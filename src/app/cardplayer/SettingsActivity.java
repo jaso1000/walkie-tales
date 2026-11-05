@@ -83,6 +83,9 @@ public class SettingsActivity extends Activity {
         row("Name", kid.isEmpty() ? "Not set — used for a friendly “Good morning, …!”" : kid, v -> editName());
 
         section("Cards");
+        toggle("Use NFC cards",
+                "Turn off on phones without working NFC. The player then works by browsing only.",
+                "cards", true);
         row("Link a card", "Choose what it plays, then tap the card on the phone", v -> pickLinkTarget(folders));
         row("Linked cards", cards.isEmpty() ? "None yet" : cards.size() + (cards.size() == 1 ? " card" : " cards"),
                 v -> showCards());
@@ -109,7 +112,7 @@ public class SettingsActivity extends Activity {
 
         section("Browsing");
         toggle("Browse without cards",
-                "Shows a ▦ button so kids can pick from the library on screen. Turn off for cards only.",
+                "Shows a ▦ button so kids can pick from the library on screen. Turn off for cards only (always on while cards are off).",
                 "browse", true);
         toggle("Pick a track from the list", "Tap the track name on the player to see every track", "track_list", true);
 

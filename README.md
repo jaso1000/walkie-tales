@@ -18,7 +18,7 @@ The app is native Android in plain Java, using only the framework (no AndroidX, 
 - Bluetooth/headset play, pause and skip buttons work.
 
 **For grown-ups** (press and hold ⋮, then answer a quick sum)
-- Link cards to folders or to actions: Shuffle everything, Pause, Skip, Sleep timer, Volume up/down.
+- Link cards to folders or to actions: Shuffle everything, Pause, Skip, Sleep timer, Volume up/down. Cards can be switched off for a browse-only player (handy on phones whose NFC doesn't work).
 - Per-folder shuffle, repeat and resume settings.
 - Maximum volume, quiet hours (a lower limit overnight), fade-in, and spoken titles (text-to-speech).
 - Dimming, keep-screen-on, night light and clock, and the grown-up check.

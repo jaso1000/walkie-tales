@@ -418,6 +418,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         s.put("accent", String.format(Locale.ROOT, "#%06X", accent & 0xFFFFFF));
         s.put("message", status.getText().toString());
         s.put("locked", Kiosk.isLocked(this));
+        s.put("nfc", nfcState);
         return s;
     }
 
@@ -557,10 +558,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void applySettings() {
         volumeRow.setVisibility(prefs.getBoolean("show_volume", true) ? View.VISIBLE : View.GONE);
         statusGroup.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
-        boolean canBrowse = prefs.getBoolean("browse", true);
+        boolean canBrowse = canBrowse();
         browseBtn.setVisibility(canBrowse ? View.VISIBLE : View.GONE);
         if (!canBrowse && browsing) closeBrowser();
         if (browsing) openBrowser(); // refresh in case folders changed
+        enableReader(); // cards may have been switched on/off
         nightClock.setVisibility(prefs.getBoolean("night_clock", true) ? View.VISIBLE : View.GONE);
         if (prefs.getBoolean("announce", false) && tts == null) initTts();
         if (folder == null) showIdle(); // refresh greeting / name
@@ -628,7 +630,23 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     // ================================================================ NFC
 
+    boolean cardsOn() {
+        return prefs.getBoolean("cards", true);
+    }
+
+    /** Browsing is always available when cards are off, otherwise there'd be no way to pick anything. */
+    boolean canBrowse() {
+        return prefs.getBoolean("browse", true) || !cardsOn();
+    }
+
     void enableReader() {
+        if (!cardsOn()) {
+            if (nfc != null) {
+                try { nfc.disableReaderMode(this); } catch (Exception ignored) { }
+            }
+            nfcState = "cards off";
+            return;
+        }
         if (nfc == null) { flash("This phone has no NFC", 8000); return; }
         if (!nfc.isEnabled()) flash("Turn on NFC in Settings", 8000);
         Bundle opts = new Bundle();
@@ -639,12 +657,21 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                             | NfcAdapter.FLAG_READER_NFC_F | NfcAdapter.FLAG_READER_NFC_V
                             | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
                     opts);
-        } catch (Exception ignored) { }
+            nfcState = nfc.isEnabled() ? "reader on" : "NFC off";
+            android.util.Log.i("WalkieTales", "NFC reader mode enabled (adapter enabled=" + nfc.isEnabled() + ")");
+        } catch (Exception e) {
+            nfcState = "reader failed: " + e;
+            android.util.Log.e("WalkieTales", "enableReaderMode failed", e);
+        }
     }
+
+    String nfcState = "not started";
 
     @Override
     public void onTagDiscovered(Tag tag) {
         final String id = hex(tag.getId());
+        android.util.Log.i("WalkieTales", "Tag discovered id=" + id + " tech=" + java.util.Arrays.toString(tag.getTechList()));
+        nfcState = "last card " + id;
         h.post(() -> onCard(id, tag));
     }
 
@@ -899,7 +926,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void togglePlay() {
         if (mp == null) {
             if (folder != null) openFolder(folder, true);
-            else if (prefs.getBoolean("browse", true)) openBrowser();
+            else if (canBrowse()) openBrowser();
             else flash("Tap a card on the back of the phone", 3000);
         } else if (mp.isPlaying()) {
             pause();
@@ -1362,7 +1389,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     // ================================================================ browse without cards
 
     void openBrowser() {
-        if (!prefs.getBoolean("browse", true)) return;
+        if (!canBrowse()) return;
         final int build = ++browseBuild;
         grid.removeAllViews();
         final List<String> items = new ArrayList<>();
@@ -1481,11 +1508,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (idleArt == null) idleArt = Ui.letterArt("♪", DEFAULT_ACCENT);
         art.setImageBitmap(idleArt);
         String name = prefs.getString("kid_name", "").trim();
-        boolean browse = prefs.getBoolean("browse", true);
-        title.setText(name.isEmpty() ? "Tap a card" : greeting() + ", " + name + "!");
-        subtitle.setText(name.isEmpty()
-                ? (browse ? "Hold a card on the back, or tap ▦ to choose" : "Hold a card against the back of the phone")
-                : (browse ? "Tap a card, or press ▦ to choose" : "Tap a card to start"));
+        boolean browse = canBrowse();
+        if (!cardsOn()) {
+            // Browse-only player (e.g. a phone without working NFC).
+            title.setText(name.isEmpty() ? "Pick something!" : greeting() + ", " + name + "!");
+            subtitle.setText("Tap here or press ▦ to choose");
+        } else {
+            title.setText(name.isEmpty() ? "Tap a card" : greeting() + ", " + name + "!");
+            subtitle.setText(name.isEmpty()
+                    ? (browse ? "Hold a card on the back, or tap ▦ to choose" : "Hold a card against the back of the phone")
+                    : (browse ? "Tap a card, or press ▦ to choose" : "Tap a card to start"));
+        }
         time.setText("");
         progress.setProgress(0);
         eq.setPlaying(false);

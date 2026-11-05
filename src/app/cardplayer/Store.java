@@ -51,6 +51,7 @@ final class Store {
         SETTINGS.put("quiet_start", 19 * 60);
         SETTINGS.put("quiet_end", 7 * 60);
         SETTINGS.put("quiet_volume", 40);
+        SETTINGS.put("cards", true);
         SETTINGS.put("browse", true);
         SETTINGS.put("track_list", true);
         SETTINGS.put("rest_mode", false);
