@@ -39,7 +39,10 @@ final class ArtFinder {
     private static final Set<String> STOP = new HashSet<>(Arrays.asList(
             "the", "a", "an", "and", "of", "to", "in", "on", "for", "with", "by", "ep", "unabridged", "abridged",
             "original", "score", "soundtrack", "edition", "deluxe", "remastered", "version", "vol", "volume",
-            "includes", "song", "read", "along", "track", "audiobook", "radio", "fm", "am", "live"));
+            "includes", "song", "read", "along", "track", "audiobook", "radio", "fm", "am", "live",
+            // generic collection words: "Hairy Maclary Story Collection" should match "Hairy Maclary Treasury"
+            "story", "stories", "collection", "treasury", "complete", "adventures", "tales", "series",
+            "book", "books", "podcast", "episode", "episodes", "full", "cd", "set", "box", "best"));
 
     private static volatile boolean running;
 
@@ -155,9 +158,20 @@ final class ArtFinder {
         }
         boolean fromTags = album != null && !album.trim().isEmpty();
         boolean hasArtist = artist != null && !artist.trim().isEmpty();
-        String title = fromTags ? album.trim() : folder;
-        String query = hasArtist ? title + " " + artist.trim() : title;
+        if (fromTags) {
+            String title = album.trim();
+            String hit = searchItunes(title, hasArtist ? title + " " + artist.trim() : title, true, hasArtist ? artist : null);
+            if (hit == null && hasArtist) hit = searchItunes(title, title, true, null);
+            if (hit != null) return download(hit);
+        }
+        // Fall back to the folder name (children's/family results only: see searchItunes).
+        String hit = searchItunes(folder, folder, false, null);
+        return hit == null ? null : download(hit);
+    }
 
+    /** Best matching iTunes artwork URL (600px) or null. fromTags = searching with the files' own album tag. */
+    static String searchItunes(String title, String query, boolean fromTags, String artist) throws Exception {
+        boolean hasArtist = artist != null && !artist.trim().isEmpty();
         String best = null;
         double bestScore = 0;
         for (String kind : new String[]{"media=audiobook", "media=music&entity=album"}) {
@@ -185,7 +199,7 @@ final class ArtFinder {
             }
         }
         if (best == null || bestScore < 0.6) return null;
-        return download(best.replace("100x100bb", "600x600bb"));
+        return best.replace("100x100bb", "600x600bb");
     }
 
     // ------------------------------------------------------------ radio logos (radio-browser.info)
