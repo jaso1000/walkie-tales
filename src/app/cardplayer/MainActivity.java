@@ -18,6 +18,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.nfc.NfcAdapter;
@@ -163,7 +164,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (Build.VERSION.SDK_INT >= 33) {
             // Kiosk: the back gesture does nothing on the player.
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> { if (browsing) closeBrowser(); });
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> { if (sheetOpen) closeTrackList(); else if (browsing) closeBrowser(); });
         }
 
         showIdle();
@@ -260,7 +261,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (browsing) closeBrowser(); // otherwise kiosk: ignore
+        if (sheetOpen) closeTrackList(); else if (browsing) closeBrowser(); // otherwise kiosk: ignore
     }
 
     @Override
@@ -1654,18 +1655,202 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         return "Good evening";
     }
 
+    // ================================================================ track list (bottom sheet)
+
+    FrameLayout sheet;
+    boolean sheetOpen;
+    int sheetBuild;
+
     void showTrackList() {
         if (folder == null || tracks.isEmpty() || !prefs.getBoolean("track_list", true)) return;
-        String[] names = new String[tracks.size()];
-        for (int i = 0; i < names.length; i++) names[i] = (i + 1) + ".   " + tracks.get(i).name;
-        new AlertDialog.Builder(this, DIALOG_THEME)
-                .setTitle(Store.ALL.equals(folder) ? "Everything" : folder)
-                .setSingleChoiceItems(names, index, (d, w) -> {
-                    d.dismiss();
-                    startTrack(w, 0, true, 0);
-                })
-                .setNegativeButton("Close", null)
-                .show();
+        final int build = ++sheetBuild;
+        final List<Track> list = tracks;
+        final boolean all = Store.ALL.equals(folder);
+
+        if (sheet != null) rootView.removeView(sheet);
+        sheet = new FrameLayout(this);
+        sheet.setBackgroundColor(0xB3000000); // dim the player behind
+        sheet.setOnClickListener(v -> closeTrackList()); // tap outside to close
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setClickable(true); // taps on the panel don't close it
+        GradientDrawable pbg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Ui.shade(accent, 0.62f), 0xFF101016});
+        float r = dp(28);
+        pbg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        panel.setBackground(pbg);
+        panel.setPadding(dp(18), dp(10), dp(18), dp(16));
+
+        // grab handle
+        View handle = new View(this);
+        GradientDrawable hb = new GradientDrawable();
+        hb.setColor(0x55FFFFFF);
+        hb.setCornerRadius(dp(3));
+        handle.setBackground(hb);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(dp(44), dp(5));
+        hl.gravity = Gravity.CENTER_HORIZONTAL;
+        hl.bottomMargin = dp(14);
+        panel.addView(handle, hl);
+
+        // header: cover · title / count · close
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView thumb = new ImageView(this);
+        thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        thumb.setImageDrawable(art.getDrawable());
+        thumb.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View v, Outline o) { o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(14)); }
+        });
+        thumb.setClipToOutline(true);
+        head.addView(thumb, new LinearLayout.LayoutParams(dp(60), dp(60)));
+        LinearLayout ht = new LinearLayout(this);
+        ht.setOrientation(LinearLayout.VERTICAL);
+        ht.setPadding(dp(14), 0, dp(8), 0);
+        TextView hTitle = Ui.text(this, all ? "Everything" : folder, 21, Color.WHITE, true);
+        hTitle.setSingleLine(true);
+        hTitle.setEllipsize(TextUtils.TruncateAt.END);
+        ht.addView(hTitle);
+        boolean liveOnly = true;
+        for (Track t : list) if (!t.live) { liveOnly = false; break; }
+        int n = list.size();
+        ht.addView(Ui.text(this, liveOnly ? (n == 1 ? "1 station" : n + " stations") : (n == 1 ? "1 track" : n + " tracks"),
+                14, 0xA6FFFFFF, false));
+        head.addView(ht, new LinearLayout.LayoutParams(0, -2, 1f));
+        ImageButton close = Ui.roundButton(this, R.drawable.ic_close, 0x26FFFFFF, 12);
+        close.setElevation(0);
+        close.setContentDescription("Close");
+        close.setOnClickListener(v -> closeTrackList());
+        head.addView(close, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        LinearLayout.LayoutParams hdl = new LinearLayout.LayoutParams(-1, -2);
+        hdl.bottomMargin = dp(12);
+        panel.addView(head, hdl);
+
+        // rows
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(false);
+        LinearLayout rows = new LinearLayout(this);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(rows);
+        final TextView[] lengths = new TextView[n];
+        boolean playing = ready() && mp.isPlaying();
+        int hi = Ui.tint(accent, 0.45f);
+        for (int i = 0; i < n; i++) {
+            final int w = i;
+            Track t = list.get(i);
+            boolean cur = i == index;
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(10), dp(10), dp(12), dp(10));
+            row.setMinimumHeight(dp(62));
+            GradientDrawable rb = new GradientDrawable();
+            rb.setCornerRadius(dp(16));
+            rb.setColor(cur ? Ui.shade(accent, 0.25f) & 0x00FFFFFF | 0x8C000000 : 0x00000000);
+            row.setBackground(new android.graphics.drawable.RippleDrawable(
+                    ColorStateList.valueOf(0x33FFFFFF), rb, null));
+
+            // left badge: track number, or dancing bars / play icon for the current one
+            FrameLayout badge = new FrameLayout(this);
+            GradientDrawable bb = new GradientDrawable();
+            bb.setShape(GradientDrawable.OVAL);
+            bb.setColor(cur ? accent : 0x1FFFFFFF);
+            badge.setBackground(bb);
+            if (cur && playing) {
+                EqView e = new EqView(this);
+                e.setColor(Color.WHITE);
+                e.setPlaying(true);
+                badge.addView(e, new FrameLayout.LayoutParams(dp(18), dp(14), Gravity.CENTER));
+            } else if (cur) {
+                ImageView pi = new ImageView(this);
+                pi.setImageResource(R.drawable.ic_play);
+                badge.addView(pi, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
+            } else {
+                TextView num = Ui.text(this, String.valueOf(i + 1), 15, 0xCCFFFFFF, true);
+                num.setGravity(Gravity.CENTER);
+                badge.addView(num, new FrameLayout.LayoutParams(-1, -1));
+            }
+            row.addView(badge, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+            LinearLayout texts = new LinearLayout(this);
+            texts.setOrientation(LinearLayout.VERTICAL);
+            texts.setPadding(dp(14), 0, dp(8), 0);
+            TextView name = Ui.text(this, t.name, 17, cur ? hi : Color.WHITE, cur);
+            name.setMaxLines(2);
+            name.setEllipsize(TextUtils.TruncateAt.END);
+            texts.addView(name);
+            row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            if (t.live) {
+                TextView live = Ui.text(this, "LIVE", 11, Color.WHITE, true);
+                live.setLetterSpacing(0.12f);
+                live.setPadding(dp(8), dp(3), dp(8), dp(3));
+                GradientDrawable lb = new GradientDrawable();
+                lb.setCornerRadius(dp(8));
+                lb.setColor(0xFFE0455A);
+                live.setBackground(lb);
+                row.addView(live);
+            } else {
+                TextView len = Ui.text(this, "", 14, 0x8CFFFFFF, false);
+                lengths[i] = len;
+                row.addView(len);
+            }
+            row.setOnClickListener(v -> {
+                closeTrackList();
+                if (w == index && mp != null) { if (preparing || !mp.isPlaying()) play(); }
+                else startTrack(w, 0, true, 0);
+            });
+            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+            rl.bottomMargin = dp(4);
+            rows.addView(row, rl);
+        }
+        int maxH = Math.round(getResources().getDisplayMetrics().heightPixels * 0.62f);
+        panel.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+        scroll.getLayoutParams().height = Math.min(maxH, n * dp(66) + dp(8));
+
+        sheet.addView(panel, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        int at = rootView.indexOfChild(nightView);
+        rootView.addView(sheet, at < 0 ? rootView.getChildCount() : at, new FrameLayout.LayoutParams(-1, -1));
+
+        // slide up, then scroll the current track into view
+        sheetOpen = true;
+        sheet.setAlpha(0f);
+        panel.setTranslationY(dp(260));
+        sheet.animate().alpha(1f).setDuration(180).start();
+        panel.animate().translationY(0).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        final int cur = index;
+        scroll.post(() -> {
+            View row = rows.getChildAt(cur);
+            if (row != null) scroll.scrollTo(0, Math.max(0, row.getTop() - dp(66)));
+        });
+
+        // track lengths, read in the background
+        new Thread(() -> {
+            for (int i = 0; i < n && i < 400; i++) {
+                if (build != sheetBuild) return;
+                if (lengths[i] == null) continue;
+                String d = "";
+                MediaMetadataRetriever mr = new MediaMetadataRetriever();
+                try {
+                    mr.setDataSource(list.get(i).source);
+                    String ms = mr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    if (ms != null) d = fmt(Integer.parseInt(ms));
+                } catch (Exception ignored) {
+                } finally {
+                    try { mr.release(); } catch (Exception ignored) { }
+                }
+                final TextView tv = lengths[i];
+                final String text = d;
+                h.post(() -> { if (build == sheetBuild) tv.setText(text); });
+            }
+        }, "track-lengths").start();
+    }
+
+    void closeTrackList() {
+        if (!sheetOpen || sheet == null) return;
+        sheetOpen = false;
+        sheetBuild++;
+        final FrameLayout s = sheet;
+        s.animate().alpha(0f).setDuration(160).withEndAction(() -> rootView.removeView(s)).start();
     }
 
     void nudge(boolean left) {
