@@ -117,6 +117,17 @@ final class Kiosk {
         p.edit().remove("saved_timeout").remove("saved_stay_on").apply();
     }
 
+    /** How long the screen stays on after the last touch, when nothing is keeping it on. */
+    static void setTimeout(Context c, int secs) {
+        if (!isOwner(c) || Store.prefs(c).contains("saved_timeout")) return; // not while switched off from the remote
+        try {
+            String v = String.valueOf(Math.max(15, secs) * 1000);
+            if (!v.equals(android.provider.Settings.System.getString(c.getContentResolver(), android.provider.Settings.System.SCREEN_OFF_TIMEOUT))) {
+                dpm(c).setSystemSetting(admin(c), android.provider.Settings.System.SCREEN_OFF_TIMEOUT, v);
+            }
+        } catch (Exception ignored) { }
+    }
+
     /** Restart the phone (device owner only): the way to switch it off and on while the power menu is blocked. */
     static boolean reboot(Context c) {
         if (!isOwner(c)) return false;

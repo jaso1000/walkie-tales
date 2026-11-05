@@ -132,8 +132,11 @@ public class SettingsActivity extends Activity {
         section("Screen");
         cycle("Dim the screen after", "dim_after", new int[]{30, 90, 300, 0},
                 new String[]{"30 seconds", "90 seconds", "5 minutes", "Never"}, 90);
-        cycle("Keep the screen on", "screen_on", new int[]{0, 1},
-                new String[]{"While charging or playing (saves battery)", "Always"}, 0);
+        cycle("Keep the screen on", "screen_on", new int[]{0, 2, 1},
+                new String[]{"Only while charging (saves battery; music keeps playing with the screen off)",
+                        "While charging or playing", "Always"}, 0);
+        cycle("Screen turns off after", "screen_timeout", new int[]{30, 60, 120, 300},
+                new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, 60);
         toggle("Night light", "Show a warm glow instead of a dark screen when idle", "night_light", false);
         toggle("Clock on the night light", "A soft bedside clock on the glow", "night_clock", true);
         toggle("Clock and battery", "Show the time and battery at the top", "show_status", true);

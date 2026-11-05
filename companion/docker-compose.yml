@@ -5,9 +5,17 @@ services:
     restart: unless-stopped
     ports:
       - "8090:8090"
+    volumes:
+      - walkie-tales-data:/data   # the players you add in the app
     environment:
-      # The address shown on the player in Grown-up settings → Remote control
+      # Optional starting player(s). You can also add players in the app (tap the name at the top),
+      # or let it find them on the Wi-Fi. Format for several: "Riv=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"
+      PLAYERS: ""
+      # The address shown on the player in Grown-up settings → Remote control (older single-player setting)
       PLAYER_URL: "http://192.168.1.50:8080"
       # Optional: put the player's PIN here so the page doesn't ask for it.
       # Anyone who can reach this container can then control the player.
       PLAYER_PIN: ""
+
+volumes:
+  walkie-tales-data:

@@ -59,6 +59,7 @@ final class Store {
         SETTINGS.put("rest_mode", false);
         SETTINGS.put("dim_after", 90);
         SETTINGS.put("screen_on", 0);
+        SETTINGS.put("screen_timeout", 60);
         SETTINGS.put("night_light", false);
         SETTINGS.put("night_clock", true);
         SETTINGS.put("show_status", true);
@@ -93,7 +94,8 @@ final class Store {
                     case "max_volume": case "quiet_volume": v = Math.max(10, Math.min(100, v)); break;
                     case "quiet_start": case "quiet_end": v = Math.max(0, Math.min(24 * 60 - 1, v)); break;
                     case "dim_after": v = Math.max(0, Math.min(3600, v)); break;
-                    case "screen_on": v = v == 1 ? 1 : 0; break;
+                    case "screen_on": v = v == 1 || v == 2 ? v : 0; break;
+                    case "screen_timeout": v = Math.max(15, Math.min(1800, v)); break;
                     default: break;
                 }
                 ed.putInt(k, v);

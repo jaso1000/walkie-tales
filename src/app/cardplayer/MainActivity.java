@@ -635,6 +635,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         renderTracksBtn();
         if (!canBrowse && browsing) closeBrowser();
         if (Kiosk.isOwner(this) && Kiosk.isLocked(this)) Kiosk.applyFeatures(this); // power menu on/off
+        if (!screenLocked) Kiosk.setTimeout(this, prefs.getInt("screen_timeout", 60));
         if (browsing) openBrowser(); // refresh in case folders changed
         enableReader(); // cards may have been switched on/off
         nightClock.setVisibility(prefs.getBoolean("night_clock", true) ? View.VISIBLE : View.GONE);
@@ -647,11 +648,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         renderVolume();
     }
 
-    /** Keep the screen (and so the card reader) awake while charging or playing, or always if chosen. */
+    /**
+     * Keep the screen (and so the card reader) awake while charging, or also while playing / always if chosen.
+     * Otherwise it times out after "screen_timeout" and the music carries on with the screen off.
+     */
     void updateKeepOn() {
-        // Bedtime "screen off" keeps the display technically on (just black) so cards and the remote keep working.
-        boolean on = !screenLocked && (prefs.getInt("screen_on", 0) == 1 || charging || (ready() && mp.isPlaying())
-                || bedtimeDarkOn());
+        int mode = prefs.getInt("screen_on", 0); // 0 charging, 1 always, 2 charging or playing
+        // Bedtime black screen stays technically on only when cards are used (the reader needs the screen on).
+        boolean on = !screenLocked && (mode == 1 || charging || (mode == 2 && ready() && mp.isPlaying())
+                || (bedtimeDarkOn() && cardsOn()));
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -1350,6 +1355,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
         col.setPadding(dp(22), dp(10), dp(22), dp(18));
+        col.setClipToPadding(false); // the scrub dot reaches into the side margins at the start/end of a track
+        col.setClipChildren(false);
         rootView.addView(col, new FrameLayout.LayoutParams(-1, -1));
 
         // ---- top bar: clock · battery ........ sleep timer · settings cog
@@ -2246,6 +2253,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             h.removeCallbacks(screenOffNow);
             releaseLockHolds();
             Kiosk.restoreTimeout(this);
+            Kiosk.setTimeout(this, prefs.getInt("screen_timeout", 60));
             turnScreenOn();
             wake();
         }

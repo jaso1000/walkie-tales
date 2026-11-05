@@ -39,6 +39,23 @@ Tip: give the player phone a fixed IP address (a DHCP reservation in your router
 - **Settings:** child's name, max volume, quiet hours, fade-in, spoken titles, browsing, track list, Toniebox mode,
   dimming, keep-screen-on, night light and clock, grown-up check.
 
+## Several players
+
+The Docker companion can look after any number of players. Tap the player's name at the top of the page to switch,
+add one by its address, or press **Find players on the Wi-Fi** (it checks port 8080 on the players' own network,
+plus any `SCAN_SUBNETS`). Each device remembers each player's PIN separately. The list is kept in the
+`walkie-tales-data` volume, and `PLAYERS="Riv=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"` can pre-fill it.
+Only addresses on the home network (10.x, 172.16-31.x, 192.168.x or local host names) are accepted.
+
+## Install it like an app
+
+- **iPhone / iPad:** open the page in Safari → Share → **Add to Home Screen**. It opens full screen with the WalkieTales icon.
+- **Android:** open it in Chrome → ⋮ → **Add to Home screen**. Over plain `http://` on your Wi-Fi, Chrome adds it as a
+  shortcut with the icon. To have it open as a full-screen app with no address bar, serve the companion over
+  `https://` (for example through a reverse proxy or a Cloudflare tunnel). Then Chrome offers **Install app**.
+
+Icons are drawn by `tools/make-web-icons.py companion/web`.
+
 ## Security
 
 The player only accepts commands that carry its 6-digit PIN. You can change the PIN on the player.

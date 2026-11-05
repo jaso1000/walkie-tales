@@ -7,8 +7,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="WalkieTales">
-<title>WalkieTales Remote</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='24' fill='%236C4CF1'/%3E%3Crect x='30' y='26' width='48' height='56' rx='6' fill='white'/%3E%3Cpath transform='translate(36 35) scale(1.5)' fill='%236C4CF1' d='M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z'/%3E%3C/svg%3E">
+<title>WalkieTales</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+<link rel="alternate icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='24' fill='%236C4CF1'/%3E%3Crect x='30' y='26' width='48' height='56' rx='6' fill='white'/%3E%3Cpath transform='translate(36 35) scale(1.5)' fill='%236C4CF1' d='M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #0b0b10; --panel: #15151d; --panel2: #1d1d28; --line: #2a2a38;
@@ -123,6 +127,28 @@
   .up-list div.err { color: var(--bad); }
   progress { width: 100%; height: 8px; accent-color: var(--accent); }
 
+  /* player switcher */
+  header { padding-top: calc(14px + env(safe-area-inset-top)); }
+  #who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; text-align: left; cursor: default; }
+  #who h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: initial; }
+  #who .caret { display: none; width: 22px; height: 22px; fill: var(--muted); flex: none; }
+  #who.multi { cursor: pointer; }
+  #who.multi .caret { display: block; }
+  #players { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 11; align-items: flex-end; justify-content: center; }
+  #players.on { display: flex; }
+  #players .sheet { width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; background: var(--panel); border-radius: 24px 24px 0 0;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); animation: up .22s ease; }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .pl { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; cursor: pointer; }
+  .pl.cur { background: var(--panel2); outline: 2px solid var(--accent); }
+  .pl .av { width: 46px; height: 46px; border-radius: 14px; background: var(--panel2); display: grid; place-items: center;
+    font-weight: 800; font-size: 20px; flex: none; overflow: hidden; }
+  .pl .av img { width: 100%; height: 100%; object-fit: cover; }
+  .pl .grow { flex: 1; min-width: 0; }
+  .pl .grow b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl .grow small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl .more { background: none; border: 0; color: var(--muted); font-size: 22px; padding: 6px 10px; cursor: pointer; }
+
   /* pin */
   #pin { position: fixed; inset: 0; background: var(--bg); display: none; place-items: center; z-index: 10; padding: 24px; }
   #pin.on { display: grid; }
@@ -136,7 +162,8 @@
 <body>
 
 <header>
-  <h1>WalkieTales</h1>
+  <button id="who" type="button" title="Switch player"><h1 id="whoName">WalkieTales</h1>
+    <svg class="caret" viewBox="0 0 24 24"><path d="M7,10l5,5 5,-5z"/></svg></button>
   <span class="pill" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting…</span></span>
   <span class="pill" id="batt" hidden></span>
 </header>
@@ -285,12 +312,31 @@
   <button data-tab="set"><svg viewBox="0 0 24 24"><path d="M3,17v2h6v-2H3zM3,5v2h10V5H3zM13,21v-2h8v-2h-8v-2h-2v6h2zM7,9v2H3v2h4v2h2V9H7zM21,13v-2H11v2h10zM15,9h2V7h4V5h-4V3h-2v6z"/></svg>Settings</button>
 </nav>
 
+<div id="players"><div class="sheet">
+  <div style="display:flex;align-items:center;margin-bottom:8px"><h2 style="margin:0;flex:1;font-size:20px">Players</h2>
+    <button class="btn ghost" id="plClose" style="flex:none;padding:8px 14px">Done</button></div>
+  <div id="plList"></div>
+  <div class="card" style="background:var(--panel2);margin:14px 0 0">
+    <h2>Add a player</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="plName" maxlength="40" placeholder="Name (e.g. Riv's player)">
+    </div>
+    <div class="row">
+      <input type="text" id="plUrl" inputmode="url" placeholder="Address, e.g. 192.168.1.50:8080">
+      <button class="btn" id="plAdd" style="flex:none">Add</button>
+    </div>
+    <div class="hint" style="text-align:left">The address is on the player in <b>Grown-up settings → Remote control</b>.</div>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" id="plScan">Find players on the Wi-Fi</button></div>
+  </div>
+</div></div>
+
 <div id="pin"><div class="box">
-  <h2 style="margin:0 0 6px">Connect to WalkieTales</h2>
+  <h2 style="margin:0 0 6px" id="pinTitle">Connect to WalkieTales</h2>
   <div class="hint">Enter the PIN shown on the player in <b>Grown-up settings → Remote control</b>.</div>
   <input type="text" id="pinIn" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
   <button class="btn" id="pinGo" style="width:100%">Connect</button>
   <div class="hint" id="pinErr" style="color:var(--bad)"></div>
+  <button class="btn ghost" id="pinOther" style="width:100%;margin-top:8px;display:none">Choose another player</button>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -299,8 +345,14 @@
 (() => {
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  let pin = localStorage.getItem('cp_pin') || '';
+  const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: (k) => { try { localStorage.removeItem(k); } catch (e) {} } };
+  let pin = store.get('cp_pin') || '';
   let st = null, lib = null, settings = null, lastPoll = 0, polling = false;
+  // Several players: the companion lists them at /players and forwards /p/<id>/api/... to each one.
+  // Served straight from a player there's no list, and everything talks to that one player.
+  let players = null, cur = null, base = '';
+  const pinKey = (id) => 'cp_pin:' + id;
 
   // ---------------------------------------------------------------- api
   async function api(path, body) {
@@ -308,7 +360,7 @@
     if (pin) opt.headers['X-Pin'] = pin;
     if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     let r;
-    try { r = await fetch(path, opt); } catch (e) { setConn(false, 'Offline'); throw e; }
+    try { r = await fetch(base + path, opt); } catch (e) { setConn(false, 'Offline'); throw e; }
     if (r.status === 401) { showPin(); throw new Error('PIN needed'); }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { if (r.status === 502) setConn(false, 'Player unreachable'); throw new Error(j.error || r.statusText); }
@@ -319,19 +371,24 @@
   function err(e) { if (e && e.message !== 'PIN needed') toast(e.message || 'Something went wrong'); }
   function toast(t) { const n = $('#toast'); n.textContent = t; n.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => n.classList.remove('on'), 2600); }
   function setConn(ok, text) { $('#dot').classList.toggle('on', ok); $('#connText').textContent = ok ? 'Connected' : (text || 'Offline'); }
-  const coverUrl = (f) => '/api/cover?folder=' + encodeURIComponent(f) + (pin ? '&pin=' + encodeURIComponent(pin) : '');
+  const coverUrl = (f) => base + '/api/cover?folder=' + encodeURIComponent(f) + (pin ? '&pin=' + encodeURIComponent(pin) : '');
   const fmt = (ms) => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
     return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
 
   // ---------------------------------------------------------------- pin
-  function showPin() { $('#pin').classList.add('on'); setTimeout(() => $('#pinIn').focus(), 50); }
+  function showPin() {
+    $('#pinTitle').textContent = cur ? 'Connect to ' + label(cur) : 'Connect to WalkieTales';
+    $('#pinOther').style.display = players && players.length > 1 ? '' : 'none';
+    $('#pin').classList.add('on'); setTimeout(() => $('#pinIn').focus(), 50);
+  }
   $('#pinGo').onclick = async () => {
     pin = $('#pinIn').value.trim();
-    try { await api('/api/status'); localStorage.setItem('cp_pin', pin); $('#pin').classList.remove('on'); $('#pinErr').textContent = ''; refreshAll(); }
+    try { await api('/api/status'); store.set(cur ? pinKey(cur.id) : 'cp_pin', pin); $('#pin').classList.remove('on'); $('#pinErr').textContent = ''; $('#pinIn').value = ''; showWho(); refreshAll(); }
     catch (e) { $('#pinErr').textContent = e.message === 'PIN needed' ? 'That PIN didn’t work' : e.message; }
   };
   $('#pinIn').onkeydown = (e) => { if (e.key === 'Enter') $('#pinGo').click(); };
-  $('#forget').onclick = () => { localStorage.removeItem('cp_pin'); pin = ''; showPin(); };
+  $('#forget').onclick = () => { store.del(cur ? pinKey(cur.id) : 'cp_pin'); pin = ''; showPin(); };
+  $('#pinOther').onclick = () => { $('#pin').classList.remove('on'); openPlayers(); };
 
   // ---------------------------------------------------------------- tabs
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
@@ -347,7 +404,9 @@
   // ---------------------------------------------------------------- now playing
   let coverFor = undefined;
   function render(s) {
+    const firstName = !st || st.name !== s.name;
     st = s; lastPoll = Date.now();
+    if (firstName) showWho();
     document.documentElement.style.setProperty('--accent', s.folder ? s.accent : '#6c4cf1');
     const b = $('#batt');
     if (s.battery >= 0) { b.hidden = false; b.textContent = (s.charging ? '⚡ ' : '') + s.battery + '%'; b.style.color = s.battery <= 15 && !s.charging ? 'var(--bad)' : ''; }
@@ -430,7 +489,7 @@
   $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };
 
   async function poll() {
-    if (polling || document.hidden || $('#pin').classList.contains('on')) return;
+    if (polling || document.hidden || $('#pin').classList.contains('on') || $('#players').classList.contains('on') || (players && !cur)) return;
     polling = true;
     try { render(await api('/api/status')); } catch (e) { /* shown in pill */ }
     polling = false;
@@ -503,7 +562,7 @@
   function upload(folder, file, onProgress) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
-      x.open('PUT', '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name));
+      x.open('PUT', base + '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name));
       if (pin) x.setRequestHeader('X-Pin', pin);
       x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round(e.loaded * 100 / e.total)); };
       x.onload = () => { if (x.status === 200) resolve(); else { let m = 'failed'; try { m = JSON.parse(x.responseText).error; } catch (e) {} reject(new Error(m)); } };
@@ -571,7 +630,8 @@
     const p = $('#setPlay'); SWITCHES.setPlay.forEach(a => p.appendChild(sw(...a)));
     const sc = $('#setScreen');
     sc.appendChild(choice('dim_after', 'Dim the screen after', [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']]));
-    sc.appendChild(choice('screen_on', 'Keep the screen on', [[0, 'While charging or playing'], [1, 'Always']]));
+    sc.appendChild(choice('screen_on', 'Keep the screen on', [[0, 'Only while charging'], [2, 'While charging or playing'], [1, 'Always']]));
+    sc.appendChild(choice('screen_timeout', 'Screen turns off after', [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes']]));
     SWITCHES.setScreen.forEach(a => sc.appendChild(sw(...a)));
     const sf = $('#setSafety'); SWITCHES.setSafety.forEach(a => sf.appendChild(sw(...a)));
     $('#s_kid_name').onchange = (e) => save('kid_name', e.target.value.trim());
@@ -590,8 +650,125 @@
     $('#about').textContent = 'WalkieTales ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
   }
 
+  // ---------------------------------------------------------------- players
+  const short = (u) => u.replace(/^https?:\/\//, '').replace(/:8080$/, '');
+  const label = (p) => p.name || (p === cur && st && st.name ? st.name + '’s player' : 'Player at ' + short(p.url));
+  function showWho() {
+    $('#whoName').textContent = cur ? label(cur) : 'WalkieTales';
+    $('#who').classList.toggle('multi', !!players);
+  }
+  function choose(p) {
+    cur = p; base = '/p/' + p.id; store.set('cp_player', p.id);
+    pin = store.get(pinKey(p.id)) || '';
+    st = null; lib = null; coverFor = undefined; lastPoll = 0; built = false;
+    for (const id of ['#setSound', '#setQuiet', '#setPlay', '#setScreen', '#setSafety']) $(id).querySelectorAll(':scope > :not(h2)').forEach(n => n.remove());
+    $('#trackList').textContent = ''; $('#grid').textContent = ''; $('#cardList').textContent = '';
+    showWho(); setConn(false, 'Connecting…');
+    document.querySelector('nav button[data-tab=now]').click();
+    refreshAll();
+  }
+  async function loadPlayers() {
+    let r;
+    try { r = await fetch('/players', { cache: 'no-store' }); } catch (e) { return false; }
+    if (!r.ok) return false;
+    const j = await r.json().catch(() => null);
+    if (!j || !Array.isArray(j.players)) return false;
+    players = j.players;
+    if (cur) cur = players.find(p => p.id === cur.id) || null;
+    return true;
+  }
+  async function openPlayers() {
+    await loadPlayers();
+    renderPlayers();
+    $('#players').classList.add('on');
+    pollAll();
+  }
+  function renderPlayers() {
+    const l = $('#plList'); l.textContent = '';
+    if (!players.length) l.appendChild(el('div', 'hint', 'No players yet. Add one below, or let it look for them on your Wi-Fi.'));
+    players.forEach(p => {
+      const r = el('div', 'pl' + (cur && p.id === cur.id ? ' cur' : '')); r.dataset.id = p.id;
+      const av = el('div', 'av', p.name ? p.name.charAt(0).toUpperCase() : '♪');
+      const g = el('div', 'grow'); g.appendChild(el('b', '', label(p))); g.appendChild(el('small', '', short(p.url)));
+      const more = el('button', 'more', '⋯'); more.title = 'Rename or remove';
+      more.onclick = (e) => { e.stopPropagation(); playerMenu(p); };
+      r.appendChild(av); r.appendChild(g); r.appendChild(more);
+      r.onclick = () => { $('#players').classList.remove('on'); if (!cur || p.id !== cur.id) choose(p); };
+      l.appendChild(r);
+    });
+  }
+  /** A quick look at every player (shows what's playing on the ones whose PIN this device knows). */
+  async function pollAll() {
+    for (const p of players || []) {
+      const row = document.querySelector('.pl[data-id="' + p.id + '"]'); if (!row) continue;
+      const k = store.get(pinKey(p.id)) || '', sm = row.querySelector('small'), av = row.querySelector('.av');
+      try {
+        const r = await fetch('/p/' + p.id + '/api/status', { headers: k ? { 'X-Pin': k } : {}, cache: 'no-store' });
+        if (r.status === 401) { sm.textContent = 'Needs its PIN · ' + short(p.url); continue; }
+        const s = await r.json();
+        if (!r.ok) throw new Error(s.error);
+        if (!p.name && s.name) row.querySelector('b').textContent = s.name + '’s player';
+        sm.textContent = (s.screenOff ? 'Screen off · ' : '') + (s.playing ? '▶ ' + (s.title || '') : s.title ? 'Paused · ' + s.title : 'Nothing playing')
+          + (s.battery >= 0 ? ' · ' + s.battery + '%' : '');
+        av.style.background = s.accent || '';
+        if (s.folder && s.folder !== '@all') {
+          const img = new Image(); img.alt = ''; img.onload = () => { av.textContent = ''; av.appendChild(img); };
+          img.src = '/p/' + p.id + '/api/cover?folder=' + encodeURIComponent(s.folder) + (k ? '&pin=' + encodeURIComponent(k) : '');
+        }
+      } catch (e) { sm.textContent = 'Offline · ' + short(p.url); }
+    }
+  }
+  async function plApi(path, method, body) {
+    const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    return j;
+  }
+  function playerMenu(p) {
+    const name = prompt('Name for this player.\n(Clear the name and press OK to remove it from the list.)', label(p));
+    if (name === null) return;
+    if (!name.trim()) {
+      if (!confirm('Remove “' + label(p) + '” from this list? Nothing on the player itself changes.')) return;
+      plApi('/players/' + p.id, 'DELETE').then(async () => {
+        store.del(pinKey(p.id)); await loadPlayers();
+        if (cur && cur.id === p.id) { cur = null; base = '/p/none'; if (players.length) choose(players[0]); else showWho(); }
+        renderPlayers(); pollAll();
+      }).catch(err);
+      return;
+    }
+    plApi('/players/' + p.id, 'PATCH', { name: name.trim() }).then(async () => { await loadPlayers(); renderPlayers(); showWho(); pollAll(); }).catch(err);
+  }
+  $('#who').onclick = () => { if (players) openPlayers(); };
+  $('#plClose').onclick = () => { $('#players').classList.remove('on'); if (!cur && players && players.length) choose(players[0]); else poll(); };
+  $('#players').onclick = (e) => { if (e.target.id === 'players') $('#plClose').click(); };
+  $('#plAdd').onclick = () => {
+    const url = $('#plUrl').value.trim(), name = $('#plName').value.trim();
+    if (!url) return toast('Type the player’s address');
+    plApi('/players', 'POST', { name, url }).then(async (j) => {
+      $('#plUrl').value = ''; $('#plName').value = ''; toast('Added');
+      await loadPlayers(); $('#players').classList.remove('on'); choose(players.find(p => p.id === j.player.id));
+    }).catch(err);
+  };
+  $('#plScan').onclick = () => {
+    const b = $('#plScan'); b.disabled = true; b.textContent = 'Looking… (about 10 seconds)';
+    plApi('/players/scan', 'POST').then(async (j) => {
+      toast(j.added.length ? 'Found ' + j.added.length + ' new player' + (j.added.length === 1 ? '' : 's')
+        : j.found ? 'No new players (they’re already in the list)' : 'No players found on ' + j.searched.join(', '));
+      await loadPlayers(); renderPlayers(); pollAll();
+    }).catch(err).finally(() => { b.disabled = false; b.textContent = 'Find players on the Wi-Fi'; });
+  };
+
   function refreshAll() { poll(); }
-  refreshAll();
+  (async () => {
+    if (await loadPlayers()) {
+      const legacy = store.get('cp_pin');
+      if (legacy && players.length && !store.get(pinKey(players[0].id))) { store.set(pinKey(players[0].id), legacy); store.del('cp_pin'); }
+      const last = players.find(p => p.id === store.get('cp_player')) || players[0];
+      if (last) choose(last); else { showWho(); openPlayers(); }
+    } else {
+      showWho(); refreshAll();
+    }
+  })();
 })();
 </script>
 </body>
