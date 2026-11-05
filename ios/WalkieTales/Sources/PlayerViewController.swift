@@ -243,13 +243,13 @@ final class PlayerViewController: UIViewController {
         volUp.setup(icon: "speaker.wave.3.fill", size: 48, color: UIColor(white: 1, alpha: 0.1), iconSize: 18)
         volDown.addTarget(self, action: #selector(volDownTapped), for: .touchUpInside)
         volUp.addTarget(self, action: #selector(volUpTapped), for: .touchUpInside)
-        dots.spacing = 8
+        dots.spacing = 7
         dots.alignment = .center
+        dots.setContentCompressionResistancePriority(.required, for: .horizontal)
         volumeRow.alignment = .center
+        volumeRow.distribution = .equalSpacing
         volumeRow.addArrangedSubview(volDown)
-        volumeRow.addArrangedSubview(UIView())
         volumeRow.addArrangedSubview(dots)
-        volumeRow.addArrangedSubview(UIView())
         volumeRow.addArrangedSubview(volUp)
         col.setCustomSpacing(12, after: controlsWrap)
         col.addArrangedSubview(volumeRow)
@@ -454,10 +454,10 @@ final class PlayerViewController: UIViewController {
         dots.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for i in 0..<segs {
             let d = UIView()
-            d.layer.cornerRadius = 6.5
+            d.layer.cornerRadius = 6
             d.backgroundColor = i < lit ? Art.tint(accent, 0.2) : UIColor(white: 1, alpha: 0.18)
-            d.widthAnchor.constraint(equalToConstant: 13).isActive = true
-            d.heightAnchor.constraint(equalToConstant: 13).isActive = true
+            d.widthAnchor.constraint(equalToConstant: 12).isActive = true
+            d.heightAnchor.constraint(equalToConstant: 12).isActive = true
             dots.addArrangedSubview(d)
         }
     }

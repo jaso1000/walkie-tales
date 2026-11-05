@@ -22,7 +22,7 @@ xcrun simctl boot "$DEV"
 xcrun simctl bootstatus "$DEV" -b > /dev/null
 xcrun simctl status_bar "$DEV" override --time "7:30" --batteryState charged --batteryLevel 100 2>/dev/null || true
 xcrun simctl install "$DEV" "$APP"
-xcrun simctl launch "$DEV" $BID > /dev/null
+SIMCTL_CHILD_WT_TEST_PIN=424242 xcrun simctl launch "$DEV" $BID > /dev/null
 sleep 6
 DATA=$(xcrun simctl get_app_container "$DEV" $BID data)
 CARDS="$DATA/Documents/Cards"
@@ -36,7 +36,7 @@ say -o /tmp/c.aiff "Stomp stomp stomp, the dinosaurs are dancing." && afconvert 
 sips -s format jpeg ../companion/web/icon-512.png --out "$CARDS/Dinosaur Songs/cover.jpg" > /dev/null
 printf '#EXTM3U\n#EXTINF:-1,Groove Salad\nhttps://ice1.somafm.com/groovesalad-128-mp3\n' > "$CARDS/Kids Radio/Groove Salad.m3u"
 
-PIN=$(xcrun simctl spawn "$DEV" defaults read $BID remote_pin 2>/dev/null || true)
+PIN=424242
 log "pin read: ${PIN:+yes}"
 B=http://127.0.0.1:8080
 api() { curl -s -m 10 -H "X-Pin: $PIN" -H "Content-Type: application/json" "$@"; }

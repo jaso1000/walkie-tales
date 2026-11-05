@@ -24,6 +24,9 @@ final class RemoteServer {
     var isRunning: Bool { listener != nil }
 
     static var pin: String {
+        #if targetEnvironment(simulator)
+        if let t = ProcessInfo.processInfo.environment["WT_TEST_PIN"], !t.isEmpty { return t } // automated simulator test only
+        #endif
         if let p = Store.ud.string(forKey: "remote_pin") { return p }
         return newPin()
     }
@@ -122,7 +125,9 @@ final class RemoteServer {
 
         if method == "OPTIONS" { send(c, 204, "text/plain", Data()); return }
         if method == "GET" && (path == "/" || path == "/index.html") {
-            let page = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web").flatMap { try? Data(contentsOf: $0) }
+            let url = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web")
+                ?? Bundle.main.url(forResource: "index", withExtension: "html")
+            let page = url.flatMap { try? Data(contentsOf: $0) }
             send(c, page == nil ? 404 : 200, "text/html; charset=utf-8", page ?? Data("Not found".utf8))
             return
         }
