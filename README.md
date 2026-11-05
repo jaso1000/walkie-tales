@@ -81,7 +81,17 @@ Handy for testing without a card: `adb shell am start -n app.cardplayer/.MainAct
 ## Phone setup notes (Nexus 5 / hammerhead)
 
 - **ROM:** unofficial LineageOS 23.2 by acroreiser (XDA). It needs TWRP `3.7.0_9-HH.R.17` and the `hh_repart_v_32gb` repartition script (or the 16 GB version).
+- **Pick the no-Google ("vanilla") build** (`lineage-23.2-…-hammerhead-signed.zip`, not `…_gms_go_2gb…`). Walkie Tales doesn't use any Google services. The first player was flashed with the Google build, and Play Services only costs battery and RAM. The one thing you lose is a text-to-speech voice for "Say the name out loud". Install one separately if you want that feature.
 - **Windows:** fastboot needs Google's USB driver (`android_winusb.inf`).
+
+### Making another player: checklist
+
+1. Unlock the bootloader, then flash TWRP, repartition and sideload the **vanilla** ROM (see above). Skip adding a Google account during setup.
+2. Turn on Developer options → USB debugging.
+3. `bash build.sh`, then run the install commands above (install, file access, home screen, device owner). Use the same `debug.keystore` so updates install over every player.
+4. App info → Wi-Fi data usage → **Allow network access** (LineageOS blocks new apps by default).
+5. `bash tools/phone-tune.sh` disables unused apps and background scanning for better battery and speed (`--undo` reverses it). Then `adb reboot`.
+6. Give the phone a DHCP reservation in the router and copy music into `Music/Cards/`.
 
 ## Project layout
 
