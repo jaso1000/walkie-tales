@@ -253,6 +253,7 @@
       <input type="text" id="stFolder" list="folderNames" placeholder="Folder (optional; leave blank for its own)">
       <button class="btn" id="stGo" style="flex:none">Add</button>
     </div>
+    <div class="targets" hidden style="margin-top:12px"><small style="color:var(--muted)">Add to</small><div class="chips target-list" style="margin-top:6px"></div></div>
   </div>
   <div class="card">
     <h2>Add music</h2>
@@ -263,7 +264,7 @@
     <div class="row">
       <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
     </div>
-    <div id="upTargets" hidden style="margin-top:12px"><small style="color:var(--muted)">Upload to</small><div class="chips" id="upTargetList" style="margin-top:6px"></div></div>
+    <div class="targets" hidden style="margin-top:12px"><small style="color:var(--muted)">Upload to</small><div class="chips target-list" style="margin-top:6px"></div></div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="upGo">Upload</button>
     </div>
@@ -575,9 +576,21 @@
     const name = $('#stName').value.trim(), url = $('#stUrl').value.trim(), folder = $('#stFolder').value.trim();
     if (!name) return toast('Give the station a name');
     if (!/^https?:\/\//i.test(url)) return toast('The address must start with http:// or https://');
-    api('/api/station', { name, url, folder }).then(() => {
-      toast('Added ' + name); $('#stName').value = ''; $('#stUrl').value = ''; $('#stFolder').value = ''; loadLibrary();
-    }).catch(err);
+    const targets = upTargets();
+    if (!targets.length) return toast('Choose at least one player');
+    $('#stGo').disabled = true;
+    Promise.all(targets.map(t => fetch(t.base + '/api/station', {
+      method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, t.pin ? { 'X-Pin': t.pin } : {}),
+      body: JSON.stringify({ name, url, folder }),
+    }).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText); return t.name; })
+      .then(n => ({ ok: true, n }), e => ({ ok: false, n: t.name, e: e.message }))))
+      .then(res => {
+        const bad = res.filter(r => !r.ok);
+        if (bad.length) toast('Added to ' + (res.length - bad.length) + ', failed on ' + bad.map(b => (b.n || 'this player') + ' (' + b.e + ')').join(', '));
+        else toast('Added ' + name + (targets.length > 1 ? ' to ' + targets.length + ' players' : ''));
+        if (bad.length < res.length) { $('#stName').value = ''; $('#stUrl').value = ''; $('#stFolder').value = ''; }
+        loadLibrary();
+      }).finally(() => { $('#stGo').disabled = false; });
   };
 
   // Several players: pick which ones get the upload (remembered on this device). A player is only offered once
@@ -591,10 +604,13 @@
       .map(p => ({ id: p.id, name: label(p), base: '/p/' + p.id, pin: p.id === cur.id ? pin : store.get(pinKey(p.id)) }));
   }
   function renderUpTargets() {
-    const box = $('#upTargets'), l = $('#upTargetList');
-    if (!players || players.length < 2 || !cur) { box.hidden = true; return; }
+    const multi = !!(players && players.length > 1 && cur);
+    document.querySelectorAll('.targets').forEach(b => b.hidden = !multi);
+    if (!multi) return;
     upTargets(); // loads the saved choice
-    box.hidden = false; l.textContent = '';
+    document.querySelectorAll('.target-list').forEach(l => { l.textContent = ''; renderTargetChips(l); });
+  }
+  function renderTargetChips(l) {
     players.forEach(p => {
       const known = p.id === cur.id || p.pinSaved || !!store.get(pinKey(p.id));
       const on = known && upSel.includes(p.id);
