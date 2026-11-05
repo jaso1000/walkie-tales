@@ -63,6 +63,20 @@ extension PlayerViewController {
             findCovers(force: false)
             flash("New radio station: \(name)", 4)
             (presentedViewController as? LibraryViewController)?.reload()
+        case "/api/ui": // used by the automated simulator test to open screens for screenshots
+            let show = b["show"] as? String ?? ""
+            presentedViewController?.dismiss(animated: false)
+            switch show {
+            case "library": openLibrary()
+            case "tracks": openTracks()
+            case "settings":
+                let s = SettingsViewController(style: .insetGrouped)
+                s.owner = self
+                let nav = UINavigationController(rootViewController: s)
+                nav.modalPresentationStyle = .fullScreen
+                present(nav, animated: false)
+            default: break
+            }
         case "/api/cards/link", "/api/cards/cancel", "/api/cards/unlink":
             throw RemoteError("Cards aren't available on the iPhone player yet")
         default: return nil

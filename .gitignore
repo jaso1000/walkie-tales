@@ -27,3 +27,5 @@ ios/Payload/
 ios/*.ipa
 ios/WalkieTales/Resources/web/
 ios/WalkieTales/Info.plist
+ios/simbuild/
+ios/shots/

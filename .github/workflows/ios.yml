@@ -46,6 +46,22 @@ jobs:
           name: WalkieTales-ipa
           path: ios/WalkieTales.ipa
 
+      - name: Build for the simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project WalkieTales.xcodeproj -scheme WalkieTales -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild             CODE_SIGNING_ALLOWED=NO build > simbuild.log 2>&1 || { grep -E "error:" -A3 simbuild.log | head -80; exit 1; }
+
+      - name: Run in an iPhone simulator and take screenshots
+        working-directory: ios
+        run: bash simtest.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-screenshots
+          path: ios/shots/
+
       - name: Show build errors
         if: failure()
         working-directory: ios
