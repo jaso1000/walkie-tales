@@ -123,6 +123,7 @@
   .val { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 
   .up-list { margin-top: 10px; font-size: 14px; }
+  .chip.off { opacity: .45; }
   .up-list div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; color: var(--muted); }
   .up-list div.ok { color: var(--good); }
   .up-list div.err { color: var(--bad); }
@@ -262,6 +263,7 @@
     <div class="row">
       <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
     </div>
+    <div id="upTargets" hidden style="margin-top:12px"><small style="color:var(--muted)">Upload to</small><div class="chips" id="upTargetList" style="margin-top:6px"></div></div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="upGo">Upload</button>
     </div>
@@ -556,6 +558,7 @@
       g.appendChild(t);
       if (f.name !== '@all') { const o = el('option'); o.value = f.name; dl.appendChild(o); }
     });
+    renderUpTargets();
     $('#free').textContent = lib.freeBytes ? (lib.freeBytes / 1e9).toFixed(1) + ' GB free on the player' : '';
     // link targets
     const sel = $('#linkTarget'); const keep = sel.value; sel.textContent = '';
@@ -577,28 +580,68 @@
     }).catch(err);
   };
 
+  // Several players: pick which ones get the upload (remembered on this device). A player is only offered once
+  // this device knows its PIN (open it from the player list once).
+  let upSel = null;
+  function upTargets() {
+    if (!players || players.length < 2 || !cur) return [{ id: null, name: '', base, pin }];
+    if (!upSel) { try { upSel = JSON.parse(store.get('cp_up_targets') || 'null'); } catch (e) { upSel = null; } }
+    if (!Array.isArray(upSel)) upSel = [cur.id];
+    return players.filter(p => upSel.includes(p.id) && (p.id === cur.id || p.pinSaved || store.get(pinKey(p.id))))
+      .map(p => ({ id: p.id, name: label(p), base: '/p/' + p.id, pin: p.id === cur.id ? pin : store.get(pinKey(p.id)) }));
+  }
+  function renderUpTargets() {
+    const box = $('#upTargets'), l = $('#upTargetList');
+    if (!players || players.length < 2 || !cur) { box.hidden = true; return; }
+    upTargets(); // loads the saved choice
+    box.hidden = false; l.textContent = '';
+    players.forEach(p => {
+      const known = p.id === cur.id || p.pinSaved || !!store.get(pinKey(p.id));
+      const on = known && upSel.includes(p.id);
+      const c = el('button', 'chip' + (on ? ' on' : '') + (known ? '' : ' off'), (on ? '\u2713 ' : '') + label(p));
+      c.type = 'button';
+      c.title = known ? '' : 'Open this player once from the player list to enter its PIN';
+      c.onclick = () => {
+        if (!known) return toast('Switch to ' + label(p) + ' once to enter its PIN');
+        upSel = on ? upSel.filter(x => x !== p.id) : upSel.concat(p.id);
+        store.set('cp_up_targets', JSON.stringify(upSel)); renderUpTargets();
+      };
+      l.appendChild(c);
+    });
+  }
+
   $('#upGo').onclick = async () => {
     const folder = $('#upFolder').value.trim(); const files = [...$('#upFiles').files];
     if (!folder) return toast('Type a folder name first');
     if (/[\\/]/.test(folder) || folder.startsWith('.')) return toast('Folder names can’t contain / or start with a dot');
     if (!files.length) return toast('Choose some files');
+    const targets = upTargets();
+    if (!targets.length) return toast('Choose at least one player to upload to');
     $('#upGo').disabled = true;
     const list = $('#upList'); list.textContent = '';
+    let failed = 0;
     for (const f of files) {
-      const row = el('div'); const name = el('span', '', f.name); const prog = el('progress'); prog.max = 100; prog.value = 0; prog.style.width = '40%';
-      row.appendChild(name); row.appendChild(prog); list.appendChild(row);
-      try { await upload(folder, f, (p) => prog.value = p); row.className = 'ok'; prog.replaceWith(el('span', '', 'done')); }
-      catch (e) { row.className = 'err'; prog.replaceWith(el('span', '', e.message)); }
+      for (const t of targets) {
+        const row = el('div'); const name = el('span', '', f.name + (targets.length > 1 ? ' \u2192 ' + t.name : ''));
+        const prog = el('progress'); prog.max = 100; prog.value = 0; prog.style.width = '40%';
+        row.appendChild(name); row.appendChild(prog); list.appendChild(row);
+        try { await upload(folder, f, (p) => prog.value = p, t); row.className = 'ok'; prog.replaceWith(el('span', '', 'done')); }
+        catch (e) { failed++; row.className = 'err'; prog.replaceWith(el('span', '', e.message)); }
+      }
     }
     $('#upGo').disabled = false; $('#upFiles').value = '';
-    toast('Upload finished'); loadLibrary();
-    api('/api/covers/find', { force: false }).then(() => setTimeout(loadLibrary, 8000)).catch(() => {});
+    toast(failed ? 'Finished, ' + failed + ' failed' : 'Upload finished' + (targets.length > 1 ? ' on ' + targets.length + ' players' : '')); loadLibrary();
+    for (const t of targets) { // look for covers for the new folder on each player
+      fetch(t.base + '/api/covers/find', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, t.pin ? { 'X-Pin': t.pin } : {}), body: '{"force":false}' }).catch(() => {});
+    }
+    setTimeout(loadLibrary, 8000);
   };
-  function upload(folder, file, onProgress) {
+  function upload(folder, file, onProgress, t) {
+    t = t || { base, pin };
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
-      x.open('PUT', base + '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name));
-      if (pin) x.setRequestHeader('X-Pin', pin);
+      x.open('PUT', t.base + '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name));
+      if (t.pin) x.setRequestHeader('X-Pin', t.pin);
       x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round(e.loaded * 100 / e.total)); };
       x.onload = () => { if (x.status === 200) resolve(); else { let m = 'failed'; try { m = JSON.parse(x.responseText).error; } catch (e) {} reject(new Error(m)); } };
       x.onerror = () => reject(new Error('network error'));

@@ -43,7 +43,7 @@ Tip: give the player phone a fixed IP address (a DHCP reservation in your router
 
 The Docker companion can look after any number of players. Tap the player's name at the top of the page to switch,
 add one by its address, or press **Find players on the Wi-Fi** (it checks port 8080 on the players' own network,
-plus any `SCAN_SUBNETS`). Each device remembers each player's PIN separately. The list is kept in the
+plus any `SCAN_SUBNETS`). Each device remembers each player's PIN separately. With more than one player, **Library → Add music** has an *Upload to* choice, so the same files go to several players in one go (a player shows up there once this device knows its PIN). The list is kept in the
 `walkie-tales-data` volume, and `PLAYERS="Riv=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"` can pre-fill it.
 Only addresses on the home network (10.x, 172.16-31.x, 192.168.x or local host names) are accepted.
 
