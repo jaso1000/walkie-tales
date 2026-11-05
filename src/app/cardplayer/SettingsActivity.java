@@ -120,7 +120,7 @@ public class SettingsActivity extends Activity {
         cycle("Dim the screen after", "dim_after", new int[]{30, 90, 300, 0},
                 new String[]{"30 seconds", "90 seconds", "5 minutes", "Never"}, 90);
         cycle("Keep the screen on", "screen_on", new int[]{0, 2, 1},
-                new String[]{"Only while charging", "While charging or playing", "Always"}, 0);
+                new String[]{"No", "While playing", "Always"}, 0);
         cycle("Screen turns off after", "screen_timeout", new int[]{30, 60, 120, 300},
                 new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, 60);
         toggle("Night light", null, "night_light", false);

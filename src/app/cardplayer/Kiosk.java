@@ -128,6 +128,17 @@ final class Kiosk {
         } catch (Exception ignored) { }
     }
 
+    /** Android's own "stay awake while charging" option (the app decides when to keep the screen on instead). */
+    static void setStayOnWhileCharging(Context c, boolean on) {
+        if (!isOwner(c) || Store.prefs(c).contains("saved_timeout")) return;
+        try {
+            String v = on ? "3" : "0";
+            if (!v.equals(android.provider.Settings.Global.getString(c.getContentResolver(), android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN))) {
+                dpm(c).setGlobalSetting(admin(c), android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, v);
+            }
+        } catch (Exception ignored) { }
+    }
+
     /** Restart the phone (device owner only): the way to switch it off and on while the power menu is blocked. */
     static boolean reboot(Context c) {
         if (!isOwner(c)) return false;

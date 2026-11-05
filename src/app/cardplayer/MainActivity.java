@@ -663,7 +663,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         renderTracksBtn();
         if (!canBrowse && browsing) closeBrowser();
         if (Kiosk.isOwner(this) && Kiosk.isLocked(this)) Kiosk.applyFeatures(this); // power menu on/off
-        if (!screenLocked) Kiosk.setTimeout(this, prefs.getInt("screen_timeout", 60));
+        if (!screenLocked) {
+            Kiosk.setTimeout(this, prefs.getInt("screen_timeout", 60));
+            Kiosk.setStayOnWhileCharging(this, false); // charging alone shouldn't keep the screen on
+        }
         if (browsing) openBrowser(); // refresh in case folders changed
         enableReader(); // cards may have been switched on/off
         nightClock.setVisibility(prefs.getBoolean("night_clock", true) ? View.VISIBLE : View.GONE);
@@ -681,10 +684,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
      * Otherwise it times out after "screen_timeout" and the music carries on with the screen off.
      */
     void updateKeepOn() {
-        int mode = prefs.getInt("screen_on", 0); // 0 charging, 1 always, 2 charging or playing
-        // Bedtime black screen stays technically on only when cards are used (the reader needs the screen on).
-        boolean on = !screenLocked && (mode == 1 || charging || (mode == 2 && ready() && mp.isPlaying())
-                || (bedtimeDarkOn() && cardsOn()));
+        int mode = prefs.getInt("screen_on", 0); // 0 never (sleeps after the timeout), 1 always, 2 while playing
+        // Cards need the screen on for the reader: then it stays on while charging, and through the bedtime black screen.
+        boolean on = !screenLocked && (mode == 1 || (mode == 2 && ready() && mp.isPlaying())
+                || (cardsOn() && (charging || bedtimeDarkOn())));
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }

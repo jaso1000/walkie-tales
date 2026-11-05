@@ -121,7 +121,7 @@ if [ "$MODE" = apply ]; then
   adb_ settings put global ble_scan_always_enabled 0       # no background Bluetooth scanning
   adb_ settings put secure location_mode 0                 # location off
   adb_ settings put global mobile_data 0                   # no SIM needed
-  adb_ settings put global stay_on_while_plugged_in 3      # screen (and card reader) awake while charging
+  adb_ settings put global stay_on_while_plugged_in 0      # screen sleeps even on the charger (the app keeps it on when needed)
   adb_ settings put system screen_brightness_mode 1        # adaptive brightness
   adb_ settings put system screen_off_timeout 60000        # 1 min when on battery and idle
   adb_ settings put global auto_sync 0 2>/dev/null

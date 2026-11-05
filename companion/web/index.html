@@ -664,7 +664,7 @@
     const p = $('#setPlay'); SWITCHES.setPlay.forEach(a => p.appendChild(sw(...a)));
     const sc = $('#setScreen');
     sc.appendChild(choice('dim_after', 'Dim the screen after', [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']]));
-    sc.appendChild(choice('screen_on', 'Keep the screen on', [[0, 'Only while charging'], [2, 'While charging or playing'], [1, 'Always']]));
+    sc.appendChild(choice('screen_on', 'Keep the screen on', [[0, 'No'], [2, 'While playing'], [1, 'Always']]));
     sc.appendChild(choice('screen_timeout', 'Screen turns off after', [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes']]));
     SWITCHES.setScreen.forEach(a => sc.appendChild(sw(...a)));
     const sf = $('#setSafety'); SWITCHES.setSafety.forEach(a => sf.appendChild(sw(...a)));
