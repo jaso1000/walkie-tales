@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Walkie Tales">
-<title>Walkie Tales Remote</title>
+<meta name="apple-mobile-web-app-title" content="WalkieTales">
+<title>WalkieTales Remote</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='24' fill='%236C4CF1'/%3E%3Crect x='30' y='26' width='48' height='56' rx='6' fill='white'/%3E%3Cpath transform='translate(36 35) scale(1.5)' fill='%236C4CF1' d='M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -136,7 +136,7 @@
 <body>
 
 <header>
-  <h1>Walkie Tales</h1>
+  <h1>WalkieTales</h1>
   <span class="pill" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting…</span></span>
   <span class="pill" id="batt" hidden></span>
 </header>
@@ -165,6 +165,14 @@
       <button class="rb" id="volUp" title="Louder"><svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg></button>
     </div>
     <div class="hint" id="volHint"></div>
+  </div>
+
+  <div class="card">
+    <h2>Screen</h2>
+    <div class="row">
+      <button class="btn" id="screenBtn">Turn the screen off</button>
+    </div>
+    <div class="hint" id="screenHint" style="text-align:left">Switches the player's screen off and ignores taps, so it can't be woken up. Music keeps playing, and you can turn it back on from here.</div>
   </div>
 
   <div class="card">
@@ -259,7 +267,7 @@
     <input type="text" id="s_kid_name" maxlength="40" placeholder="Name">
   </div>
   <div class="card" id="setSound"><h2>Sound</h2></div>
-  <div class="card" id="setQuiet"><h2>Quiet hours</h2></div>
+  <div class="card" id="setQuiet"><h2>Bedtime</h2></div>
   <div class="card" id="setPlay"><h2>Browsing & cards</h2></div>
   <div class="card" id="setScreen"><h2>Screen</h2></div>
   <div class="card" id="setSafety"><h2>Safety</h2></div>
@@ -278,7 +286,7 @@
 </nav>
 
 <div id="pin"><div class="box">
-  <h2 style="margin:0 0 6px">Connect to Walkie Tales</h2>
+  <h2 style="margin:0 0 6px">Connect to WalkieTales</h2>
   <div class="hint">Enter the PIN shown on the player in <b>Grown-up settings → Remote control</b>.</div>
   <input type="text" id="pinIn" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
   <button class="btn" id="pinGo" style="width:100%">Connect</button>
@@ -372,6 +380,11 @@
       const c = el('button', 'chip' + ((m === 0 && !s.sleepMinutesLeft) ? ' on' : ''), m ? m + ' min' : 'Off');
       c.onclick = () => act('/api/sleep', { minutes: m }); chips.appendChild(c);
     });
+    $('#screenBtn').textContent = s.screenOff ? 'Turn the screen back on' : 'Turn the screen off';
+    $('#screenBtn').classList.toggle('ghost', !!s.screenOff);
+    $('#screenHint').textContent = s.screenOff ? 'The screen is off and taps are ignored. Music and the remote still work.'
+      : 'Switches the player’s screen off and ignores taps, so it can’t be woken up. Music keeps playing, and you can turn it back on from here.'
+        + (s.dark ? ' (It’s black right now for bedtime; a tap shows it again.)' : '');
     $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
     // track list
     const tl = $('#trackList'); tl.textContent = '';
@@ -412,6 +425,7 @@
   $('#volUp').onclick = () => act('/api/volume', { delta: 1 });
   $('#restart').onclick = () => act('/api/restart');
   $('#stop').onclick = () => act('/api/stop');
+  $('#screenBtn').onclick = () => act('/api/screen', { off: !(st && st.screenOff) }).then(r => toast(r && r.screenOff ? 'Screen off' : 'Screen on'));
   $('#msgSend').onclick = () => { const t = $('#msgText').value.trim(); if (!t) return; act('/api/message', { text: t }).then(() => { $('#msgText').value = ''; toast('Sent'); }); };
   $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };
 
@@ -520,10 +534,10 @@
   // ---------------------------------------------------------------- settings
   const SWITCHES = {
     setSound: [['show_volume', 'Volume buttons on the player'], ['fade_in', 'Fade in', 'Start music gently'], ['announce', 'Say the name out loud', 'Announce what’s playing (text-to-speech)']],
-    setQuiet: [['quiet', 'Quiet hours', 'Lower volume limit overnight']],
+    setQuiet: [['bedtime_dark', 'Screen off at bedtime', 'Black screen 30 s after the last touch; music, cards and the remote keep working'], ['quiet', 'Quieter at bedtime', 'Lower volume limit overnight']],
     setPlay: [['find_art', 'Find missing covers online', 'iTunes / radio-browser.info, using folder names'], ['cards', 'Use NFC cards', 'Off = browse-only player (for phones without working NFC)'], ['browse', 'Browse without cards', 'Show the ▦ library button (always on while cards are off)'], ['track_list', 'Pick a track from the list'], ['rest_mode', 'Play while the card rests on the phone', 'Lift the card to pause (Toniebox style)']],
     setScreen: [['night_light', 'Night light', 'Warm glow when idle'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery on the player']],
-    setSafety: [['gate', 'Grown-up check', 'Ask a sum before the settings open on the player']],
+    setSafety: [['gate', 'Grown-up check', 'Ask a sum before the settings open on the player'], ['power_menu', 'Power button menu', 'Off = holding the power button can’t switch the player off']],
   };
   let built = false;
   function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; toast('Saved'); poll(); }).catch(err); }
@@ -550,8 +564,10 @@
   function buildSettings() {
     if (built) return; built = true;
     const snd = $('#setSound'); snd.appendChild(range('max_volume', 'Maximum volume', 10, 100)); SWITCHES.setSound.forEach(a => snd.appendChild(sw(...a)));
-    const q = $('#setQuiet'); SWITCHES.setQuiet.forEach(a => q.appendChild(sw(...a)));
-    q.appendChild(time('quiet_start', 'Starts')); q.appendChild(time('quiet_end', 'Ends')); q.appendChild(range('quiet_volume', 'Quiet-time maximum volume', 10, 100));
+    const q = $('#setQuiet');
+    q.appendChild(time('quiet_start', 'Bedtime starts')); q.appendChild(time('quiet_end', 'Bedtime ends'));
+    SWITCHES.setQuiet.forEach(a => q.appendChild(sw(...a)));
+    q.appendChild(range('quiet_volume', 'Bedtime maximum volume', 10, 100));
     const p = $('#setPlay'); SWITCHES.setPlay.forEach(a => p.appendChild(sw(...a)));
     const sc = $('#setScreen');
     sc.appendChild(choice('dim_after', 'Dim the screen after', [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']]));
@@ -571,7 +587,7 @@
       else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
       else inp.value = v;
     }
-    $('#about').textContent = 'Walkie Tales ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
+    $('#about').textContent = 'WalkieTales ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
   }
 
   function refreshAll() { poll(); }

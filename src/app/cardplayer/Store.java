@@ -51,6 +51,7 @@ final class Store {
         SETTINGS.put("quiet_start", 19 * 60);
         SETTINGS.put("quiet_end", 7 * 60);
         SETTINGS.put("quiet_volume", 40);
+        SETTINGS.put("bedtime_dark", false);
         SETTINGS.put("cards", true);
         SETTINGS.put("find_art", true);
         SETTINGS.put("browse", true);
@@ -62,6 +63,7 @@ final class Store {
         SETTINGS.put("night_clock", true);
         SETTINGS.put("show_status", true);
         SETTINGS.put("gate", true);
+        SETTINGS.put("power_menu", true);
         SETTINGS.put("remote", true);
     }
 
@@ -153,7 +155,7 @@ final class Store {
         Properties p = new Properties();
         p.putAll(m);
         try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
-            p.store(w, "Walkie Tales links: CARD_ID=Folder name (or @action)");
+            p.store(w, "WalkieTales links: CARD_ID=Folder name (or @action)");
             return true;
         } catch (IOException e) {
             return false;

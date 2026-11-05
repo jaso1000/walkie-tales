@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Slim down a Walkie Tales player phone for speed and battery life.
+# Slim down a WalkieTales player phone for speed and battery life.
 #
 #   bash tools/phone-tune.sh            # apply
 #   bash tools/phone-tune.sh --undo     # re-enable everything this disabled, restore settings
@@ -125,11 +125,13 @@ if [ "$MODE" = apply ]; then
   adb_ settings put system screen_brightness_mode 1        # adaptive brightness
   adb_ settings put system screen_off_timeout 60000        # 1 min when on battery and idle
   adb_ settings put global auto_sync 0 2>/dev/null
+  adb_ cmd deviceidle whitelist +app.cardplayer >/dev/null  # let the remote reach it while the screen is off
   echo "Settings tuned. Reboot the phone to free the memory: adb reboot"
 else
   adb_ settings put global window_animation_scale 1
   adb_ settings put global transition_animation_scale 1
   adb_ settings put global wifi_scan_always_enabled 1
   adb_ settings put secure location_mode 3
+  adb_ cmd deviceidle whitelist -app.cardplayer >/dev/null
   echo "Settings restored."
 fi

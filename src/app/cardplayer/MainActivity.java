@@ -60,7 +60,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextClock;
 import android.widget.TextView;
 import android.window.OnBackInvokedDispatcher;
@@ -79,7 +79,7 @@ import java.util.Random;
 import java.util.TreeMap;
 
 /**
- * Walkie Tales: tap an NFC card on the phone to play a folder of audio.
+ * WalkieTales: tap an NFC card on the phone to play a folder of audio.
  *
  * Music lives in /sdcard/Music/Cards/<folder>/... (one folder per card).
  * Grown-ups press and hold ⋮ (top-right) for settings.
@@ -107,7 +107,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     boolean preparing, wantPlay; // a live stream is connecting
     int prepToken;
     int index;
-    int ticks;
+    int ticks, bedtimeTicks;
     int accent = DEFAULT_ACCENT;
 
     String linkTarget;
@@ -134,13 +134,20 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     LinearLayout grid;
     boolean browsing;
     int browseBuild;
-    View nightView, statusGroup, volumeRow, browseBtn;
+    View nightView, statusGroup, volumeRow, browseBtn, blackout, chipsRow;
     GradientDrawable backdrop;
     ImageView art, moon;
-    TextView title, subtitle, status, time, battery, sleepText;
-    ProgressBar progress;
+    TextView title, subtitle, status, timePos, timeDur, battery, sleepText, tracksText;
+    LinearLayout tracksBtn;
+    SeekBar seek;
+    boolean scrubbing;
     ImageButton prevBtn, playBtn, nextBtn;
     LinearLayout dots;
+
+    // "Screen off" from the remote: black, touch-proof, and switched off for real where Android allows.
+    boolean screenLocked;
+    PowerManager.WakeLock lockWake;
+    android.net.wifi.WifiManager.WifiLock wifiLock;
 
     // ================================================================ lifecycle
 
@@ -167,6 +174,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                     OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> { if (sheetOpen) closeTrackList(); else if (browsing) closeBrowser(); });
         }
 
+        Kiosk.restoreTimeout(this); // in case the app restarted while the screen was switched off
         showIdle();
         restoreLast();
         handleIntent(getIntent());
@@ -230,7 +238,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             android.media.MediaMetadata.Builder md = new android.media.MediaMetadata.Builder()
                     .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, tracks.get(index).name)
                     .putString(android.media.MediaMetadata.METADATA_KEY_ALBUM, Store.ALL.equals(folder) ? "Everything" : folder)
-                    .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, "Walkie Tales")
+                    .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, "WalkieTales")
                     .putLong(android.media.MediaMetadata.METADATA_KEY_TRACK_NUMBER, index + 1)
                     .putLong(android.media.MediaMetadata.METADATA_KEY_NUM_TRACKS, tracks.size());
             try { if (ready() && !isLive()) md.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, mp.getDuration()); } catch (Exception ignored) { }
@@ -288,7 +296,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         hideSystemBars();
         wake();
         if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
-            flash("Walkie Tales needs access to the Music folder", 8000);
+            flash("WalkieTales needs access to the Music folder", 8000);
             if (!askedForFiles) {
                 askedForFiles = true;
                 try {
@@ -301,6 +309,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!receiversOn) {
             register(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             register(noisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+            register(screenReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
             receiversOn = true;
         }
         maybeLockTask();
@@ -327,7 +336,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             default: break;
         }
         if (!post) return null;
-        wake();
+        wake(); // does nothing while the screen is switched off from the remote
         switch (path) {
             case "/api/play": {
                 String f = b.optString("folder");
@@ -365,6 +374,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 break;
             }
             case "/api/sleep": setSleep(b.optInt("minutes", 0)); break;
+            case "/api/screen": setScreenLocked(b.optBoolean("off", !screenLocked)); break;
             case "/api/message": {
                 String t = b.optString("text").trim();
                 if (t.length() > 120) t = t.substring(0, 120);
@@ -466,6 +476,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         s.put("message", status.getText().toString());
         s.put("locked", Kiosk.isLocked(this));
         s.put("nfc", nfcState);
+        s.put("screenOff", screenLocked);
+        s.put("bedtime", bedtimeNow());
+        s.put("dark", blackout.getVisibility() == View.VISIBLE);
         return s;
     }
 
@@ -542,7 +555,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (receiversOn) {
             try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) { }
             try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) { }
+            try { unregisterReceiver(screenReceiver); } catch (Exception ignored) { }
         }
+        releaseLockHolds();
         savePosition();
         releasePlayer();
         if (tts != null) tts.shutdown();
@@ -560,6 +575,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     public boolean dispatchTouchEvent(MotionEvent ev) {
         // When the screen is dimmed, the first touch only wakes it (so a sleepy tap can't press a button).
         int a = ev.getActionMasked();
+        if (screenLocked) { // switched off from the remote: touches do nothing, and the screen goes back off
+            if (a == MotionEvent.ACTION_DOWN) scheduleScreenOff(800);
+            return true;
+        }
         if (a == MotionEvent.ACTION_DOWN && dimmed) {
             wake();
             swallowTouch = true;
@@ -575,6 +594,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent e) {
+        if (screenLocked && (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            scheduleScreenOff(800);
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) { changeVolume(1); return true; }
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) { changeVolume(-1); return true; }
         // Media buttons (Bluetooth remotes / headsets) even before Android has picked a media session.
@@ -609,7 +632,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         statusGroup.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
         boolean canBrowse = canBrowse();
         browseBtn.setVisibility(canBrowse ? View.VISIBLE : View.GONE);
+        renderTracksBtn();
         if (!canBrowse && browsing) closeBrowser();
+        if (Kiosk.isOwner(this) && Kiosk.isLocked(this)) Kiosk.applyFeatures(this); // power menu on/off
         if (browsing) openBrowser(); // refresh in case folders changed
         enableReader(); // cards may have been switched on/off
         nightClock.setVisibility(prefs.getBoolean("night_clock", true) ? View.VISIBLE : View.GONE);
@@ -624,7 +649,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     /** Keep the screen (and so the card reader) awake while charging or playing, or always if chosen. */
     void updateKeepOn() {
-        boolean on = prefs.getInt("screen_on", 0) == 1 || charging || (ready() && mp.isPlaying());
+        // Bedtime "screen off" keeps the display technically on (just black) so cards and the remote keep working.
+        boolean on = !screenLocked && (prefs.getInt("screen_on", 0) == 1 || charging || (ready() && mp.isPlaying())
+                || bedtimeDarkOn());
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -1137,18 +1164,27 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         @Override public void run() {
             h.removeCallbacks(this);
             if (isLive()) {
-                progress.setMax(1);
-                progress.setProgress(ready() ? 1 : 0); // full bar = on air
-                time.setText(preparing ? "Connecting…" : ready() && mp.isPlaying() ? "●  LIVE" : "LIVE");
+                setSeekable(false);
+                seek.setMax(1);
+                seek.setProgress(ready() ? 1 : 0); // full bar = on air
+                timePos.setText(preparing ? "Connecting…" : ready() && mp.isPlaying() ? "●  LIVE" : "LIVE");
+                timeDur.setText("");
             } else if (ready()) {
+                setSeekable(true);
                 try {
                     int dur = mp.getDuration(), cur = mp.getCurrentPosition();
-                    progress.setMax(Math.max(dur, 1));
-                    progress.setProgress(cur);
-                    time.setText(fmt(cur) + "  /  " + fmt(dur));
+                    if (!scrubbing) {
+                        seek.setMax(Math.max(dur, 1));
+                        seek.setProgress(cur);
+                        timePos.setText(fmt(cur));
+                    }
+                    timeDur.setText(fmt(dur));
                     if (mp.isPlaying() && ++ticks % 20 == 0) savePosition();
                 } catch (Exception ignored) { }
+            } else {
+                setSeekable(false);
             }
+            if (++bedtimeTicks % 20 == 0) checkBedtime();
             tickSleep();
             enforceVolumeCap();
             renderVolume();
@@ -1208,7 +1244,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     /** Quiet hours: a lower volume limit overnight (e.g. 7pm–7am). */
     boolean quietNow() {
-        if (!prefs.getBoolean("quiet", false)) return false;
+        return prefs.getBoolean("quiet", false) && bedtimeNow();
+    }
+
+    /** Bedtime: between the quiet-hours start and end times (used by the volume limit and the screen-off option). */
+    boolean bedtimeNow() {
         Calendar c = Calendar.getInstance();
         int m = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
         int s = prefs.getInt("quiet_start", 19 * 60), e = prefs.getInt("quiet_end", 7 * 60);
@@ -1244,7 +1284,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         shownVolume = key;
         if (dots.getChildCount() != segs) {
             dots.removeAllViews();
-            int avail = getResources().getDisplayMetrics().widthPixels - dp(56 + 2 * 52 + 24);
+            int avail = getResources().getDisplayMetrics().widthPixels - dp(2 * 22 + 2 * 52 + 24);
             int slot = Math.min(dp(22), avail / segs);
             int size = Math.max(dp(6), Math.round(slot * 0.6f));
             for (int i = 0; i < segs; i++) {
@@ -1309,10 +1349,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        col.setPadding(dp(28), dp(16), dp(28), dp(26));
+        col.setPadding(dp(22), dp(10), dp(22), dp(18));
         rootView.addView(col, new FrameLayout.LayoutParams(-1, -1));
 
-        // ---- top bar: clock · battery ........ sleep timer · ⋮
+        // ---- top bar: clock · battery ........ sleep timer · settings cog
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout sg = new LinearLayout(this);
@@ -1328,28 +1368,23 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         statusGroup = sg;
         top.addView(sg);
         top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
-        ImageView bb = new ImageView(this);
-        bb.setImageResource(R.drawable.ic_grid);
-        bb.setAlpha(0.75f);
-        bb.setPadding(dp(11), dp(11), dp(11), dp(11));
-        bb.setOnClickListener(v -> openBrowser());
-        browseBtn = bb;
-        top.addView(bb, new LinearLayout.LayoutParams(dp(46), dp(46)));
         sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true);
         sleepText.setPadding(dp(6), 0, 0, 0);
         top.addView(sleepText);
         moon = new ImageView(this);
         moon.setImageResource(R.drawable.ic_moon);
         moon.setPadding(dp(11), dp(11), dp(11), dp(11));
+        moon.setContentDescription("Sleep timer");
         moon.setOnClickListener(v -> cycleSleep());
         top.addView(moon, new LinearLayout.LayoutParams(dp(46), dp(46)));
-        ImageView more = new ImageView(this);
-        more.setImageResource(R.drawable.ic_more);
-        more.setAlpha(0.4f);
-        more.setPadding(dp(11), dp(11), dp(11), dp(11));
-        more.setOnClickListener(v -> flash("Grown-ups: press and hold", 2000));
-        more.setOnLongClickListener(v -> { openSettings(); return true; });
-        top.addView(more, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        ImageView cog = new ImageView(this);
+        cog.setImageResource(R.drawable.ic_settings);
+        cog.setAlpha(0.55f);
+        cog.setPadding(dp(11), dp(11), dp(11), dp(11));
+        cog.setContentDescription("Grown-up settings (press and hold)");
+        cog.setOnClickListener(v -> flash("Grown-ups: press and hold ⚙", 2000));
+        cog.setOnLongClickListener(v -> { openSettings(); return true; });
+        top.addView(cog, new LinearLayout.LayoutParams(dp(46), dp(46)));
         col.addView(top, new LinearLayout.LayoutParams(-1, dp(46)));
 
         // ---- artwork: lives in a box that takes all leftover height, and stays square inside it,
@@ -1357,7 +1392,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         FrameLayout artBox = new FrameLayout(this) {
             @Override protected void onSizeChanged(int w, int hgt, int ow, int oh) {
                 super.onSizeChanged(w, hgt, ow, oh);
-                int s = Math.max(dp(120), Math.min(Math.min(w - dp(24), hgt - dp(20)), dp(320)));
+                int s = Math.max(dp(120), Math.min(Math.min(w - dp(16), hgt - dp(16)), dp(340)));
                 FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) art.getLayoutParams();
                 if (lp.width != s) {
                     lp.width = s;
@@ -1376,7 +1411,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         });
         art.setClipToOutline(true);
         art.setElevation(dp(18));
-        // Tap the cover to play/pause; swipe it left/right to skip.
+        // Tap the cover to play/pause; swipe it left/right to skip, up for the track list.
         final GestureDetector gd = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent e) { return true; }
             @Override public boolean onSingleTapUp(MotionEvent e) {
@@ -1384,18 +1419,22 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 return true;
             }
             @Override public boolean onFling(MotionEvent a, MotionEvent b, float vx, float vy) {
-                if (a == null || mp == null) return false;
-                float dx = b.getX() - a.getX();
-                if (Math.abs(dx) > dp(50) && Math.abs(vx) > Math.abs(vy)) {
+                if (a == null) return false;
+                float dx = b.getX() - a.getX(), dy = b.getY() - a.getY();
+                if (mp != null && Math.abs(dx) > dp(50) && Math.abs(vx) > Math.abs(vy)) {
                     nudge(dx < 0);
                     if (dx < 0) next(); else prev();
+                    return true;
+                }
+                if (dy < -dp(60) && Math.abs(vy) > Math.abs(vx)) {
+                    showTrackList();
                     return true;
                 }
                 return false;
             }
         });
         art.setOnTouchListener((v, e) -> gd.onTouchEvent(e));
-        art.setContentDescription("Cover. Tap to play or pause, swipe to skip");
+        art.setContentDescription("Cover. Tap to play or pause, swipe sideways to skip, swipe up for the tracks");
         int size = dp(240); // replaced with the real size once the box is measured
         artBox.addView(art, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
         breathe = ObjectAnimator.ofFloat(art, "scaleX", 1f, 1.035f);
@@ -1405,54 +1444,105 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         breathe.setInterpolator(new AccelerateDecelerateInterpolator());
         breathe.addUpdateListener(an -> art.setScaleY((float) an.getAnimatedValue()));
 
-        title = Ui.text(this, "", 28, Color.WHITE, true);
+        // messages float over the bottom of the cover instead of taking up a row of their own
+        status = Ui.text(this, "", 15, 0xFFFFE082, true);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(dp(16), dp(9), dp(16), dp(9));
+        status.setMaxLines(3);
+        GradientDrawable sb = new GradientDrawable();
+        sb.setCornerRadius(dp(18));
+        sb.setColor(0xD9101016);
+        status.setBackground(sb);
+        status.setElevation(dp(24));
+        status.setVisibility(View.GONE);
+        FrameLayout.LayoutParams stl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        stl.bottomMargin = dp(14);
+        stl.leftMargin = stl.rightMargin = dp(18);
+        artBox.addView(status, stl);
+
+        // ---- folder name (shrinks to fit one line) and the track playing
+        title = Ui.text(this, "", 26, Color.WHITE, true);
         title.setGravity(Gravity.CENTER);
-        title.setMaxLines(2);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
-        tl.topMargin = dp(14);
+        title.setMaxLines(1);
+        title.setAutoSizeTextTypeUniformWithConfiguration(17, 26, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, dp(38));
+        tl.topMargin = dp(12);
         col.addView(title, tl);
 
-        // subtitle row: [dancing bars] Track 2 of 9 · Name ›
         LinearLayout subRow = new LinearLayout(this);
         subRow.setGravity(Gravity.CENTER);
         eq = new EqView(this);
         LinearLayout.LayoutParams el = new LinearLayout.LayoutParams(dp(20), dp(14));
         el.rightMargin = dp(10);
         subRow.addView(eq, el);
-        subtitle = Ui.text(this, "", 16, 0xB3FFFFFF, false);
+        subtitle = Ui.text(this, "", 17, 0xC7FFFFFF, false);
         subtitle.setSingleLine(true);
         subtitle.setEllipsize(TextUtils.TruncateAt.END);
-        subtitle.setMaxWidth(getResources().getDisplayMetrics().widthPixels - dp(100));
-        subtitle.setPadding(0, dp(4), 0, dp(4));
+        subtitle.setMaxWidth(getResources().getDisplayMetrics().widthPixels - dp(90));
         subRow.addView(subtitle);
-        subRow.setOnClickListener(v -> showTrackList());
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2);
-        sl.topMargin = dp(4);
+        sl.topMargin = dp(2);
         col.addView(subRow, sl);
 
-        status = Ui.text(this, "", 15, 0xFFFFD54F, true);
-        status.setGravity(Gravity.CENTER);
-        status.setMinHeight(dp(38));
-        status.setPadding(0, dp(8), 0, 0);
-        col.addView(status, new LinearLayout.LayoutParams(-1, -2));
-
-        // ---- progress
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progress.setProgressTintList(ColorStateList.valueOf(Color.WHITE));
-        progress.setProgressBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
-        col.addView(progress, new LinearLayout.LayoutParams(-1, dp(8)));
-        time = Ui.text(this, "", 13, 0x99FFFFFF, false);
-        time.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-1, -2);
-        ml.topMargin = dp(4);
-        col.addView(time, ml);
+        // ---- scrub bar: drag the dot to move through the track
+        seek = new SeekBar(this);
+        GradientDrawable trackBg = new GradientDrawable();
+        trackBg.setCornerRadius(dp(4));
+        trackBg.setColor(0x33FFFFFF);
+        GradientDrawable trackFg = new GradientDrawable();
+        trackFg.setCornerRadius(dp(4));
+        trackFg.setColor(Color.WHITE);
+        android.graphics.drawable.LayerDrawable bar = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{
+                trackBg, new android.graphics.drawable.ClipDrawable(trackFg, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL)});
+        bar.setId(0, android.R.id.background);
+        bar.setId(1, android.R.id.progress);
+        seek.setProgressDrawable(bar);
+        seek.setMinHeight(dp(8));
+        seek.setMaxHeight(dp(8));
+        GradientDrawable thumb = new GradientDrawable();
+        thumb.setShape(GradientDrawable.OVAL);
+        thumb.setColor(Color.WHITE);
+        thumb.setSize(dp(26), dp(26));
+        seek.setThumb(thumb);
+        seek.setSplitTrack(false);
+        seek.setPadding(dp(14), 0, dp(14), 0);
+        seek.setContentDescription("Position in the track");
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean user) {
+                if (user) timePos.setText(fmt(p));
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {
+                scrubbing = true;
+                s.animate().scaleY(1.15f).setDuration(120).start();
+            }
+            @Override public void onStopTrackingTouch(SeekBar s) {
+                scrubbing = false;
+                s.animate().scaleY(1f).setDuration(160).start();
+                if (ready() && !isLive()) {
+                    try {
+                        mp.seekTo(s.getProgress());
+                        savePosition();
+                    } catch (Exception ignored) { }
+                }
+                updateUi();
+            }
+        });
+        LinearLayout.LayoutParams skl = new LinearLayout.LayoutParams(-1, dp(40));
+        skl.topMargin = dp(10);
+        skl.leftMargin = skl.rightMargin = -dp(14); // let the dot reach the edges of the column
+        col.addView(seek, skl);
+        LinearLayout times = new LinearLayout(this);
+        timePos = Ui.text(this, "", 13, 0x99FFFFFF, false);
+        timeDur = Ui.text(this, "", 13, 0x99FFFFFF, false);
+        times.addView(timePos, new LinearLayout.LayoutParams(0, -2, 1f));
+        times.addView(timeDur);
+        col.addView(times, new LinearLayout.LayoutParams(-1, -2));
 
         // ---- transport
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         prevBtn = Ui.roundButton(this, R.drawable.ic_prev, 0x26FFFFFF, 18);
-        playBtn = Ui.roundButton(this, R.drawable.ic_play, DEFAULT_ACCENT, 20);
+        playBtn = Ui.roundButton(this, R.drawable.ic_play, DEFAULT_ACCENT, 22);
         nextBtn = Ui.roundButton(this, R.drawable.ic_next, 0x26FFFFFF, 18);
         prevBtn.setContentDescription("Previous track");
         playBtn.setContentDescription("Play or pause");
@@ -1462,10 +1552,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         playBtn.setOnClickListener(v -> togglePlay());
         nextBtn.setOnClickListener(v -> next());
         controls.addView(prevBtn, sized(68, 0));
-        controls.addView(playBtn, sized(96, 30));
+        controls.addView(playBtn, sized(92, 30));
         controls.addView(nextBtn, sized(68, 0));
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
-        cl.topMargin = dp(14);
+        cl.topMargin = dp(8);
         col.addView(controls, cl);
 
         // ---- volume: [-] ● ● ● ○ ○ [+]
@@ -1488,8 +1578,25 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         vr.addView(up, sized(48, 0));
         volumeRow = vr;
         LinearLayout.LayoutParams vl = new LinearLayout.LayoutParams(-1, -2);
-        vl.topMargin = dp(14);
+        vl.topMargin = dp(12);
         col.addView(vr, vl);
+
+        // ---- two big buttons: pick something else / see every track
+        LinearLayout chips = new LinearLayout(this);
+        browseBtn = chip(R.drawable.ic_grid, "Library", null);
+        browseBtn.setOnClickListener(v -> openBrowser());
+        tracksText = Ui.text(this, "Tracks", 17, Color.WHITE, true);
+        tracksBtn = chip(R.drawable.ic_queue, null, tracksText);
+        tracksBtn.setOnClickListener(v -> showTrackList());
+        LinearLayout.LayoutParams c1 = new LinearLayout.LayoutParams(0, dp(54), 1f);
+        LinearLayout.LayoutParams c2 = new LinearLayout.LayoutParams(0, dp(54), 1f);
+        c2.leftMargin = dp(12);
+        chips.addView(browseBtn, c1);
+        chips.addView(tracksBtn, c2);
+        chipsRow = chips;
+        LinearLayout.LayoutParams chl = new LinearLayout.LayoutParams(-1, -2);
+        chl.topMargin = dp(16);
+        col.addView(chips, chl);
 
         // ---- library browser overlay (lets kids pick without a card; can be turned off in settings)
         browser = new FrameLayout(this);
@@ -1537,6 +1644,53 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         nv.addView(nightClock, ncl);
         nightView = nv;
         rootView.addView(nightView, new FrameLayout.LayoutParams(-1, -1));
+
+        // ---- black screen: bedtime "screen off", and "screen off" from the remote
+        blackout = new View(this);
+        blackout.setBackgroundColor(Color.BLACK);
+        blackout.setVisibility(View.GONE);
+        rootView.addView(blackout, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    /** A big rounded button with an icon and a label, for the bottom row. */
+    LinearLayout chip(int icon, String label, TextView labelView) {
+        LinearLayout c = new LinearLayout(this);
+        c.setGravity(Gravity.CENTER);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(27));
+        bg.setColor(0x24FFFFFF);
+        c.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), bg, null));
+        ImageView i = new ImageView(this);
+        i.setImageResource(icon);
+        i.setColorFilter(Color.WHITE);
+        c.addView(i, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        TextView t = labelView != null ? labelView : Ui.text(this, label, 17, Color.WHITE, true);
+        t.setPadding(dp(10), 0, 0, 0);
+        t.setSingleLine(true);
+        c.addView(t);
+        c.setContentDescription(label != null ? label : "Tracks");
+        return c;
+    }
+
+    void setSeekable(boolean on) {
+        if (seek.isEnabled() == on) return;
+        seek.setEnabled(on);
+        seek.getThumb().mutate().setAlpha(on ? 255 : 0);
+    }
+
+    /** "Tracks · 3 of 9" button; hidden when there's nothing to choose from or the list is turned off. */
+    void renderTracksBtn() {
+        boolean allowed = prefs.getBoolean("track_list", true);
+        boolean have = folder != null && tracks.size() > 1;
+        tracksBtn.setVisibility(allowed ? View.VISIBLE : View.GONE);
+        tracksBtn.setAlpha(have ? 1f : 0.4f);
+        tracksBtn.setEnabled(have);
+        if (have) tracksText.setText((isLive() ? "Stations  " : "Tracks  ") + (index + 1) + "/" + tracks.size());
+        else tracksText.setText("Tracks");
+        boolean both = allowed && browseBtn.getVisibility() == View.VISIBLE;
+        ((LinearLayout.LayoutParams) tracksBtn.getLayoutParams()).leftMargin = both ? dp(12) : 0;
+        chipsRow.setVisibility(allowed || browseBtn.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE);
+        chipsRow.requestLayout();
     }
 
     // ================================================================ browse without cards
@@ -1669,15 +1823,16 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!cardsOn()) {
             // Browse-only player (e.g. a phone without working NFC).
             title.setText(name.isEmpty() ? "Pick something!" : greeting() + ", " + name + "!");
-            subtitle.setText("Tap here or press ▦ to choose");
+            subtitle.setText("Press Library to choose");
         } else {
             title.setText(name.isEmpty() ? "Tap a card" : greeting() + ", " + name + "!");
-            subtitle.setText(name.isEmpty()
-                    ? (browse ? "Hold a card on the back, or tap ▦ to choose" : "Hold a card against the back of the phone")
-                    : (browse ? "Tap a card, or press ▦ to choose" : "Tap a card to start"));
+            subtitle.setText(browse ? "Tap a card, or press Library" : "Hold a card against the back of the phone");
         }
-        time.setText("");
-        progress.setProgress(0);
+        timePos.setText("");
+        timeDur.setText("");
+        seek.setProgress(0);
+        setSeekable(false);
+        renderTracksBtn();
         eq.setPlaying(false);
         eq.setVisibility(View.GONE);
         setControlsEnabled(false);
@@ -1915,14 +2070,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         String extra = "";
         if (!all && prefs.getBoolean("shuffle:" + folder, false)) extra += "  ·  shuffle";
         if (!all && prefs.getBoolean("repeat:" + folder, false)) extra += "  ·  repeat";
-        boolean list = prefs.getBoolean("track_list", true) && tracks.size() > 1;
-        if (isLive()) {
-            subtitle.setText((tracks.size() > 1 ? "Station " + (index + 1) + " of " + tracks.size() : "Live radio")
-                    + "  ·  " + tracks.get(index).name + (list ? "  ›" : ""));
-        } else {
-            subtitle.setText("Track " + (index + 1) + " of " + tracks.size() + "  ·  " + tracks.get(index).name
-                    + extra + (list ? "  ›" : ""));
-        }
+        String tn = tracks.get(index).name;
+        boolean playingNow = ready() && mp.isPlaying();
+        if (tn.equalsIgnoreCase(title.getText().toString())) tn = playingNow ? "Now playing" : "Tap ▶ to listen";
+        subtitle.setText(tn + extra);
+        renderTracksBtn();
         boolean playing = ready() && mp.isPlaying();
         setControlsEnabled(mp != null || isLive());
         setBreathing(!playing);
@@ -1977,10 +2129,22 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 .setDuration(420).start();
     }
 
-    final Runnable clearStatus = () -> status.setText("");
+    final Runnable clearStatus = () -> {
+        status.setText("");
+        status.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+            if (status.getText().length() == 0) status.setVisibility(View.GONE);
+        }).start();
+    };
 
     void flash(String msg, long ms) {
         status.setText(msg);
+        status.animate().cancel();
+        if (msg.isEmpty()) {
+            status.setVisibility(View.GONE);
+        } else {
+            status.setAlpha(1f);
+            status.setVisibility(View.VISIBLE);
+        }
         h.removeCallbacks(clearStatus);
         h.postDelayed(clearStatus, ms);
     }
@@ -1997,32 +2161,148 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     // ================================================================ dimming / night light
 
+    /** "Screen off at bedtime" is switched on and it's bedtime now. */
+    boolean bedtimeDarkOn() {
+        return prefs.getBoolean("bedtime_dark", false) && bedtimeNow();
+    }
+
     final Runnable dim = () -> {
-        boolean night = prefs.getBoolean("night_light", false);
-        WindowManager.LayoutParams lp = getWindow().getAttributes();
-        lp.screenBrightness = night ? 0.12f : 0.02f;
-        getWindow().setAttributes(lp);
-        if (night) {
+        if (screenLocked) return;
+        boolean dark = bedtimeDarkOn();
+        boolean night = !dark && prefs.getBoolean("night_light", false);
+        setBrightness(dark ? 0f : night ? 0.12f : 0.02f);
+        showBlackout(dark);
+        if (night && nightView.getVisibility() != View.VISIBLE) {
             nightView.setAlpha(0f);
             nightView.setVisibility(View.VISIBLE);
             nightView.animate().alpha(1f).setDuration(1500).start();
+        } else if (!night) {
+            nightView.setVisibility(View.GONE);
         }
         dimmed = true;
+        updateKeepOn();
     };
 
+    void setBrightness(float v) {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = v;
+        getWindow().setAttributes(lp);
+    }
+
+    void showBlackout(boolean on) {
+        if (on && blackout.getVisibility() != View.VISIBLE) {
+            closeTrackList();
+            blackout.setAlpha(0f);
+            blackout.setVisibility(View.VISIBLE);
+            blackout.animate().alpha(1f).setDuration(1200).start();
+        } else if (!on && blackout.getVisibility() == View.VISIBLE) {
+            blackout.animate().cancel();
+            blackout.setVisibility(View.GONE);
+        }
+    }
+
     void wake() {
+        if (screenLocked) return;
         if (dimmed) {
-            WindowManager.LayoutParams lp = getWindow().getAttributes();
-            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
-            getWindow().setAttributes(lp);
+            setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE);
             nightView.animate().cancel();
             nightView.setVisibility(View.GONE);
+            showBlackout(false);
             dimmed = false;
         }
         h.removeCallbacks(dim);
         int secs = prefs.getInt("dim_after", 90);
+        if (bedtimeDarkOn()) secs = secs == 0 ? 30 : Math.min(secs, 30); // bedtime: back to black after 30 s
         if (secs > 0) h.postDelayed(dim, secs * 1000L);
     }
+
+    /** Bedtime starts or ends while the screen is already dimmed: switch between black and the normal dim. */
+    void checkBedtime() {
+        if (screenLocked) return;
+        boolean dark = bedtimeDarkOn();
+        if (dimmed && dark != (blackout.getVisibility() == View.VISIBLE)) dim.run();
+        else if (!dimmed && dark && !h.hasCallbacks(dim)) wake();
+    }
+
+    // ================================================================ screen off from the remote
+
+    void setScreenLocked(boolean on) {
+        if (on == screenLocked) return;
+        if (on) {
+            screenLocked = true;
+            h.removeCallbacks(dim);
+            closeTrackList();
+            closeBrowser();
+            setBrightness(0f);
+            blackout.animate().cancel();
+            blackout.setAlpha(1f);
+            blackout.setVisibility(View.VISIBLE);
+            nightView.setVisibility(View.GONE);
+            dimmed = true;
+            holdForRemote();
+            scheduleScreenOff(1500);
+        } else {
+            screenLocked = false;
+            h.removeCallbacks(screenOffNow);
+            releaseLockHolds();
+            Kiosk.restoreTimeout(this);
+            turnScreenOn();
+            wake();
+        }
+        updateKeepOn();
+    }
+
+    final Runnable screenOffNow = () -> {
+        // Switch the display off; if Android won't allow that, let it time out after 5 s instead.
+        if (screenLocked && !Kiosk.screenOff(this)) Kiosk.shortTimeout(this);
+    };
+
+    void scheduleScreenOff(long ms) {
+        h.removeCallbacks(screenOffNow);
+        h.postDelayed(screenOffNow, ms);
+    }
+
+    /** Keep Wi-Fi and the remote server alive while the screen is off, so the grown-up can switch it back on. */
+    void holdForRemote() {
+        try {
+            if (lockWake == null) {
+                lockWake = ((PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WalkieTales:remote");
+                lockWake.setReferenceCounted(false);
+            }
+            lockWake.acquire(24 * 3600_000L);
+        } catch (Exception ignored) { }
+        try {
+            if (wifiLock == null) {
+                android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                @SuppressWarnings("deprecation")
+                android.net.wifi.WifiManager.WifiLock wl = wm.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "WalkieTales:remote");
+                wifiLock = wl;
+                wifiLock.setReferenceCounted(false);
+            }
+            wifiLock.acquire();
+        } catch (Exception ignored) { }
+    }
+
+    void releaseLockHolds() {
+        try { if (lockWake != null && lockWake.isHeld()) lockWake.release(); } catch (Exception ignored) { }
+        try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) { }
+    }
+
+    @SuppressWarnings("deprecation")
+    void turnScreenOn() {
+        try {
+            PowerManager.WakeLock w = ((PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "WalkieTales:wake");
+            w.acquire(3000);
+        } catch (Exception ignored) { }
+    }
+
+    /** Someone pressed the power button while the screen is meant to be off: switch it straight back off. */
+    final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            if (screenLocked) scheduleScreenOff(800);
+        }
+    };
 
     @SuppressWarnings("deprecation")
     void buzz() {

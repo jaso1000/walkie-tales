@@ -108,11 +108,15 @@ public class SettingsActivity extends Activity {
         toggle("Say the name out loud", "Announce what's playing when a card is tapped (Android text-to-speech)",
                 "announce", false);
 
-        section("Quiet hours");
-        toggle("Quiet hours", "Use a lower volume limit overnight", "quiet", false);
-        timeRow("Starts", "quiet_start", 19 * 60);
-        timeRow("Ends", "quiet_end", 7 * 60);
-        seek("Quiet-time maximum volume", "quiet_volume", 10, 100, 40);
+        section("Bedtime");
+        timeRow("Bedtime starts", "quiet_start", 19 * 60);
+        timeRow("Bedtime ends", "quiet_end", 7 * 60);
+        toggle("Screen off at bedtime",
+                "The screen goes black 30 seconds after the last touch. Music, cards and the remote keep working; "
+                        + "a tap shows the player again.",
+                "bedtime_dark", false);
+        toggle("Quieter at bedtime", "Use a lower volume limit overnight", "quiet", false);
+        seek("Bedtime maximum volume", "quiet_volume", 10, 100, 40);
 
         section("Browsing");
         toggle("Browse without cards",
@@ -137,7 +141,20 @@ public class SettingsActivity extends Activity {
         section("Safety");
         toggle("Grown-up check", "Ask a quick sum (like 27 + 14) before opening these settings", "gate", true);
         lockToggle();
-        row("Home screen app", "Make Walkie Tales (or the normal launcher) the home screen",
+        if (Kiosk.isOwner(this)) {
+            toggle("Power button menu",
+                    "When off, holding the power button does nothing, so the player can't be switched off. "
+                            + "(Holding it for about 15 seconds still force-restarts the phone.)",
+                    "power_menu", true);
+            row("Restart the phone", "Turns it off and on again. The player opens by itself afterwards.",
+                    v -> confirm("Restart the phone?", "It takes about a minute.", () -> {
+                        if (!Kiosk.reboot(this)) {
+                            new AlertDialog.Builder(this, DIALOG).setMessage("Android didn't allow the restart.")
+                                    .setPositiveButton("OK", null).show();
+                        }
+                    }));
+        }
+        row("Home screen app", "Make WalkieTales (or the normal launcher) the home screen",
                 v -> openSystem(Settings.ACTION_HOME_SETTINGS));
         row("Android settings", "Wi-Fi, Bluetooth speakers, brightness… The lock comes back when you return to the player.",
                 v -> openSystem(Settings.ACTION_SETTINGS));
@@ -159,12 +176,12 @@ public class SettingsActivity extends Activity {
         String version = "1";
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         long free = Store.root().getParentFile() != null ? Store.root().getParentFile().getUsableSpace() : 0;
-        row("Walkie Tales " + version,
+        row("WalkieTales " + version,
                 "Music folder: Music/Cards  ·  " + String.format(Locale.ROOT, "%.1f GB free", free / 1e9)
                         + "\nCard links are saved in Music/Cards/cards.txt", null);
         if (Kiosk.isOwner(this)) {
             row("Release kiosk control",
-                    "Walkie Tales is the device owner (that's what blocks the pull-down). Release it before uninstalling "
+                    "WalkieTales is the device owner (that's what blocks the pull-down). Release it before uninstalling "
                             + "the app or giving the phone back to normal use.",
                     v -> confirm("Release kiosk control?",
                             "The notification shade, Home and Recents will work again, and the lock can only be "
@@ -330,7 +347,7 @@ public class SettingsActivity extends Activity {
         boolean owner = Kiosk.isOwner(this);
         Switch sw = toggle("Lock to this app",
                 owner ? "Blocks the notification pull-down, Home and Recents. Settings stay reachable here."
-                        : "Pins Walkie Tales so it can't be swiped away (the pull-down still works without kiosk setup).",
+                        : "Pins WalkieTales so it can't be swiped away (the pull-down still works without kiosk setup).",
                 "kiosk_lock", owner);
         sw.setChecked(Kiosk.wanted(this) || Kiosk.isLocked(this));
         sw.setOnCheckedChangeListener((b, on) -> {

@@ -1,6 +1,6 @@
-# Walkie Tales Remote
+# WalkieTales Remote
 
-A web remote for the Walkie Tales kids' music player. Use it from any phone or computer on your Wi-Fi.
+A web remote for the WalkieTales kids' music player. Use it from any phone or computer on your Wi-Fi.
 
 ## Two ways to use it
 
