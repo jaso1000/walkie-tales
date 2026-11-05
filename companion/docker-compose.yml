@@ -1,7 +1,7 @@
 services:
-  cardplayer-remote:
+  walkie-tales-remote:
     build: .
-    container_name: cardplayer-remote
+    container_name: walkie-tales-remote
     restart: unless-stopped
     ports:
       - "8090:8090"

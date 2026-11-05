@@ -1,4 +1,4 @@
-// Card Player companion: serves the remote-control page and forwards /api/* to the player.
+// Walkie Tales companion: serves the remote-control page and forwards /api/* to the player.
 // No dependencies. Configure with environment variables:
 //   PLAYER_URL  e.g. http://192.168.1.50:8080   (shown on the player: Grown-up settings → Remote control)
 //   PLAYER_PIN  the player's PIN (optional: if set, the page won't ask for it)
@@ -53,6 +53,6 @@ const server = http.createServer((req, res) => {
 
 server.requestTimeout = 0; // allow long uploads
 server.listen(PORT, () => {
-  console.log(`Card Player companion on :${PORT} -> ${PLAYER_URL || '(PLAYER_URL not set)'}${PLAYER_PIN ? ' (PIN from env)' : ''}`);
+  console.log(`Walkie Tales companion on :${PORT} -> ${PLAYER_URL || '(PLAYER_URL not set)'}${PLAYER_PIN ? ' (PIN from env)' : ''}`);
 });
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => server.close(() => process.exit(0)));

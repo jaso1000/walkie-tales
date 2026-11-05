@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds CardPlayer.apk with only the Android SDK + JDK (no Gradle).
+# Builds WalkieTales.apk with only the Android SDK + JDK (no Gradle).
 set -euo pipefail
 unset MSYS_NO_PATHCONV  # Windows tools need Git Bash path conversion
 cd "$(dirname "$0")"
@@ -36,5 +36,5 @@ javac -nowarn --release 11 -encoding UTF-8 -classpath "$JAR" \
     -alias cardplayer -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Card Player" >/dev/null 2>&1
 
 "$BT/apksigner.bat" sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
-    --out CardPlayer.apk build/aligned.apk
-echo "Built $(pwd)/CardPlayer.apk"
+    --out WalkieTales.apk build/aligned.apk
+echo "Built $(pwd)/WalkieTales.apk"

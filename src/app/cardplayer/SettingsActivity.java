@@ -130,7 +130,7 @@ public class SettingsActivity extends Activity {
         section("Safety");
         toggle("Grown-up check", "Ask a quick sum (like 27 + 14) before opening these settings", "gate", true);
         lockToggle();
-        row("Home screen app", "Make Card Player (or the normal launcher) the home screen",
+        row("Home screen app", "Make Walkie Tales (or the normal launcher) the home screen",
                 v -> openSystem(Settings.ACTION_HOME_SETTINGS));
         row("Android settings", "Wi-Fi, Bluetooth speakers, brightness… The lock comes back when you return to the player.",
                 v -> openSystem(Settings.ACTION_SETTINGS));
@@ -152,12 +152,12 @@ public class SettingsActivity extends Activity {
         String version = "1";
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         long free = Store.root().getParentFile() != null ? Store.root().getParentFile().getUsableSpace() : 0;
-        row("Card Player " + version,
+        row("Walkie Tales " + version,
                 "Music folder: Music/Cards  ·  " + String.format(Locale.ROOT, "%.1f GB free", free / 1e9)
                         + "\nCard links are saved in Music/Cards/cards.txt", null);
         if (Kiosk.isOwner(this)) {
             row("Release kiosk control",
-                    "Card Player is the device owner (that's what blocks the pull-down). Release it before uninstalling "
+                    "Walkie Tales is the device owner (that's what blocks the pull-down). Release it before uninstalling "
                             + "the app or giving the phone back to normal use.",
                     v -> confirm("Release kiosk control?",
                             "The notification shade, Home and Recents will work again, and the lock can only be "
@@ -322,7 +322,7 @@ public class SettingsActivity extends Activity {
         boolean owner = Kiosk.isOwner(this);
         Switch sw = toggle("Lock to this app",
                 owner ? "Blocks the notification pull-down, Home and Recents. Settings stay reachable here."
-                        : "Pins Card Player so it can't be swiped away (the pull-down still works without kiosk setup).",
+                        : "Pins Walkie Tales so it can't be swiped away (the pull-down still works without kiosk setup).",
                 "kiosk_lock", owner);
         sw.setChecked(Kiosk.wanted(this) || Kiosk.isLocked(this));
         sw.setOnCheckedChangeListener((b, on) -> {

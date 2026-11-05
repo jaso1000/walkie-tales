@@ -9,7 +9,7 @@ import android.content.Context;
 /**
  * Kiosk lock.
  *
- * If Card Player is the device owner (set once with
+ * If Walkie Tales is the device owner (set once with
  * {@code adb shell dpm set-device-owner app.cardplayer/.AdminReceiver}) the lock is total:
  * no notification shade, no Home / Recents, no "pin app?" prompt.
  * Otherwise it falls back to ordinary Android app pinning.

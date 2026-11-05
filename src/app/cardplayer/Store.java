@@ -151,7 +151,7 @@ final class Store {
         Properties p = new Properties();
         p.putAll(m);
         try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
-            p.store(w, "Card Player links: CARD_ID=Folder name (or @action)");
+            p.store(w, "Walkie Tales links: CARD_ID=Folder name (or @action)");
             return true;
         } catch (IOException e) {
             return false;

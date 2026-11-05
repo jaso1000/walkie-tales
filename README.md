@@ -1,6 +1,8 @@
-# Card Player
+# Walkie Tales
 
-Turns an old Android phone into a kids' card-based audio player: tap an NFC card on the back of the phone and it plays a folder of music or stories. Built for a Nexus 5 running LineageOS 23.2 (Android 16), and works on any NFC Android phone with Android 8 or newer.
+*Tap a card, hear a story.* A homemade, card-based audio player for the Walker kids.
+
+Walkie Tales turns an old Android phone into a kids' card-based audio player: tap an NFC card on the back of the phone and it plays a folder of music or stories. Built for a Nexus 5 running LineageOS 23.2 (Android 16), and works on any NFC Android phone with Android 8 or newer.
 
 The app is native Android in plain Java, using only the framework (no AndroidX, Gradle or Flutter). It's about 100 KB and runs fine on 32-bit phones.
 
@@ -56,7 +58,7 @@ The player runs a small PIN-protected web server on port 8080. Open the address 
 You need the Android SDK (build-tools 36, platform android-36), JDK 17 and Python 3. Gradle isn't needed.
 
 ```bash
-bash build.sh          # -> CardPlayer.apk
+bash build.sh          # -> WalkieTales.apk
 ```
 
 `build.sh` expects the SDK at `/c/Android/sdk`; override it with `ANDROID_SDK=...`. On the first build it creates `debug.keystore` to sign the app. **Keep a backup of that file.** An update signed with a different key won't install over the existing app.
@@ -64,7 +66,7 @@ bash build.sh          # -> CardPlayer.apk
 ## Install on the phone
 
 ```bash
-adb install -r CardPlayer.apk
+adb install -r WalkieTales.apk
 adb shell appops set app.cardplayer MANAGE_EXTERNAL_STORAGE allow       # read Music/Cards
 adb shell cmd package set-home-activity app.cardplayer/.MainActivity    # make it the home screen
 adb shell dpm set-device-owner app.cardplayer/.AdminReceiver            # full kiosk (needs no accounts on the phone)

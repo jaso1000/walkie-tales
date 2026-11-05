@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Card Player">
-<title>Card Player Remote</title>
+<meta name="apple-mobile-web-app-title" content="Walkie Tales">
+<title>Walkie Tales Remote</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='24' fill='%236C4CF1'/%3E%3Crect x='30' y='26' width='48' height='56' rx='6' fill='white'/%3E%3Cpath transform='translate(36 35) scale(1.5)' fill='%236C4CF1' d='M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -136,7 +136,7 @@
 <body>
 
 <header>
-  <h1>Card Player</h1>
+  <h1>Walkie Tales</h1>
   <span class="pill" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting…</span></span>
   <span class="pill" id="batt" hidden></span>
 </header>
@@ -260,7 +260,7 @@
 </nav>
 
 <div id="pin"><div class="box">
-  <h2 style="margin:0 0 6px">Connect to Card Player</h2>
+  <h2 style="margin:0 0 6px">Connect to Walkie Tales</h2>
   <div class="hint">Enter the PIN shown on the player in <b>Grown-up settings → Remote control</b>.</div>
   <input type="text" id="pinIn" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
   <button class="btn" id="pinGo" style="width:100%">Connect</button>
@@ -525,7 +525,7 @@
       else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
       else inp.value = v;
     }
-    $('#about').textContent = 'Card Player ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
+    $('#about').textContent = 'Walkie Tales ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
   }
 
   function refreshAll() { poll(); }

@@ -109,19 +109,19 @@ final class RemoteServer {
             }
             if (bound == null) {
                 running = false;
-                android.util.Log.w("CardPlayer", "Remote server could not bind port " + PORT);
+                android.util.Log.w("WalkieTales", "Remote server could not bind port " + PORT);
                 return;
             }
             try (ServerSocket ss = bound) {
                 socket = ss;
-                android.util.Log.i("CardPlayer", "Remote server listening on " + PORT);
+                android.util.Log.i("WalkieTales", "Remote server listening on " + PORT);
                 while (running) {
                     Socket s = ss.accept();
                     pool.execute(() -> handle(s));
                 }
             } catch (Exception e) {
                 // closed by stop(), or port busy
-                if (running) android.util.Log.w("CardPlayer", "Remote server stopped: " + e);
+                if (running) android.util.Log.w("WalkieTales", "Remote server stopped: " + e);
             } finally {
                 running = false;
             }

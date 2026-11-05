@@ -78,7 +78,7 @@ import java.util.Random;
 import java.util.TreeMap;
 
 /**
- * Card Player: tap an NFC card on the phone to play a folder of audio.
+ * Walkie Tales: tap an NFC card on the phone to play a folder of audio.
  *
  * Music lives in /sdcard/Music/Cards/<folder>/... (one folder per card).
  * Grown-ups press and hold ⋮ (top-right) for settings.
@@ -176,7 +176,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     /** Lets play/pause/skip buttons on Bluetooth speakers, headphones and media remotes control the player. */
     void initMediaSession() {
-        session = new android.media.session.MediaSession(this, "CardPlayer");
+        session = new android.media.session.MediaSession(this, "WalkieTales");
         session.setCallback(new android.media.session.MediaSession.Callback() {
             @Override public void onPlay() {
                 wake();
@@ -211,7 +211,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             android.media.MediaMetadata.Builder md = new android.media.MediaMetadata.Builder()
                     .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, Store.cleanName(tracks.get(index)))
                     .putString(android.media.MediaMetadata.METADATA_KEY_ALBUM, Store.ALL.equals(folder) ? "Everything" : folder)
-                    .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, "Card Player")
+                    .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, "Walkie Tales")
                     .putLong(android.media.MediaMetadata.METADATA_KEY_TRACK_NUMBER, index + 1)
                     .putLong(android.media.MediaMetadata.METADATA_KEY_NUM_TRACKS, tracks.size());
             try { if (mp != null) md.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, mp.getDuration()); } catch (Exception ignored) { }
@@ -269,7 +269,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         hideSystemBars();
         wake();
         if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
-            flash("Card Player needs access to the Music folder", 8000);
+            flash("Walkie Tales needs access to the Music folder", 8000);
             if (!askedForFiles) {
                 askedForFiles = true;
                 try {
