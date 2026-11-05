@@ -98,6 +98,7 @@
   .tile small { color: var(--muted); }
   .tile:active .art { transform: scale(.97); }
 
+  .list > div.now { color: var(--accent); font-weight: 700; }
   /* lists */
   .list > div { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
   .list > div:first-child { border-top: 0; }
@@ -192,6 +193,11 @@
       <button class="rb" id="volUp" title="Louder"><svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg></button>
     </div>
     <div class="hint" id="volHint"></div>
+    <div class="set" style="border-top:1px solid var(--line);margin-top:12px;padding-bottom:0">
+      <div class="grow">Maximum volume<small id="capHint">How loud the player is allowed to go</small>
+        <input type="range" id="np_max" min="10" max="100" step="5"></div>
+      <span class="val" id="np_max_v"></span>
+    </div>
   </div>
 
   <div class="card">
@@ -220,6 +226,7 @@
   <div class="card">
     <h2>Track list</h2>
     <div class="list" id="trackList"><div><span class="grow"><small>Nothing loaded</small></span></div></div>
+    <button class="btn ghost" id="tlMore" style="width:100%;margin-top:10px" hidden></button>
     <div class="row" style="margin-top:12px">
       <button class="btn ghost" id="restart">Start folder over</button>
       <button class="btn danger" id="stop">Stop</button>
@@ -432,7 +439,9 @@
     const d = $('#dots'); d.textContent = '';
     for (let i = 1; i <= s.volume.cap; i++) { const dot = el('i', i <= s.volume.level ? 'on' : ''); dot.onclick = () => act('/api/volume', { level: i }); d.appendChild(dot); }
     const capPct = Math.round(s.volume.cap * 100 / s.volume.max);
-    $('#volHint').textContent = 'Level ' + Math.min(s.volume.level, s.volume.cap) + ' of ' + s.volume.cap + ' · limit ' + capPct + '% of max' + (s.volume.quiet ? ' (quiet hours)' : '');
+    if (capFor !== (cur ? cur.id : 'one')) { capFor = cur ? cur.id : 'one'; loadCap(); }
+    $('#capHint').textContent = s.volume.quiet ? 'Bedtime limit is lower right now (change it in Settings → Bedtime)' : 'How loud the player is allowed to go';
+    $('#volHint').textContent = 'Level ' + Math.min(s.volume.level, s.volume.cap) + ' of ' + s.volume.cap + ' · limit ' + capPct + '% of max' + (s.volume.quiet ? ' (bedtime)' : '');
     // sleep chips
     const chips = $('#sleepChips'); chips.textContent = '';
     [0, 15, 30, 45, 60, 90].forEach(m => {
@@ -446,18 +455,54 @@
         + (s.dark ? ' (It’s black right now for bedtime; a tap shows it again.)' : '');
     $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
     // track list
-    const tl = $('#trackList'); tl.textContent = '';
-    if (s.tracks && s.tracks.length) {
-      s.tracks.forEach((t, i) => {
-        const r = el('div'); const g = el('span', 'grow'); g.appendChild(el('span', '', (i + 1) + '. ' + t));
-        if (i === s.trackIndex) { g.style.color = 'var(--accent)'; g.style.fontWeight = '700'; }
-        r.appendChild(g); r.style.cursor = 'pointer'; r.onclick = () => act('/api/track', { index: i }); tl.appendChild(r);
-      });
-    } else { const r = el('div'); r.appendChild(el('small', '', 'Nothing loaded')); tl.appendChild(r); }
+    renderTracks(s);
     // linking banner
     $('#linkBanner').hidden = !s.linking;
     if (s.linking) $('#linkText').textContent = 'Tap a card on the player to link it to “' + s.linking + '”…';
   }
+  // Long lists (more than 8) show just the tracks around the one playing, with a button to see them all.
+  let tlOpen = false, tlKey = '';
+  function renderTracks(s) {
+    const list = s.tracks || [];
+    const key = (s.folder || '') + '|' + list.length + '|' + s.trackIndex + '|' + tlOpen;
+    if (key === tlKey) return; // nothing changed: don't rebuild (keeps the scroll position)
+    tlKey = key;
+    const tl = $('#trackList'); tl.textContent = '';
+    const more = $('#tlMore');
+    if (!list.length) { const r = el('div'); r.appendChild(el('small', '', 'Nothing loaded')); tl.appendChild(r); more.hidden = true; return; }
+    const big = list.length > 8;
+    let from = 0, to = list.length;
+    if (big && !tlOpen) { from = Math.max(0, Math.min(s.trackIndex - 2, list.length - 6)); to = Math.min(list.length, from + 6); }
+    for (let i = from; i < to; i++) {
+      const r = el('div', i === s.trackIndex ? 'now' : ''); const g = el('span', 'grow');
+      g.appendChild(el('span', '', (i + 1) + '. ' + list[i]));
+      if (i === s.trackIndex) g.appendChild(el('small', '', s.playing ? 'Playing now' : 'Paused here'));
+      r.appendChild(g); r.style.cursor = 'pointer'; r.onclick = () => act('/api/track', { index: i }); tl.appendChild(r);
+    }
+    more.hidden = !big;
+    more.textContent = tlOpen ? 'Show fewer' : 'Show all ' + list.length + ' tracks';
+  }
+  $('#tlMore').onclick = () => {
+    tlOpen = !tlOpen; if (st) renderTracks(st);
+    if (!tlOpen) $('#trackList').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  // Maximum volume, right under the volume controls (same setting as in Settings → Sound).
+  let capFor = null;
+  async function loadCap() {
+    try { const r = await api('/api/settings'); settings = r.settings; capFor = cur ? cur.id : 'one'; showCap(); } catch (e) { /* PIN screen etc. */ }
+  }
+  function showCap() {
+    if (!settings) return;
+    $('#np_max').value = settings.max_volume; $('#np_max_v').textContent = settings.max_volume + '%';
+    const sm = document.getElementById('s_max_volume'); if (sm) { sm.value = settings.max_volume; $('#v_max_volume').textContent = settings.max_volume + '%'; }
+  }
+  $('#np_max').oninput = () => { $('#np_max_v').textContent = $('#np_max').value + '%'; };
+  $('#np_max').onchange = () => {
+    const v = +$('#np_max').value;
+    api('/api/settings', { max_volume: v }).then(r => { settings = r.settings; showCap(); toast('Maximum volume ' + v + '%'); poll(); }).catch(err);
+  };
+
   function tickProgress() {
     if (!st) return;
     if (st.live) { // radio: no duration
@@ -599,7 +644,7 @@
     setSafety: [['gate', 'Grown-up check', 'Ask a sum before the settings open on the player'], ['power_menu', 'Power button menu', 'Off = holding the power button can’t switch the player off']],
   };
   let built = false;
-  function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; toast('Saved'); poll(); }).catch(err); }
+  function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; showCap(); toast('Saved'); poll(); }).catch(err); }
   function sw(k, title, sub) {
     const row = el('div', 'set'); const g = el('div', 'grow', title); if (sub) g.appendChild(el('small', '', sub));
     const lab = el('label', 'switch'); const inp = el('input'); inp.type = 'checkbox'; inp.id = 's_' + k; inp.onchange = () => save(k, inp.checked);
@@ -660,7 +705,7 @@
   function choose(p) {
     cur = p; base = '/p/' + p.id; store.set('cp_player', p.id);
     pin = store.get(pinKey(p.id)) || '';
-    st = null; lib = null; coverFor = undefined; lastPoll = 0; built = false;
+    st = null; lib = null; coverFor = undefined; lastPoll = 0; built = false; tlOpen = false; tlKey = ''; capFor = null; settings = null;
     for (const id of ['#setSound', '#setQuiet', '#setPlay', '#setScreen', '#setSafety']) $(id).querySelectorAll(':scope > :not(h2)').forEach(n => n.remove());
     $('#trackList').textContent = ''; $('#grid').textContent = ''; $('#cardList').textContent = '';
     showWho(); setConn(false, 'Connecting…');
