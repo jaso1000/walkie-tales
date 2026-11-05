@@ -348,7 +348,8 @@ final class PlayerViewController: UIViewController {
         setControls(enabled: true)
         if p.isLive {
             setSeekable(false)
-            seek.value = p.player == nil ? 0 : 1
+            seek.maximumValue = 1
+            seek.value = p.player == nil ? 0 : 1 // full bar = on air
             timePos.text = p.connecting ? "Connecting…" : (p.isPlaying ? "●  LIVE" : "LIVE")
             timeDur.text = ""
         } else if !scrubbing {

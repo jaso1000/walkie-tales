@@ -100,7 +100,8 @@ final class SettingsViewController: UITableViewController {
             cell.selectionStyle = .default
             cell.accessoryType = .disclosureIndicator
         case let .slider(title, key):
-            cell.textLabel?.text = title + "  \(Store.int(key))%"
+            cell.textLabel?.text = title
+            cell.detailTextLabel?.text = "\(Store.int(key))%"
             let sl = UISlider(frame: CGRect(x: 0, y: 0, width: 150, height: 30))
             sl.minimumValue = 10
             sl.maximumValue = 100
@@ -108,7 +109,7 @@ final class SettingsViewController: UITableViewController {
             sl.addAction(UIAction { _ in
                 let v = Int((sl.value / 5).rounded()) * 5
                 Store.set(key, v)
-                cell.textLabel?.text = title + "  \(v)%"
+                cell.detailTextLabel?.text = "\(v)%"
             }, for: .valueChanged)
             sl.addAction(UIAction { [weak self] _ in self?.owner?.applySettings() }, for: .touchUpInside)
             cell.accessoryView = sl
