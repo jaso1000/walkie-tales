@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Card Player">
+<title>Card Player Remote</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='24' fill='%236C4CF1'/%3E%3Crect x='30' y='26' width='48' height='56' rx='6' fill='white'/%3E%3Cpath transform='translate(36 35) scale(1.5)' fill='%236C4CF1' d='M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b0b10; --panel: #15151d; --panel2: #1d1d28; --line: #2a2a38;
+    --text: #f4f4f8; --muted: #9a9aae; --accent: #6c4cf1; --warn: #ffd54f; --bad: #ff7a7a; --good: #8be38b;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); min-height: 100vh; }
+  button, input, select { font: inherit; color: inherit; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 4px; max-width: 560px; margin: 0 auto; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: .2px; }
+  .pill { font-size: 13px; color: var(--muted); background: var(--panel); padding: 4px 10px; border-radius: 99px; white-space: nowrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; }
+  .dot.on { background: var(--good); }
+
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(15,15,22,.96); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; max-width: 140px; background: none; border: 0; padding: 10px 4px 12px; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
+  nav button svg { width: 24px; height: 24px; fill: currentColor; }
+  nav button.on { color: var(--text); }
+  nav button.on svg { fill: var(--accent); }
+
+  section { display: none; }
+  section.on { display: block; animation: fade .2s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .card { background: var(--panel); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin: 0 0 12px; font-weight: 700; }
+
+  /* now playing */
+  .np { text-align: center; padding: 20px 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 38%, #000) 0%, var(--panel) 70%); }
+  .cover { width: min(62vw, 260px); aspect-ratio: 1; border-radius: 26px; margin: 4px auto 18px; overflow: hidden;
+    box-shadow: 0 18px 40px rgba(0,0,0,.45); background: var(--panel2); display: grid; place-items: center;
+    font-size: 96px; font-weight: 800; color: #fff; }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .np .title { font-size: 26px; font-weight: 800; margin: 0; }
+  .np .sub { color: var(--muted); margin: 4px 0 14px; min-height: 22px; }
+  .bar { height: 7px; background: rgba(255,255,255,.14); border-radius: 9px; overflow: hidden; cursor: pointer; }
+  .bar > i { display: block; height: 100%; width: 0; background: #fff; border-radius: 9px; transition: width .4s linear; }
+  .times { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .controls { display: flex; justify-content: center; align-items: center; gap: 22px; margin: 16px 0 6px; }
+  .rb { border: 0; border-radius: 50%; width: 62px; height: 62px; background: rgba(255,255,255,.12); display: grid; place-items: center; cursor: pointer; }
+  .rb svg { width: 30px; height: 30px; fill: #fff; }
+  .rb.big { width: 84px; height: 84px; background: var(--accent); box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .rb.big svg { width: 42px; height: 42px; }
+  .rb:active { transform: scale(.94); }
+  .msg { color: var(--warn); font-weight: 700; min-height: 22px; margin-top: 8px; }
+
+  .vol { display: flex; align-items: center; gap: 12px; }
+  .vol .rb { width: 48px; height: 48px; flex: none; }
+  .vol .rb svg { width: 24px; height: 24px; }
+  .dots { flex: 1; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .dots i { width: 13px; height: 13px; border-radius: 50%; background: rgba(255,255,255,.15); cursor: pointer; }
+  .dots i.on { background: var(--accent); }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; text-align: center; }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--panel2); padding: 8px 14px; border-radius: 99px; cursor: pointer; }
+  .chip.on { background: var(--accent); border-color: var(--accent); }
+
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  input[type=text], input[type=time], select { width: 100%; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 12px; outline: none; }
+  input[type=text]:focus, select:focus { border-color: var(--accent); }
+  .btn { border: 0; border-radius: 12px; padding: 11px 16px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+  .btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  .btn.danger { background: transparent; color: var(--bad); border: 1px solid #4a2a30; }
+  .btn:disabled { opacity: .5; }
+
+  /* library */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 14px; }
+  .tile { cursor: pointer; }
+  .tile .art { aspect-ratio: 1; border-radius: 18px; overflow: hidden; display: grid; place-items: center;
+    font-size: 64px; font-weight: 800; color: #fff; box-shadow: 0 8px 20px rgba(0,0,0,.35); position: relative; }
+  .tile .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .tile b { display: block; margin-top: 8px; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile small { color: var(--muted); }
+  .tile:active .art { transform: scale(.97); }
+
+  /* lists */
+  .list > div { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .list > div:first-child { border-top: 0; }
+  .list .grow { flex: 1; min-width: 0; }
+  .list .grow small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; }
+  .banner { background: color-mix(in srgb, var(--warn) 18%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+    color: var(--warn); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }
+  .banner span { flex: 1; font-weight: 700; }
+
+  /* settings */
+  .set { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .set:first-of-type { border-top: 0; }
+  .set .grow { flex: 1; }
+  .set small { color: var(--muted); display: block; }
+  .switch { position: relative; width: 50px; height: 30px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 30px; transition: .2s; cursor: pointer; }
+  .switch span::after { content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .val { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+
+  .up-list { margin-top: 10px; font-size: 14px; }
+  .up-list div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; color: var(--muted); }
+  .up-list div.ok { color: var(--good); }
+  .up-list div.err { color: var(--bad); }
+  progress { width: 100%; height: 8px; accent-color: var(--accent); }
+
+  /* pin */
+  #pin { position: fixed; inset: 0; background: var(--bg); display: none; place-items: center; z-index: 10; padding: 24px; }
+  #pin.on { display: grid; }
+  #pin .box { width: 100%; max-width: 340px; text-align: center; }
+  #pin input { text-align: center; font-size: 28px; letter-spacing: 8px; margin: 18px 0 12px; }
+  .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: #2b2b3a; padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .25s; pointer-events: none; z-index: 20; max-width: 90vw; }
+  .toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Card Player</h1>
+  <span class="pill" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting…</span></span>
+  <span class="pill" id="batt" hidden></span>
+</header>
+
+<!-- ================= NOW PLAYING ================= -->
+<section id="tab-now" class="on"><div class="wrap">
+  <div class="card np">
+    <div class="cover" id="cover">♪</div>
+    <p class="title" id="title">Nothing playing</p>
+    <p class="sub" id="sub">Tap a card on the player, or pick something in the Library</p>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+    <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
+    <div class="controls">
+      <button class="rb" id="prev" title="Previous (hold: start over)"><svg viewBox="0 0 24 24"><path d="M6,6h2v12H6zM9.5,12l8.5,6V6z"/></svg></button>
+      <button class="rb big" id="play" title="Play / pause"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8,5v14l11,-7z"/></svg></button>
+      <button class="rb" id="next" title="Next"><svg viewBox="0 0 24 24"><path d="M6,18l8.5,-6L6,6v12zM16,6v12h2V6h-2z"/></svg></button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Volume</h2>
+    <div class="vol">
+      <button class="rb" id="volDown" title="Quieter"><svg viewBox="0 0 24 24"><path d="M18.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM5,9v6h4l5,5V4L9,9H5z"/></svg></button>
+      <div class="dots" id="dots"></div>
+      <button class="rb" id="volUp" title="Louder"><svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg></button>
+    </div>
+    <div class="hint" id="volHint"></div>
+  </div>
+
+  <div class="card">
+    <h2>Sleep timer</h2>
+    <div class="chips" id="sleepChips"></div>
+    <div class="hint" id="sleepHint" style="text-align:left"></div>
+  </div>
+
+  <div class="card">
+    <h2>Send a message to the screen</h2>
+    <div class="row">
+      <input type="text" id="msgText" maxlength="120" placeholder="Dinner's ready! 🍝">
+      <button class="btn" id="msgSend" style="flex:none">Send</button>
+    </div>
+    <div class="hint" style="text-align:left">Shows on the player for 20 seconds (and is read out if “Say the name out loud” is on).</div>
+  </div>
+
+  <div class="card">
+    <h2>Track list</h2>
+    <div class="list" id="trackList"><div><span class="grow"><small>Nothing loaded</small></span></div></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" id="restart">Start folder over</button>
+      <button class="btn danger" id="stop">Stop</button>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= LIBRARY ================= -->
+<section id="tab-lib"><div class="wrap">
+  <div class="card">
+    <h2>Library</h2>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="card">
+    <h2>Add music</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="upFolder" list="folderNames" placeholder="Folder name (one folder per card)">
+      <datalist id="folderNames"></datalist>
+    </div>
+    <div class="row">
+      <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="upGo">Upload</button>
+    </div>
+    <div class="hint" style="text-align:left">Tip: add an image named <b>cover.jpg</b> to give the folder a picture. <span id="free"></span></div>
+    <div class="up-list" id="upList"></div>
+  </div>
+</div></section>
+
+<!-- ================= CARDS ================= -->
+<section id="tab-cards"><div class="wrap">
+  <div class="banner" id="linkBanner" hidden><span id="linkText">Tap the card on the player now…</span>
+    <button class="btn ghost" id="linkCancel" style="flex:none">Cancel</button></div>
+  <div class="card">
+    <h2>Link a card</h2>
+    <div class="row">
+      <select id="linkTarget"></select>
+      <button class="btn" id="linkGo" style="flex:none">Link</button>
+    </div>
+    <div class="hint" style="text-align:left">Choose what the card should do, press Link, then tap the card on the back of the player within 30 seconds.</div>
+  </div>
+  <div class="card">
+    <h2>Linked cards</h2>
+    <div class="list" id="cardList"></div>
+  </div>
+</div></section>
+
+<!-- ================= SETTINGS ================= -->
+<section id="tab-set"><div class="wrap">
+  <div class="card">
+    <h2>Your child</h2>
+    <div class="set"><div class="grow">Name<small>For the “Good morning, …!” greeting</small></div></div>
+    <input type="text" id="s_kid_name" maxlength="40" placeholder="Name">
+  </div>
+  <div class="card" id="setSound"><h2>Sound</h2></div>
+  <div class="card" id="setQuiet"><h2>Quiet hours</h2></div>
+  <div class="card" id="setPlay"><h2>Browsing & cards</h2></div>
+  <div class="card" id="setScreen"><h2>Screen</h2></div>
+  <div class="card" id="setSafety"><h2>Safety</h2></div>
+  <div class="card">
+    <h2>About</h2>
+    <div class="hint" style="text-align:left" id="about"></div>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" id="forget">Forget PIN on this device</button></div>
+  </div>
+</div></section>
+
+<nav>
+  <button data-tab="now" class="on"><svg viewBox="0 0 24 24"><path d="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z"/></svg>Playing</button>
+  <button data-tab="lib"><svg viewBox="0 0 24 24"><path d="M4,8h4V4H4v4zM10,20h4v-4h-4v4zM4,20h4v-4H4v4zM4,14h4v-4H4v4zM10,14h4v-4h-4v4zM16,4v4h4V4h-4zM10,8h4V4h-4v4zM16,14h4v-4h-4v4zM16,20h4v-4h-4v4z"/></svg>Library</button>
+  <button data-tab="cards"><svg viewBox="0 0 24 24"><path d="M20,4H4C2.89,4 2,4.89 2,6v12c0,1.11 0.89,2 2,2h16c1.11,0 2,-0.89 2,-2V6C22,4.89 21.11,4 20,4zM20,18H4v-6h16v6zM20,8H4V6h16v2z"/></svg>Cards</button>
+  <button data-tab="set"><svg viewBox="0 0 24 24"><path d="M3,17v2h6v-2H3zM3,5v2h10V5H3zM13,21v-2h8v-2h-8v-2h-2v6h2zM7,9v2H3v2h4v2h2V9H7zM21,13v-2H11v2h10zM15,9h2V7h4V5h-4V3h-2v6z"/></svg>Settings</button>
+</nav>
+
+<div id="pin"><div class="box">
+  <h2 style="margin:0 0 6px">Connect to Card Player</h2>
+  <div class="hint">Enter the PIN shown on the player in <b>Grown-up settings → Remote control</b>.</div>
+  <input type="text" id="pinIn" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+  <button class="btn" id="pinGo" style="width:100%">Connect</button>
+  <div class="hint" id="pinErr" style="color:var(--bad)"></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  let pin = localStorage.getItem('cp_pin') || '';
+  let st = null, lib = null, settings = null, lastPoll = 0, polling = false;
+
+  // ---------------------------------------------------------------- api
+  async function api(path, body) {
+    const opt = { method: body === undefined ? 'GET' : 'POST', headers: {} };
+    if (pin) opt.headers['X-Pin'] = pin;
+    if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    let r;
+    try { r = await fetch(path, opt); } catch (e) { setConn(false, 'Offline'); throw e; }
+    if (r.status === 401) { showPin(); throw new Error('PIN needed'); }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (r.status === 502) setConn(false, 'Player unreachable'); throw new Error(j.error || r.statusText); }
+    setConn(true);
+    return j;
+  }
+  const act = (path, body) => api(path, body || {}).then(s => { if (s && s.volume) render(s); return s; }).catch(err);
+  function err(e) { if (e && e.message !== 'PIN needed') toast(e.message || 'Something went wrong'); }
+  function toast(t) { const n = $('#toast'); n.textContent = t; n.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => n.classList.remove('on'), 2600); }
+  function setConn(ok, text) { $('#dot').classList.toggle('on', ok); $('#connText').textContent = ok ? 'Connected' : (text || 'Offline'); }
+  const coverUrl = (f) => '/api/cover?folder=' + encodeURIComponent(f) + (pin ? '&pin=' + encodeURIComponent(pin) : '');
+  const fmt = (ms) => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+
+  // ---------------------------------------------------------------- pin
+  function showPin() { $('#pin').classList.add('on'); setTimeout(() => $('#pinIn').focus(), 50); }
+  $('#pinGo').onclick = async () => {
+    pin = $('#pinIn').value.trim();
+    try { await api('/api/status'); localStorage.setItem('cp_pin', pin); $('#pin').classList.remove('on'); $('#pinErr').textContent = ''; refreshAll(); }
+    catch (e) { $('#pinErr').textContent = e.message === 'PIN needed' ? 'That PIN didn’t work' : e.message; }
+  };
+  $('#pinIn').onkeydown = (e) => { if (e.key === 'Enter') $('#pinGo').click(); };
+  $('#forget').onclick = () => { localStorage.removeItem('cp_pin'); pin = ''; showPin(); };
+
+  // ---------------------------------------------------------------- tabs
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 'tab-' + b.dataset.tab));
+    const t = b.dataset.tab;
+    if (t === 'lib') loadLibrary();
+    if (t === 'cards') { loadLibrary(); loadCards(); }
+    if (t === 'set') loadSettings();
+    window.scrollTo(0, 0);
+  });
+
+  // ---------------------------------------------------------------- now playing
+  let coverFor = undefined;
+  function render(s) {
+    st = s; lastPoll = Date.now();
+    document.documentElement.style.setProperty('--accent', s.folder ? s.accent : '#6c4cf1');
+    const b = $('#batt');
+    if (s.battery >= 0) { b.hidden = false; b.textContent = (s.charging ? '⚡ ' : '') + s.battery + '%'; b.style.color = s.battery <= 15 && !s.charging ? 'var(--bad)' : ''; }
+    $('#title').textContent = s.title || (s.name ? 'Hi, ' + s.name + '!' : 'Nothing playing');
+    $('#sub').textContent = s.folder ? 'Track ' + (s.trackIndex + 1) + ' of ' + s.trackCount + ' · ' + s.track : 'Tap a card on the player, or pick something in the Library';
+    if (coverFor !== s.folder) {
+      coverFor = s.folder;
+      const c = $('#cover'); c.textContent = '';
+      if (s.folder && s.folder !== '@all') {
+        const img = new Image(); img.alt = '';
+        img.onload = () => { c.textContent = ''; c.appendChild(img); };
+        img.onerror = () => { c.textContent = s.folder.charAt(0).toUpperCase(); c.style.background = s.accent; };
+        c.style.background = s.accent; c.textContent = s.folder.charAt(0).toUpperCase();
+        img.src = coverUrl(s.folder);
+      } else { c.style.background = ''; c.textContent = s.folder === '@all' ? '★' : '♪'; }
+    }
+    $('#playIcon').innerHTML = s.playing ? '<path d="M6,19h4V5H6v14zM14,5v14h4V5h-4z"/>' : '<path d="M8,5v14l11,-7z"/>';
+    $('#msg').textContent = s.message || '';
+    tickProgress();
+    // volume dots
+    const d = $('#dots'); d.textContent = '';
+    for (let i = 1; i <= s.volume.cap; i++) { const dot = el('i', i <= s.volume.level ? 'on' : ''); dot.onclick = () => act('/api/volume', { level: i }); d.appendChild(dot); }
+    const capPct = Math.round(s.volume.cap * 100 / s.volume.max);
+    $('#volHint').textContent = 'Level ' + Math.min(s.volume.level, s.volume.cap) + ' of ' + s.volume.cap + ' · limit ' + capPct + '% of max' + (s.volume.quiet ? ' (quiet hours)' : '');
+    // sleep chips
+    const chips = $('#sleepChips'); chips.textContent = '';
+    [0, 15, 30, 45, 60, 90].forEach(m => {
+      const c = el('button', 'chip' + ((m === 0 && !s.sleepMinutesLeft) ? ' on' : ''), m ? m + ' min' : 'Off');
+      c.onclick = () => act('/api/sleep', { minutes: m }); chips.appendChild(c);
+    });
+    $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
+    // track list
+    const tl = $('#trackList'); tl.textContent = '';
+    if (s.tracks && s.tracks.length) {
+      s.tracks.forEach((t, i) => {
+        const r = el('div'); const g = el('span', 'grow'); g.appendChild(el('span', '', (i + 1) + '. ' + t));
+        if (i === s.trackIndex) { g.style.color = 'var(--accent)'; g.style.fontWeight = '700'; }
+        r.appendChild(g); r.style.cursor = 'pointer'; r.onclick = () => act('/api/track', { index: i }); tl.appendChild(r);
+      });
+    } else { const r = el('div'); r.appendChild(el('small', '', 'Nothing loaded')); tl.appendChild(r); }
+    // linking banner
+    $('#linkBanner').hidden = !s.linking;
+    if (s.linking) $('#linkText').textContent = 'Tap a card on the player to link it to “' + s.linking + '”…';
+  }
+  function tickProgress() {
+    if (!st) return;
+    let p = st.position || 0; const dur = st.duration || 0;
+    if (st.playing) p += Date.now() - lastPoll;
+    p = Math.min(p, dur);
+    $('#barFill').style.width = dur ? (p * 100 / dur) + '%' : '0';
+    $('#pos').textContent = fmt(p); $('#dur').textContent = fmt(dur);
+  }
+  setInterval(tickProgress, 500);
+  $('#bar').onclick = (e) => { if (!st || !st.duration) return; const r = e.currentTarget.getBoundingClientRect();
+    act('/api/seek', { ms: Math.round((e.clientX - r.left) / r.width * st.duration) }); };
+  $('#play').onclick = () => act('/api/toggle');
+  $('#next').onclick = () => act('/api/next');
+  let holdT;
+  $('#prev').onpointerdown = () => { holdT = setTimeout(() => { holdT = null; act('/api/restart'); toast('Back to the beginning'); }, 700); };
+  $('#prev').onpointerup = () => { if (holdT) { clearTimeout(holdT); act('/api/prev'); } };
+  $('#volDown').onclick = () => act('/api/volume', { delta: -1 });
+  $('#volUp').onclick = () => act('/api/volume', { delta: 1 });
+  $('#restart').onclick = () => act('/api/restart');
+  $('#stop').onclick = () => act('/api/stop');
+  $('#msgSend').onclick = () => { const t = $('#msgText').value.trim(); if (!t) return; act('/api/message', { text: t }).then(() => { $('#msgText').value = ''; toast('Sent'); }); };
+  $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };
+
+  async function poll() {
+    if (polling || document.hidden || $('#pin').classList.contains('on')) return;
+    polling = true;
+    try { render(await api('/api/status')); } catch (e) { /* shown in pill */ }
+    polling = false;
+  }
+  setInterval(poll, 2000);
+  document.addEventListener('visibilitychange', poll);
+
+  // ---------------------------------------------------------------- library
+  async function loadLibrary() {
+    try { lib = await api('/api/library'); } catch (e) { return err(e); }
+    const g = $('#grid'); g.textContent = '';
+    const dl = $('#folderNames'); dl.textContent = '';
+    if (!lib.folders.length) g.appendChild(el('div', 'hint', 'No music yet — add some below.'));
+    const items = lib.folders.slice();
+    if (items.length > 1) items.push({ name: '@all', info: 'Shuffle it all', color: '#E0559A' });
+    items.forEach(f => {
+      const t = el('div', 'tile'); const a = el('div', 'art', f.name === '@all' ? '★' : f.name.charAt(0).toUpperCase());
+      a.style.background = 'linear-gradient(135deg, ' + f.color + ', color-mix(in srgb, ' + f.color + ' 45%, #000))';
+      if (f.name !== '@all') { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.onerror = () => img.remove(); img.src = coverUrl(f.name); a.appendChild(img); }
+      t.appendChild(a); t.appendChild(el('b', '', f.name === '@all' ? 'Everything' : f.name));
+      t.appendChild(el('small', '', f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '')));
+      t.onclick = () => act('/api/play', { folder: f.name }).then(() => { toast('Playing ' + (f.name === '@all' ? 'everything' : f.name)); document.querySelector('nav button[data-tab=now]').click(); });
+      g.appendChild(t);
+      if (f.name !== '@all') { const o = el('option'); o.value = f.name; dl.appendChild(o); }
+    });
+    $('#free').textContent = lib.freeBytes ? '(' + (lib.freeBytes / 1e9).toFixed(1) + ' GB free on the player)' : '';
+    // link targets
+    const sel = $('#linkTarget'); const keep = sel.value; sel.textContent = '';
+    lib.folders.forEach(f => { const o = el('option', '', '🎵 ' + f.name); o.value = f.name; sel.appendChild(o); });
+    lib.actions.forEach(a => { const o = el('option', '', '⚙️ ' + a.label); o.value = a.target; sel.appendChild(o); });
+    if (keep) sel.value = keep;
+  }
+
+  $('#upGo').onclick = async () => {
+    const folder = $('#upFolder').value.trim(); const files = [...$('#upFiles').files];
+    if (!folder) return toast('Type a folder name first');
+    if (/[\\/]/.test(folder) || folder.startsWith('.')) return toast('Folder names can’t contain / or start with a dot');
+    if (!files.length) return toast('Choose some files');
+    $('#upGo').disabled = true;
+    const list = $('#upList'); list.textContent = '';
+    for (const f of files) {
+      const row = el('div'); const name = el('span', '', f.name); const prog = el('progress'); prog.max = 100; prog.value = 0; prog.style.width = '40%';
+      row.appendChild(name); row.appendChild(prog); list.appendChild(row);
+      try { await upload(folder, f, (p) => prog.value = p); row.className = 'ok'; prog.replaceWith(el('span', '', 'done')); }
+      catch (e) { row.className = 'err'; prog.replaceWith(el('span', '', e.message)); }
+    }
+    $('#upGo').disabled = false; $('#upFiles').value = '';
+    toast('Upload finished'); loadLibrary();
+  };
+  function upload(folder, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name));
+      if (pin) x.setRequestHeader('X-Pin', pin);
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round(e.loaded * 100 / e.total)); };
+      x.onload = () => { if (x.status === 200) resolve(); else { let m = 'failed'; try { m = JSON.parse(x.responseText).error; } catch (e) {} reject(new Error(m)); } };
+      x.onerror = () => reject(new Error('network error'));
+      x.send(file);
+    });
+  }
+
+  // ---------------------------------------------------------------- cards
+  async function loadCards() {
+    let c; try { c = await api('/api/cards'); } catch (e) { return err(e); }
+    const l = $('#cardList'); l.textContent = '';
+    if (!c.cards.length) { const r = el('div'); r.appendChild(el('small', '', 'No cards linked yet.')); l.appendChild(r); }
+    c.cards.forEach(card => {
+      const r = el('div'); const g = el('span', 'grow'); g.appendChild(el('span', '', card.label)); g.appendChild(el('small', '', 'Card ' + card.id));
+      const b = el('button', 'btn danger', 'Unlink');
+      b.onclick = () => { if (confirm('Unlink this card from “' + card.label + '”?')) act('/api/cards/unlink', { id: card.id }).then(loadCards); };
+      r.appendChild(g); r.appendChild(b); l.appendChild(r);
+    });
+  }
+  $('#linkGo').onclick = () => { const t = $('#linkTarget').value; if (!t) return; act('/api/cards/link', { target: t }).then(() => toast('Now tap the card on the player')); watchLink(); };
+  $('#linkCancel').onclick = () => act('/api/cards/cancel');
+  function watchLink() { // refresh the card list once linking finishes
+    const t = setInterval(() => { if (st && !st.linking) { clearInterval(t); loadCards(); loadLibrary(); } }, 1500);
+    setTimeout(() => clearInterval(t), 35000);
+  }
+
+  // ---------------------------------------------------------------- settings
+  const SWITCHES = {
+    setSound: [['show_volume', 'Volume buttons on the player'], ['fade_in', 'Fade in', 'Start music gently'], ['announce', 'Say the name out loud', 'Announce what’s playing (text-to-speech)']],
+    setQuiet: [['quiet', 'Quiet hours', 'Lower volume limit overnight']],
+    setPlay: [['browse', 'Browse without cards', 'Show the ▦ library button'], ['track_list', 'Pick a track from the list'], ['rest_mode', 'Play while the card rests on the phone', 'Lift the card to pause (Toniebox style)']],
+    setScreen: [['night_light', 'Night light', 'Warm glow when idle'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery on the player']],
+    setSafety: [['gate', 'Grown-up check', 'Ask a sum before the settings open on the player']],
+  };
+  let built = false;
+  function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; toast('Saved'); poll(); }).catch(err); }
+  function sw(k, title, sub) {
+    const row = el('div', 'set'); const g = el('div', 'grow', title); if (sub) g.appendChild(el('small', '', sub));
+    const lab = el('label', 'switch'); const inp = el('input'); inp.type = 'checkbox'; inp.id = 's_' + k; inp.onchange = () => save(k, inp.checked);
+    lab.appendChild(inp); lab.appendChild(el('span')); row.appendChild(g); row.appendChild(lab); return row;
+  }
+  function range(k, title, min, max) {
+    const row = el('div', 'set'); const g = el('div', 'grow', title); const inp = el('input'); inp.type = 'range'; inp.min = min; inp.max = max; inp.step = 5; inp.id = 's_' + k;
+    const v = el('span', 'val'); v.id = 'v_' + k; inp.oninput = () => v.textContent = inp.value + '%'; inp.onchange = () => save(k, +inp.value);
+    g.appendChild(inp); row.appendChild(g); row.appendChild(v); return row;
+  }
+  function time(k, title) {
+    const row = el('div', 'set'); const g = el('div', 'grow', title); const inp = el('input'); inp.type = 'time'; inp.id = 's_' + k; inp.style.maxWidth = '150px';
+    inp.onchange = () => { const [h, m] = inp.value.split(':').map(Number); save(k, h * 60 + m); };
+    row.appendChild(g); row.appendChild(inp); return row;
+  }
+  function choice(k, title, opts) {
+    const row = el('div', 'set'); const g = el('div', 'grow', title); const s = el('select'); s.id = 's_' + k; s.style.maxWidth = '210px';
+    opts.forEach(([v, l]) => { const o = el('option', '', l); o.value = v; s.appendChild(o); }); s.onchange = () => save(k, +s.value);
+    row.appendChild(g); row.appendChild(s); return row;
+  }
+  function buildSettings() {
+    if (built) return; built = true;
+    const snd = $('#setSound'); snd.appendChild(range('max_volume', 'Maximum volume', 10, 100)); SWITCHES.setSound.forEach(a => snd.appendChild(sw(...a)));
+    const q = $('#setQuiet'); SWITCHES.setQuiet.forEach(a => q.appendChild(sw(...a)));
+    q.appendChild(time('quiet_start', 'Starts')); q.appendChild(time('quiet_end', 'Ends')); q.appendChild(range('quiet_volume', 'Quiet-time maximum volume', 10, 100));
+    const p = $('#setPlay'); SWITCHES.setPlay.forEach(a => p.appendChild(sw(...a)));
+    const sc = $('#setScreen');
+    sc.appendChild(choice('dim_after', 'Dim the screen after', [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']]));
+    sc.appendChild(choice('screen_on', 'Keep the screen on', [[0, 'While charging or playing'], [1, 'Always']]));
+    SWITCHES.setScreen.forEach(a => sc.appendChild(sw(...a)));
+    const sf = $('#setSafety'); SWITCHES.setSafety.forEach(a => sf.appendChild(sw(...a)));
+    $('#s_kid_name').onchange = (e) => save('kid_name', e.target.value.trim());
+  }
+  async function loadSettings() {
+    buildSettings();
+    let r; try { r = await api('/api/settings'); } catch (e) { return err(e); }
+    settings = r.settings;
+    for (const [k, v] of Object.entries(settings)) {
+      const inp = document.getElementById('s_' + k); if (!inp) continue;
+      if (inp.type === 'checkbox') inp.checked = !!v;
+      else if (inp.type === 'range') { inp.value = v; $('#v_' + k).textContent = v + '%'; }
+      else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
+      else inp.value = v;
+    }
+    $('#about').textContent = 'Card Player ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
+  }
+
+  function refreshAll() { poll(); }
+  refreshAll();
+})();
+</script>
+</body>
+</html>

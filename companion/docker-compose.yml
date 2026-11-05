@@ -1,0 +1,13 @@
+services:
+  cardplayer-remote:
+    build: .
+    container_name: cardplayer-remote
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      # The address shown on the player in Grown-up settings → Remote control
+      PLAYER_URL: "http://192.168.1.50:8080"
+      # Optional: put the player's PIN here so the page doesn't ask for it.
+      # Anyone who can reach this container can then control the player.
+      PLAYER_PIN: ""

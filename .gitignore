@@ -1,0 +1,19 @@
+# build output
+build/
+*.apk
+*.apk.idsig
+
+# signing key: keep a private backup, never commit it
+*.keystore
+*.jks
+
+# generated test audio
+demo/
+
+# misc
+*.log
+*.png
+!res/**/*.png
+node_modules/
+.DS_Store
+Thumbs.db
