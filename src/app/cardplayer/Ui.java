@@ -113,21 +113,30 @@ final class Ui {
 
     // ------------------------------------------------------------ artwork
 
-    /** cover.jpg / folder.jpg / any image in the folder, else art embedded in the first track. */
+    /**
+     * cover.jpg / folder.jpg / any image in the folder, else art embedded in the first track, else the cover
+     * found online (cover.auto.jpg). A picture you add yourself always wins over the automatic one.
+     */
     static Bitmap loadCover(File dir) {
         File[] files = dir.listFiles();
+        File auto = null;
         if (files != null) {
             File any = null;
             for (File f : files) {
                 String n = f.getName().toLowerCase(Locale.ROOT);
                 if (!(n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp"))) continue;
+                if (n.equals(ArtFinder.AUTO_COVER)) { auto = f; continue; }
                 if (any == null) any = f;
                 for (String c : COVER_NAMES) if (n.startsWith(c + ".")) return decode(f, null);
             }
             if (any != null) return decode(any, null);
         }
         List<File> t = Store.listAudio(dir);
-        if (!t.isEmpty()) return embeddedArt(t.get(0));
+        if (!t.isEmpty()) {
+            Bitmap b = embeddedArt(t.get(0));
+            if (b != null) return b;
+        }
+        if (auto != null) return decode(auto, null);
         return null;
     }
 

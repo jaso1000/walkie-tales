@@ -96,6 +96,10 @@ public class SettingsActivity extends Activity {
         }
         for (String f : folders) row(f, folderSummary(f, cards), v -> folderOptions(f));
         row("Shuffle everything", "Play every folder mixed together", v -> playNow(Store.ALL));
+        toggle("Find missing covers online",
+                "Looks up pictures for folders without one (Apple's iTunes catalogue for music and audiobooks, "
+                        + "radio-browser.info for station logos). Sends folder names to search. Your own cover.jpg always wins.",
+                "find_art", true);
 
         section("Sound");
         seek("Maximum volume", "max_volume", 10, 100, 70);

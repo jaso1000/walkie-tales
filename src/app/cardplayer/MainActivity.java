@@ -173,6 +173,22 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         server = new RemoteServer(this, this::remote);
         syncRemote();
         initMediaSession();
+        h.postDelayed(() -> findCovers(false), 15_000); // give Wi-Fi a moment after boot
+    }
+
+    // ================================================================ automatic covers
+
+    long lastCoverRun;
+
+    void findCovers(boolean force) {
+        lastCoverRun = SystemClock.elapsedRealtime();
+        ArtFinder.runAsync(this, force, this::coversChanged);
+    }
+
+    /** New pictures arrived: refresh the player and the browse grid. */
+    void coversChanged() {
+        if (folder != null && !Store.ALL.equals(folder)) applyTheme(folder);
+        if (browsing) openBrowser();
     }
 
     // ================================================================ Bluetooth / headset buttons
@@ -288,6 +304,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             receiversOn = true;
         }
         maybeLockTask();
+        if (lastCoverRun > 0 && SystemClock.elapsedRealtime() - lastCoverRun > 30 * 60_000L) findCovers(false);
         if (server != null) syncRemote();
         h.post(ticker);
     }
@@ -371,6 +388,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 h.postDelayed(cancelLink, 30000);
                 break;
             }
+            case "/api/covers/find": {
+                findCovers(b.optBoolean("force", true));
+                return new JSONObject().put("started", true);
+            }
+            case "/api/covers/remove": { // "wrong cover": delete it and never fetch one for this folder again
+                String f = b.getString("folder");
+                if (RemoteServer.safeFolder(f) == null) throw new IllegalArgumentException("Bad folder");
+                ArtFinder.reject(this, f);
+                coversChanged();
+                break;
+            }
             case "/api/station": {
                 String name = b.optString("name").trim(), url = b.optString("url").trim();
                 String fold = b.optString("folder").trim();
@@ -380,6 +408,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 File dir = RemoteServer.safeFolder(fold.isEmpty() ? name.replaceAll("[\\\\/]", "") : fold);
                 if (dir == null) throw new IllegalArgumentException("Bad folder name");
                 Store.addStation(dir, name, url);
+                findCovers(false); // look for the station's logo
                 flash("New radio station: " + name, 4000);
                 if (browsing) openBrowser();
                 break;
@@ -447,6 +476,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             o.put("name", f);
             o.put("tracks", Store.listTracks(f).size());
             o.put("live", Store.isLiveOnly(f));
+            o.put("autoCover", ArtFinder.hasAuto(f));
             o.put("cards", Store.cardsFor(cards, f));
             o.put("info", tileInfo(f));
             o.put("color", String.format(Locale.ROOT, "#%06X", Ui.colorFor(f) & 0xFFFFFF));
@@ -852,6 +882,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         }
         prefs.edit().putString("last", f).apply();
         applyTheme(f);
+        if (!play && list.get(i).live) {
+            // Restoring a radio folder (e.g. after a restart): don't connect until play is pressed.
+            releasePlayer();
+            index = i;
+            updateUi();
+            return;
+        }
         if (play && prefs.getBoolean("announce", false)) {
             startTrack(i, pos, false, 0);
             final List<Track> mine = tracks;
@@ -1887,7 +1924,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                     + extra + (list ? "  ›" : ""));
         }
         boolean playing = ready() && mp.isPlaying();
-        setControlsEnabled(mp != null);
+        setControlsEnabled(mp != null || isLive());
         setBreathing(!playing);
         eq.setVisibility(View.VISIBLE);
         eq.setColor(Ui.tint(accent, 0.3f));

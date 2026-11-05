@@ -20,7 +20,7 @@ cp companion/web/index.html build/assets/web/index.html
 "$BT/aapt2" compile --dir res -o build/res.zip
 "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml \
     --java build/gen --min-sdk-version 26 --target-sdk-version 36 \
-    --version-code 8 --version-name 1.7 -A build/assets build/res.zip
+    --version-code 10 --version-name 1.9 -A build/assets build/res.zip
 
 javac -nowarn --release 11 -encoding UTF-8 -classpath "$JAR" \
     -d build/classes $(find src build/gen -name '*.java')

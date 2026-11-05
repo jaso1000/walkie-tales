@@ -197,6 +197,10 @@
   <div class="card">
     <h2>Library</h2>
     <div class="grid" id="grid"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn ghost" id="findCovers">Find missing covers</button>
+    </div>
+    <div class="hint" style="text-align:left">Folders without a picture get one automatically from Apple's iTunes catalogue (music &amp; audiobooks) or radio-browser.info (station logos). Your own <b>cover.jpg</b> always wins.</div>
   </div>
   <div class="card">
     <h2>Add a radio station</h2>
@@ -434,6 +438,12 @@
       if (f.name !== '@all') { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.onerror = () => img.remove(); img.src = coverUrl(f.name); a.appendChild(img); }
       t.appendChild(a); t.appendChild(el('b', '', f.name === '@all' ? 'Everything' : f.name));
       t.appendChild(el('small', '', f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '')));
+      if (f.autoCover) {
+        const w = el('small', '', 'Wrong picture?'); w.style.cssText = 'display:block;color:var(--accent);text-decoration:underline;margin-top:2px';
+        w.onclick = (e) => { e.stopPropagation(); if (confirm('Remove the picture found online for “' + f.name + '”? It won’t look again for this folder.'))
+          api('/api/covers/remove', { folder: f.name }).then(() => { toast('Picture removed'); loadLibrary(); }).catch(err); };
+        t.appendChild(w);
+      }
       t.onclick = () => act('/api/play', { folder: f.name }).then(() => { toast('Playing ' + (f.name === '@all' ? 'everything' : f.name)); document.querySelector('nav button[data-tab=now]').click(); });
       g.appendChild(t);
       if (f.name !== '@all') { const o = el('option'); o.value = f.name; dl.appendChild(o); }
@@ -445,6 +455,10 @@
     lib.actions.forEach(a => { const o = el('option', '', '⚙️ ' + a.label); o.value = a.target; sel.appendChild(o); });
     if (keep) sel.value = keep;
   }
+
+  $('#findCovers').onclick = () => {
+    api('/api/covers/find', { force: true }).then(() => { toast('Looking for covers…'); setTimeout(loadLibrary, 6000); setTimeout(loadLibrary, 15000); }).catch(err);
+  };
 
   $('#stGo').onclick = () => {
     const name = $('#stName').value.trim(), url = $('#stUrl').value.trim(), folder = $('#stFolder').value.trim();
@@ -470,6 +484,7 @@
     }
     $('#upGo').disabled = false; $('#upFiles').value = '';
     toast('Upload finished'); loadLibrary();
+    api('/api/covers/find', { force: false }).then(() => setTimeout(loadLibrary, 8000)).catch(() => {});
   };
   function upload(folder, file, onProgress) {
     return new Promise((resolve, reject) => {
@@ -506,7 +521,7 @@
   const SWITCHES = {
     setSound: [['show_volume', 'Volume buttons on the player'], ['fade_in', 'Fade in', 'Start music gently'], ['announce', 'Say the name out loud', 'Announce what’s playing (text-to-speech)']],
     setQuiet: [['quiet', 'Quiet hours', 'Lower volume limit overnight']],
-    setPlay: [['cards', 'Use NFC cards', 'Off = browse-only player (for phones without working NFC)'], ['browse', 'Browse without cards', 'Show the ▦ library button (always on while cards are off)'], ['track_list', 'Pick a track from the list'], ['rest_mode', 'Play while the card rests on the phone', 'Lift the card to pause (Toniebox style)']],
+    setPlay: [['find_art', 'Find missing covers online', 'iTunes / radio-browser.info, using folder names'], ['cards', 'Use NFC cards', 'Off = browse-only player (for phones without working NFC)'], ['browse', 'Browse without cards', 'Show the ▦ library button (always on while cards are off)'], ['track_list', 'Pick a track from the list'], ['rest_mode', 'Play while the card rests on the phone', 'Lift the card to pause (Toniebox style)']],
     setScreen: [['night_light', 'Night light', 'Warm glow when idle'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery on the player']],
     setSafety: [['gate', 'Grown-up check', 'Ask a sum before the settings open on the player']],
   };
