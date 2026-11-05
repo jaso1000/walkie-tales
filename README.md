@@ -11,18 +11,20 @@ The app is native Android in plain Java, using only the framework (no AndroidX, 
 **For kids**
 - Tap a card to play its folder. Tap again to pause. Each folder carries on where it stopped.
 - Optional *Toniebox mode*: plays while the card rests on the phone and pauses when it's lifted.
-- Big play/pause/skip buttons. Swipe the cover to skip, hold ⏮ to start over, and tap the track name for a track list.
-- Browse without cards: a grid of covers with "Now playing" and "Track 3 of 12". Grown-ups can turn it off.
+- Big play/pause/skip buttons and a scrub bar to drag through a track. Swipe the cover to skip, swipe up for the track list, hold ⏮ to start over.
+- Two big buttons along the bottom: **Library** (a grid of covers, works without cards) and **Tracks** (every track in the folder). Grown-ups can hide either.
 - Volume buttons with a dot meter, a sleep timer (moon button) and a friendly greeting ("Good morning, Sam!").
-- The look follows the cover art. There's an equalizer animation, crossfades, a night-light glow with a bedside clock, and screen dimming.
+- The look follows the cover art. There's an equalizer animation, crossfades, and a night-light glow with a bedside clock.
 - Bluetooth/headset play, pause and skip buttons work.
 
-**For grown-ups** (press and hold ⋮, then answer a quick sum)
+**For grown-ups** (press and hold the ⚙ cog, then answer a quick sum)
 - Link cards to folders or to actions: Shuffle everything, Pause, Skip, Sleep timer, Volume up/down. Cards can be switched off for a browse-only player (handy on phones whose NFC doesn't work).
 - Per-folder shuffle, repeat and resume settings.
-- Maximum volume, quiet hours (a lower limit overnight), fade-in, and spoken titles (text-to-speech).
-- Dimming, keep-screen-on, night light and clock, and the grown-up check.
-- Kiosk lock: as device owner it blocks the notification shade, Home and Recents. "Android settings" steps out of the lock and it locks again when you return to the player.
+- Maximum volume, fade-in, and spoken titles (text-to-speech).
+- **Bedtime:** a lower volume limit overnight, and an optional black screen 30 s after the last touch.
+- **Battery:** the screen sleeps after a set time (30 s to 5 min), even while playing or charging. Music carries on with the screen off.
+- **Safety:** kiosk lock (as device owner it blocks the notification shade, Home and Recents), the power-button menu can be blocked so it can't be switched off, and *Restart the phone* is in settings. "Android settings" steps out of the lock and it locks again when you return.
+- Radio stations are hidden from the Library while there's no internet.
 - A remote control over Wi-Fi (see below).
 
 ## Music
@@ -74,14 +76,19 @@ Music/Cards/Radio/
 ## Remote control and Docker companion
 
 The player runs a small PIN-protected web server on port 8080. Open the address shown in *Grown-up settings → Remote control* on your phone (same Wi-Fi) and you get a remote with:
-- now playing and playback controls
-- volume and the sleep timer
+- now playing, playback controls and the track list
+- volume, maximum volume and the sleep timer
+- **turn the screen off**: black, taps ignored, and it switches itself back off if the power button wakes it
 - a library you can tap to play, plus music upload and adding radio stations
 - card linking
 - all settings
 - messages to the screen
 
-[`companion/`](companion/) packages the same page as a Docker container for a home server. See [companion/README.md](companion/README.md).
+[`companion/`](companion/) packages the same page as a Docker container for a home server, with extras: it handles **several players** (switch by tapping the name at the top, or let it find them on the Wi-Fi), and it can be added to a phone's home screen as an app with its own icon. See [companion/README.md](companion/README.md).
+
+## Download
+
+Each [release](https://github.com/jaso1000/walkie-tales/releases) has a ready-built `WalkieTales.apk`. It's signed with this project's own key, so a later release installs over an earlier one. A copy you build yourself is signed with your own key and won't install over a release (uninstall first, after releasing kiosk control).
 
 ## Build
 
@@ -120,7 +127,7 @@ Handy for testing without a card: `adb shell am start -n app.cardplayer/.MainAct
 2. Turn on Developer options → USB debugging.
 3. `bash build.sh`, then run the install commands above (install, file access, home screen, device owner). Use the same `debug.keystore` so updates install over every player.
 4. App info → Wi-Fi data usage → **Allow network access** (LineageOS blocks new apps by default).
-5. `bash tools/phone-tune.sh` disables unused apps and background scanning for better battery and speed (`--undo` reverses it). Then `adb reboot`.
+5. `bash tools/phone-tune.sh` disables unused apps and background scanning, lets the screen sleep on the charger, and lets the remote reach the player while its screen is off (`--undo` reverses it). Then `adb reboot`.
 6. Give the phone a DHCP reservation in the router and copy music into `Music/Cards/`.
 
 ## Project layout
@@ -133,9 +140,12 @@ src/app/cardplayer/
   MainActivity.java          player screen, NFC, playback, kiosk, remote API handlers
   SettingsActivity.java      grown-up settings
   RemoteServer.java          tiny HTTP server for the remote
-  Store.java                 library, card links, settings registry
+  Store.java                 library, card links, radio playlists, settings registry
+  Track.java                 a music file or a live stream
+  ArtFinder.java             automatic covers (iTunes / radio-browser.info)
   Kiosk.java                 lock-task / device-owner kiosk
   Ui.java, EqView.java       drawing helpers
   AdminReceiver.java         device-admin receiver
-companion/                   web remote (shared page) + Docker container
+companion/                   web remote (shared page) + Docker container (several players, app icons)
+tools/                       phone-tune.sh (battery/speed), make-web-icons.py
 ```
