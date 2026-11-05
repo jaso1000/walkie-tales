@@ -309,11 +309,12 @@ public class SettingsActivity extends Activity {
     }
 
     String folderSummary(String f, Map<String, String> cards) {
-        int n = Store.listAudio(f).size();
+        int n = Store.listTracks(f).size();
         int c = Store.cardsFor(cards, f);
         StringBuilder sb = new StringBuilder();
-        sb.append(n).append(n == 1 ? " track" : " tracks").append("  ·  ")
-                .append(c == 0 ? "no card" : c == 1 ? "1 card" : c + " cards");
+        if (Store.isLiveOnly(f)) sb.append(n == 1 ? "live radio" : n + " radio stations");
+        else sb.append(n).append(n == 1 ? " track" : " tracks");
+        sb.append("  ·  ").append(c == 0 ? "no card" : c == 1 ? "1 card" : c + " cards");
         if (prefs.getBoolean("shuffle:" + f, false)) sb.append("  ·  shuffle");
         if (prefs.getBoolean("repeat:" + f, false)) sb.append("  ·  repeat");
         if (!prefs.getBoolean("resume:" + f, true)) sb.append("  ·  always from the start");

@@ -15,7 +15,8 @@
         android:label="Walkie Tales"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"

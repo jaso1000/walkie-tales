@@ -41,12 +41,31 @@ Music/Cards/
 
 Supported formats are MP3, M4A/M4B, AAC, OGG, Opus, FLAC and WAV. Subfolders are included, sorted naturally. Card links are stored in `Music/Cards/cards.txt`, so they survive reinstalling the app.
 
+## Internet radio
+
+A folder can hold radio stations instead of (or as well as) music files. A station is a small playlist file with the stream address:
+
+```
+Music/Cards/Radio/
+  cover.jpg
+  Kids Radio.m3u      <- #EXTM3U / #EXTINF:-1,Kids Radio / https://example.com/stream.mp3
+  Groove Salad.m3u
+```
+
+- `.m3u`, `.m3u8`, `.pls` and `.url` files are understood. A station's "listen live" link to a `.pls` or `.m3u` is followed automatically.
+- StreamTheWorld links that name a numbered server (`12345.live.streamtheworld.com/…`) are switched to StreamTheWorld's official redirect, because those servers rotate.
+- The easiest way to add one is the remote's *Library → Add a radio station*.
+- A station folder works like any other folder: tap it in browse, link a card to it, sleep timer, volume limit. With several stations in a folder, ⏮/⏭ switch stations.
+- The player shows **LIVE** instead of a progress bar, connects without freezing the screen, and says so if a station can't be reached or drops out (press play to reconnect).
+- Stations are left out of "Everything" (shuffle), since a live stream never ends.
+- Needs Wi-Fi, of course. Plain `http://` streams are allowed as well as `https://`.
+
 ## Remote control and Docker companion
 
 The player runs a small PIN-protected web server on port 8080. Open the address shown in *Grown-up settings → Remote control* on your phone (same Wi-Fi) and you get a remote with:
 - now playing and playback controls
 - volume and the sleep timer
-- a library you can tap to play, plus music upload
+- a library you can tap to play, plus music upload and adding radio stations
 - card linking
 - all settings
 - messages to the screen

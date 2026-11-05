@@ -199,13 +199,27 @@
     <div class="grid" id="grid"></div>
   </div>
   <div class="card">
+    <h2>Add a radio station</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="stName" maxlength="60" placeholder="Station name (e.g. Kids Radio)">
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="stUrl" inputmode="url" placeholder="Stream address: https://… (.mp3, .aac, .pls or .m3u link)">
+    </div>
+    <div class="row">
+      <input type="text" id="stFolder" list="folderNames" placeholder="Folder (optional; leave blank for its own)">
+      <button class="btn" id="stGo" style="flex:none">Add</button>
+    </div>
+    <div class="hint" style="text-align:left">A station works like a folder: tap it in the Library, link a card to it, or put several stations in one folder and use ⏭ to flip between them. Add a <b>cover.jpg</b> to the folder for a logo.</div>
+  </div>
+  <div class="card">
     <h2>Add music</h2>
     <div class="row" style="margin-bottom:10px">
       <input type="text" id="upFolder" list="folderNames" placeholder="Folder name (one folder per card)">
       <datalist id="folderNames"></datalist>
     </div>
     <div class="row">
-      <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac">
+      <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
     </div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="upGo">Upload</button>
@@ -326,7 +340,9 @@
     const b = $('#batt');
     if (s.battery >= 0) { b.hidden = false; b.textContent = (s.charging ? '⚡ ' : '') + s.battery + '%'; b.style.color = s.battery <= 15 && !s.charging ? 'var(--bad)' : ''; }
     $('#title').textContent = s.title || (s.name ? 'Hi, ' + s.name + '!' : 'Nothing playing');
-    $('#sub').textContent = s.folder ? 'Track ' + (s.trackIndex + 1) + ' of ' + s.trackCount + ' · ' + s.track : 'Tap a card on the player, or pick something in the Library';
+    $('#sub').textContent = !s.folder ? 'Tap a card on the player, or pick something in the Library'
+      : s.live ? (s.trackCount > 1 ? 'Station ' + (s.trackIndex + 1) + ' of ' + s.trackCount : 'Live radio') + ' · ' + s.track
+      : 'Track ' + (s.trackIndex + 1) + ' of ' + s.trackCount + ' · ' + s.track;
     if (coverFor !== s.folder) {
       coverFor = s.folder;
       const c = $('#cover'); c.textContent = '';
@@ -368,6 +384,12 @@
   }
   function tickProgress() {
     if (!st) return;
+    if (st.live) { // radio: no duration
+      $('#barFill').style.width = st.connecting ? '0' : '100%';
+      $('#pos').textContent = st.connecting ? 'Connecting…' : (st.playing ? '● LIVE' : 'LIVE');
+      $('#dur').textContent = '';
+      return;
+    }
     let p = st.position || 0; const dur = st.duration || 0;
     if (st.playing) p += Date.now() - lastPoll;
     p = Math.min(p, dur);
@@ -375,7 +397,7 @@
     $('#pos').textContent = fmt(p); $('#dur').textContent = fmt(dur);
   }
   setInterval(tickProgress, 500);
-  $('#bar').onclick = (e) => { if (!st || !st.duration) return; const r = e.currentTarget.getBoundingClientRect();
+  $('#bar').onclick = (e) => { if (!st || st.live || !st.duration) return; const r = e.currentTarget.getBoundingClientRect();
     act('/api/seek', { ms: Math.round((e.clientX - r.left) / r.width * st.duration) }); };
   $('#play').onclick = () => act('/api/toggle');
   $('#next').onclick = () => act('/api/next');
@@ -423,6 +445,15 @@
     lib.actions.forEach(a => { const o = el('option', '', '⚙️ ' + a.label); o.value = a.target; sel.appendChild(o); });
     if (keep) sel.value = keep;
   }
+
+  $('#stGo').onclick = () => {
+    const name = $('#stName').value.trim(), url = $('#stUrl').value.trim(), folder = $('#stFolder').value.trim();
+    if (!name) return toast('Give the station a name');
+    if (!/^https?:\/\//i.test(url)) return toast('The address must start with http:// or https://');
+    api('/api/station', { name, url, folder }).then(() => {
+      toast('Added ' + name); $('#stName').value = ''; $('#stUrl').value = ''; $('#stFolder').value = ''; loadLibrary();
+    }).catch(err);
+  };
 
   $('#upGo').onclick = async () => {
     const folder = $('#upFolder').value.trim(); const files = [...$('#upFiles').files];

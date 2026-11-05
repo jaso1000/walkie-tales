@@ -102,7 +102,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     MediaPlayer mp;
     String folder;              // folder name, Store.ALL, or null when idle
     String folderCard;          // card that started the current folder
-    List<File> tracks = new ArrayList<>();
+    List<Track> tracks = new ArrayList<>();
+    boolean preparing, wantPlay; // a live stream is connecting
+    int prepToken;
     int index;
     int ticks;
     int accent = DEFAULT_ACCENT;
@@ -181,7 +183,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             @Override public void onPlay() {
                 wake();
                 if (mp == null) togglePlay();
-                else if (!mp.isPlaying()) play();
+                else if (preparing || !mp.isPlaying()) play();
             }
             @Override public void onPause() { pause(); }
             @Override public void onStop() { pause(); }
@@ -194,9 +196,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void updateMediaSession() {
         if (session == null) return;
-        boolean playing = mp != null && mp.isPlaying();
+        boolean playing = ready() && mp.isPlaying();
         long pos = 0;
-        try { if (mp != null) pos = mp.getCurrentPosition(); } catch (Exception ignored) { }
+        try { if (ready() && !isLive()) pos = mp.getCurrentPosition(); } catch (Exception ignored) { }
         session.setPlaybackState(new android.media.session.PlaybackState.Builder()
                 .setActions(android.media.session.PlaybackState.ACTION_PLAY
                         | android.media.session.PlaybackState.ACTION_PAUSE
@@ -209,12 +211,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 .build());
         if (folder != null && !tracks.isEmpty()) {
             android.media.MediaMetadata.Builder md = new android.media.MediaMetadata.Builder()
-                    .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, Store.cleanName(tracks.get(index)))
+                    .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, tracks.get(index).name)
                     .putString(android.media.MediaMetadata.METADATA_KEY_ALBUM, Store.ALL.equals(folder) ? "Everything" : folder)
                     .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, "Walkie Tales")
                     .putLong(android.media.MediaMetadata.METADATA_KEY_TRACK_NUMBER, index + 1)
                     .putLong(android.media.MediaMetadata.METADATA_KEY_NUM_TRACKS, tracks.size());
-            try { if (mp != null) md.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, mp.getDuration()); } catch (Exception ignored) { }
+            try { if (ready() && !isLive()) md.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, mp.getDuration()); } catch (Exception ignored) { }
             session.setMetadata(md.build());
         }
     }
@@ -321,7 +323,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             }
             case "/api/toggle": togglePlay(); break;
             case "/api/pause": pause(); break;
-            case "/api/resume": if (mp != null && !mp.isPlaying()) play(); else if (mp == null) togglePlay(); break;
+            case "/api/resume": if (ready() && !mp.isPlaying()) play(); else if (mp == null) togglePlay(); break;
             case "/api/next": next(); break;
             case "/api/prev": prev(); break;
             case "/api/restart": restartFolder(); break;
@@ -332,7 +334,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 startTrack(i, 0, true, 0);
                 break;
             }
-            case "/api/seek": if (mp != null) { mp.seekTo(Math.max(0, b.getInt("ms"))); updateUi(); } break;
+            case "/api/seek": if (ready() && !isLive()) { mp.seekTo(Math.max(0, b.getInt("ms"))); updateUi(); } break;
             case "/api/volume": {
                 if (b.has("level")) {
                     int v = Math.max(0, Math.min(capSteps(), b.getInt("level")));
@@ -368,6 +370,19 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 h.postDelayed(cancelLink, 30000);
                 break;
             }
+            case "/api/station": {
+                String name = b.optString("name").trim(), url = b.optString("url").trim();
+                String fold = b.optString("folder").trim();
+                if (name.isEmpty()) throw new IllegalArgumentException("Give the station a name");
+                if (!Store.isUrl(url) || url.length() > 1000) throw new IllegalArgumentException("The stream address must start with http:// or https://");
+                if (name.length() > 60) name = name.substring(0, 60);
+                File dir = RemoteServer.safeFolder(fold.isEmpty() ? name.replaceAll("[\\\\/]", "") : fold);
+                if (dir == null) throw new IllegalArgumentException("Bad folder name");
+                Store.addStation(dir, name, url);
+                flash("New radio station: " + name, 4000);
+                if (browsing) openBrowser();
+                break;
+            }
             case "/api/cards/cancel": linkTarget = null; h.removeCallbacks(cancelLink); flash("Linking cancelled", 2000); break;
             case "/api/cards/unlink": {
                 cards.remove(b.getString("id"));
@@ -389,16 +404,18 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         boolean have = folder != null && !tracks.isEmpty();
         s.put("folder", have ? folder : JSONObject.NULL);
         s.put("title", have ? (Store.ALL.equals(folder) ? "Everything" : folder) : JSONObject.NULL);
-        s.put("playing", mp != null && mp.isPlaying());
+        s.put("playing", ready() && mp.isPlaying());
         if (have) {
-            s.put("track", Store.cleanName(tracks.get(index)));
+            s.put("track", tracks.get(index).name);
             s.put("trackIndex", index);
             s.put("trackCount", tracks.size());
             JSONArray names = new JSONArray();
-            for (File t : tracks) names.put(Store.cleanName(t));
+            for (Track t : tracks) names.put(t.name);
             s.put("tracks", names);
         }
-        if (mp != null) {
+        s.put("live", isLive());
+        s.put("connecting", preparing);
+        if (ready() && !isLive()) {
             try {
                 s.put("position", mp.getCurrentPosition());
                 s.put("duration", mp.getDuration());
@@ -427,7 +444,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         for (String f : Store.folders()) {
             JSONObject o = new JSONObject();
             o.put("name", f);
-            o.put("tracks", Store.listAudio(f).size());
+            o.put("tracks", Store.listTracks(f).size());
+            o.put("live", Store.isLiveOnly(f));
             o.put("cards", Store.cardsFor(cards, f));
             o.put("info", tileInfo(f));
             o.put("color", String.format(Locale.ROOT, "#%06X", Ui.colorFor(f) & 0xFFFFFF));
@@ -532,7 +550,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         switch (keyCode) {
             case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
             case KeyEvent.KEYCODE_HEADSETHOOK: wake(); togglePlay(); return true;
-            case KeyEvent.KEYCODE_MEDIA_PLAY: wake(); if (mp == null || !mp.isPlaying()) togglePlay(); return true;
+            case KeyEvent.KEYCODE_MEDIA_PLAY: wake(); if (preparing) play(); else if (mp == null || !mp.isPlaying()) togglePlay(); return true;
             case KeyEvent.KEYCODE_MEDIA_PAUSE:
             case KeyEvent.KEYCODE_MEDIA_STOP: pause(); return true;
             case KeyEvent.KEYCODE_MEDIA_NEXT: wake(); next(); return true;
@@ -575,7 +593,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     /** Keep the screen (and so the card reader) awake while charging or playing, or always if chosen. */
     void updateKeepOn() {
-        boolean on = prefs.getInt("screen_on", 0) == 1 || charging || (mp != null && mp.isPlaying());
+        boolean on = prefs.getInt("screen_on", 0) == 1 || charging || (ready() && mp.isPlaying());
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -722,7 +740,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (target.equals(folder) && mp != null) {
             folderCard = id;
             if (rest) {
-                if (!mp.isPlaying()) play();
+                if (preparing || !mp.isPlaying()) play();
             } else {
                 togglePlay();
             }
@@ -736,7 +754,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void doAction(String a) {
         switch (a) {
             case Store.PAUSE:
-                if (mp != null && mp.isPlaying()) pause();
+                if (ready() && mp.isPlaying()) pause();
                 else flash("Paused", 1500);
                 break;
             case Store.NEXT: next(); break;
@@ -769,7 +787,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void onCardRemoved(String id) {
         lastTag = null; // allow putting the same card straight back
-        if (prefs.getBoolean("rest_mode", false) && id.equals(folderCard) && mp != null && mp.isPlaying()) {
+        if (prefs.getBoolean("rest_mode", false) && id.equals(folderCard) && ready() && mp.isPlaying()) {
             pause();
             flash("Put the card back to keep listening", 4000);
         }
@@ -805,12 +823,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void openFolder(String f, boolean play) {
         boolean all = Store.ALL.equals(f);
-        List<File> list;
+        List<Track> list;
         if (all) {
             list = new ArrayList<>();
-            for (String d : Store.folders()) list.addAll(Store.listAudio(d));
+            for (String d : Store.folders()) for (Track t : Store.listTracks(d)) if (!t.live) list.add(t); // no radio in "Everything"
         } else {
-            list = Store.listAudio(f);
+            list = Store.listTracks(f);
         }
         if (list.isEmpty()) {
             flash(all ? "There's no music on the phone yet" : "No music in “" + f + "” yet", 4000);
@@ -835,7 +853,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         applyTheme(f);
         if (play && prefs.getBoolean("announce", false)) {
             startTrack(i, pos, false, 0);
-            final List<File> mine = tracks;
+            final List<Track> mine = tracks;
             announce(all ? "Everything" : f, () -> { if (tracks == mine) play(); });
         } else {
             startTrack(i, pos, play, 0);
@@ -845,11 +863,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void startTrack(int i, int posMs, boolean play, int failures) {
         releasePlayer();
         index = i;
+        if (tracks.get(i).live) {
+            startStream(i, play);
+            return;
+        }
         MediaPlayer m = new MediaPlayer();
         try {
             m.setAudioAttributes(attrs());
             m.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            m.setDataSource(tracks.get(i).getAbsolutePath());
+            m.setDataSource(tracks.get(i).source);
             m.prepare();
             if (posMs > 0 && posMs < m.getDuration() - 2000) m.seekTo(posMs);
         } catch (Exception e) {
@@ -865,6 +887,71 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         m.setOnCompletionListener(x -> onTrackDone());
         mp = m;
         if (play) play(); else updateUi();
+    }
+
+    // ---------------------------------------------------------------- live streams (radio)
+
+    boolean isLive() {
+        return folder != null && !tracks.isEmpty() && index < tracks.size() && tracks.get(index).live;
+    }
+
+    /** Player exists and isn't still connecting: safe to ask it for position/duration. */
+    boolean ready() {
+        return mp != null && !preparing;
+    }
+
+    /** Connect to an internet stream without blocking the screen; plays when ready (if asked to). */
+    void startStream(int i, boolean play) {
+        final Track t = tracks.get(i);
+        final int token = ++prepToken;
+        preparing = true;
+        wantPlay = play;
+        flash("Connecting to “" + t.name + "”…", 20000);
+        updateUi();
+        new Thread(() -> {
+            final String url = Store.resolveStream(t.source); // follows .pls/.m3u "listen live" links
+            h.post(() -> {
+                if (token != prepToken) return; // something else was picked meanwhile
+                MediaPlayer m = new MediaPlayer();
+                try {
+                    m.setAudioAttributes(attrs());
+                    m.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
+                    m.setDataSource(url);
+                } catch (Exception e) {
+                    m.release();
+                    streamFailed(t, token);
+                    return;
+                }
+                m.setOnPreparedListener(x -> {
+                    if (token != prepToken || mp != x) return;
+                    preparing = false;
+                    flash("", 1);
+                    if (wantPlay) play(); else updateUi();
+                    wantPlay = false;
+                });
+                m.setOnErrorListener((x, what, extra) -> {
+                    if (mp == x) streamFailed(t, token);
+                    return true;
+                });
+                m.setOnCompletionListener(x -> { // the station dropped the connection
+                    if (mp != x) return;
+                    releasePlayer();
+                    flash("“" + t.name + "” stopped. Press play to reconnect", 10000);
+                    updateUi();
+                });
+                mp = m;
+                m.prepareAsync();
+            });
+        }, "stream-connect").start();
+    }
+
+    void streamFailed(Track t, int token) {
+        if (token != prepToken) return;
+        preparing = false;
+        wantPlay = false;
+        releasePlayer();
+        flash("Can't reach “" + t.name + "” right now", 8000);
+        updateUi();
     }
 
     boolean repeats() {
@@ -886,6 +973,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void play() {
         if (mp == null) return;
+        if (preparing) { // still connecting to a station: start as soon as it's ready
+            wantPlay = true;
+            updateUi();
+            return;
+        }
         if (focusRequest == null) {
             focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(attrs())
@@ -912,20 +1004,26 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     void setPlayerVolume(float v) {
-        if (mp == null) return;
+        if (!ready()) return; // not allowed while a station is still connecting
         try { mp.setVolume(v, v); } catch (Exception ignored) { }
     }
 
     void pause() {
         if (fade != null) fade.cancel();
-        if (mp != null && mp.isPlaying()) mp.pause();
+        wantPlay = false;
+        try { if (ready() && mp.isPlaying()) mp.pause(); } catch (Exception ignored) { }
         savePosition();
         updateUi();
     }
 
     void togglePlay() {
+        if (preparing) { // tapping while a station connects cancels/restores the auto-start
+            if (wantPlay) pause(); else play();
+            return;
+        }
         if (mp == null) {
-            if (folder != null) openFolder(folder, true);
+            if (isLive()) startTrack(index, 0, true, 0); // reconnect to the station
+            else if (folder != null) openFolder(folder, true);
             else if (canBrowse()) openBrowser();
             else flash("Tap a card on the back of the phone", 3000);
         } else if (mp.isPlaying()) {
@@ -936,7 +1034,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     void prev() {
-        if (mp == null) return;
+        if (isLive()) { // previous station
+            if (index > 0) startTrack(index - 1, 0, true, 0);
+            else if (tracks.size() > 1) startTrack(tracks.size() - 1, 0, true, 0);
+            return;
+        }
+        if (!ready()) return;
         boolean playing = mp.isPlaying();
         if (mp.getCurrentPosition() > 3000 || index == 0) {
             mp.seekTo(0);
@@ -947,6 +1050,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     void next() {
+        if (isLive()) { // next station (wraps around)
+            if (tracks.size() > 1) startTrack((index + 1) % tracks.size(), 0, true, 0);
+            else flash("That's the only station here", 2500);
+            return;
+        }
         if (mp == null) {
             flash("Nothing is playing", 1500);
             return;
@@ -966,11 +1074,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (folder == null || mp == null || Store.ALL.equals(folder)) return;
         if (prefs.getBoolean("shuffle:" + folder, false)) return;
         try {
-            prefs.edit().putString("pos:" + folder, index + ":" + mp.getCurrentPosition()).apply();
+            int pos = isLive() || !ready() ? 0 : mp.getCurrentPosition(); // stations: just remember which one
+            prefs.edit().putString("pos:" + folder, index + ":" + pos).apply();
         } catch (Exception ignored) { }
     }
 
     void releasePlayer() {
+        prepToken++; // cancels any station that's still connecting
+        preparing = false;
         if (mp != null) {
             try { mp.release(); } catch (Exception ignored) { }
             mp = null;
@@ -987,7 +1098,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     final Runnable ticker = new Runnable() {
         @Override public void run() {
             h.removeCallbacks(this);
-            if (mp != null) {
+            if (isLive()) {
+                progress.setMax(1);
+                progress.setProgress(ready() ? 1 : 0); // full bar = on air
+                time.setText(preparing ? "Connecting…" : ready() && mp.isPlaying() ? "●  LIVE" : "LIVE");
+            } else if (ready()) {
                 try {
                     int dur = mp.getDuration(), cur = mp.getCurrentPosition();
                     progress.setMax(Math.max(dur, 1));
@@ -1024,7 +1139,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 setPlayerVolume(1f);
                 flash("Goodnight", 6000);
                 h.postDelayed(dim, 4000);
-            } else if (left < 15_000 && mp != null && mp.isPlaying() && (fade == null || !fade.isRunning())) {
+            } else if (left < 15_000 && ready() && mp.isPlaying() && (fade == null || !fade.isRunning())) {
                 setPlayerVolume(left / 15_000f);
             }
         }
@@ -1393,7 +1508,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         final int build = ++browseBuild;
         grid.removeAllViews();
         final List<String> items = new ArrayList<>();
-        for (String f : Store.folders()) if (!Store.listAudio(f).isEmpty()) items.add(f);
+        for (String f : Store.folders()) if (!Store.listTracks(f).isEmpty()) items.add(f);
         if (items.size() > 1) items.add(Store.ALL);
 
         if (items.isEmpty()) {
@@ -1443,7 +1558,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             cell.setOnClickListener(v -> {
                 closeBrowser();
                 if (f.equals(folder) && mp != null) {
-                    if (!mp.isPlaying()) play();
+                    if (preparing || !mp.isPlaying()) play();
                 } else {
                     savePosition();
                     folderCard = null;
@@ -1478,9 +1593,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     String tileInfo(String f) {
-        if (f.equals(folder) && mp != null && mp.isPlaying()) return "Now playing";
+        if (f.equals(folder) && ready() && mp.isPlaying()) return "Now playing";
         if (Store.ALL.equals(f)) return "Shuffle it all";
-        int n = Store.listAudio(f).size();
+        if (Store.isLiveOnly(f)) {
+            int s = Store.listTracks(f).size();
+            return s == 1 ? "Live radio" : s + " radio stations";
+        }
+        int n = Store.listTracks(f).size();
         int at = 0;
         try { at = Integer.parseInt(prefs.getString("pos:" + f, "0:0").split(":")[0]); } catch (Exception ignored) { }
         boolean resumes = prefs.getBoolean("resume:" + f, true) && !prefs.getBoolean("shuffle:" + f, false);
@@ -1538,7 +1657,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void showTrackList() {
         if (folder == null || tracks.isEmpty() || !prefs.getBoolean("track_list", true)) return;
         String[] names = new String[tracks.size()];
-        for (int i = 0; i < names.length; i++) names[i] = (i + 1) + ".   " + Store.cleanName(tracks.get(i));
+        for (int i = 0; i < names.length; i++) names[i] = (i + 1) + ".   " + tracks.get(i).name;
         new AlertDialog.Builder(this, DIALOG_THEME)
                 .setTitle(Store.ALL.equals(folder) ? "Everything" : folder)
                 .setSingleChoiceItems(names, index, (d, w) -> {
@@ -1575,9 +1694,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!all && prefs.getBoolean("shuffle:" + folder, false)) extra += "  ·  shuffle";
         if (!all && prefs.getBoolean("repeat:" + folder, false)) extra += "  ·  repeat";
         boolean list = prefs.getBoolean("track_list", true) && tracks.size() > 1;
-        subtitle.setText("Track " + (index + 1) + " of " + tracks.size() + "  ·  " + Store.cleanName(tracks.get(index))
-                + extra + (list ? "  ›" : ""));
-        boolean playing = mp != null && mp.isPlaying();
+        if (isLive()) {
+            subtitle.setText((tracks.size() > 1 ? "Station " + (index + 1) + " of " + tracks.size() : "Live radio")
+                    + "  ·  " + tracks.get(index).name + (list ? "  ›" : ""));
+        } else {
+            subtitle.setText("Track " + (index + 1) + " of " + tracks.size() + "  ·  " + tracks.get(index).name
+                    + extra + (list ? "  ›" : ""));
+        }
+        boolean playing = ready() && mp.isPlaying();
         setControlsEnabled(mp != null);
         setBreathing(!playing);
         eq.setVisibility(View.VISIBLE);
@@ -1593,7 +1717,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         prevBtn.setAlpha(a);
         nextBtn.setAlpha(a);
         playBtn.setAlpha(on ? 1f : 0.6f);
-        playBtn.setImageResource(mp != null && mp.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
+        playBtn.setImageResource(ready() && mp.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
     }
 
     void setBreathing(boolean on) {
@@ -1707,7 +1831,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     /** Headphones unplugged / Bluetooth speaker disconnected: pause instead of blasting the phone speaker. */
     final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
-            if (mp != null && mp.isPlaying()) {
+            if (ready() && mp.isPlaying()) {
                 pause();
                 flash("Paused — speaker disconnected", 4000);
             }

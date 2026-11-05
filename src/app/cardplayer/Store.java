@@ -181,6 +181,157 @@ final class Store {
         return listAudio(new File(root(), folder));
     }
 
+    // ------------------------------------------------------------ tracks + radio streams
+
+    static final String[] PLAYLIST_EXT = {".m3u", ".m3u8", ".pls", ".url"};
+
+    /** Everything playable in a folder: local audio files first, then streams from playlist files. */
+    static List<Track> listTracks(String folder) {
+        File dir = new File(root(), folder);
+        List<Track> out = new ArrayList<>();
+        for (File f : listAudio(dir)) out.add(Track.file(f));
+        out.addAll(listStreams(dir));
+        return out;
+    }
+
+    /** True when a folder holds only streams (a radio-station folder). */
+    static boolean isLiveOnly(String folder) {
+        List<Track> t = listTracks(folder);
+        if (t.isEmpty()) return false;
+        for (Track x : t) if (!x.live) return false;
+        return true;
+    }
+
+    static List<Track> listStreams(File dir) {
+        List<Track> out = new ArrayList<>();
+        File[] files = dir.listFiles();
+        if (files == null) return out;
+        List<File> lists = new ArrayList<>();
+        for (File f : files) {
+            String n = f.getName().toLowerCase(Locale.ROOT);
+            if (f.isFile() && !n.startsWith(".")) {
+                for (String e : PLAYLIST_EXT) if (n.endsWith(e)) { lists.add(f); break; }
+            }
+        }
+        Collections.sort(lists, (a, b) -> natCmp(a.getName(), b.getName()));
+        for (File pl : lists) out.addAll(parsePlaylist(pl, dir));
+        return out;
+    }
+
+    /** Reads .m3u/.m3u8 (#EXTINF titles), .pls (FileN/TitleN) and .url (URL=) files. */
+    static List<Track> parsePlaylist(File pl, File dir) {
+        List<Track> out = new ArrayList<>();
+        String text;
+        try {
+            if (pl.length() > 256 * 1024) return out;
+            text = new String(java.nio.file.Files.readAllBytes(pl.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return out;
+        }
+        String base = cleanName(pl);
+        String lower = pl.getName().toLowerCase(Locale.ROOT);
+        List<String[]> entries = new ArrayList<>(); // {location, title or null}
+        if (lower.endsWith(".pls")) {
+            Map<String, String> files = new TreeMap<>(Store::natCmp), titles = new java.util.HashMap<>();
+            for (String line : text.split("\\r?\\n")) {
+                String l = line.trim();
+                int eq = l.indexOf('=');
+                if (eq <= 0) continue;
+                String k = l.substring(0, eq).trim().toLowerCase(Locale.ROOT), v = l.substring(eq + 1).trim();
+                if (k.startsWith("file")) files.put(k.substring(4), v);
+                else if (k.startsWith("title")) titles.put(k.substring(5), v);
+            }
+            for (Map.Entry<String, String> e : files.entrySet()) entries.add(new String[]{e.getValue(), titles.get(e.getKey())});
+        } else if (lower.endsWith(".url")) {
+            for (String line : text.split("\\r?\\n")) {
+                String l = line.trim();
+                if (l.regionMatches(true, 0, "URL=", 0, 4)) entries.add(new String[]{l.substring(4).trim(), null});
+            }
+        } else {
+            String title = null;
+            for (String line : text.split("\\r?\\n")) {
+                String l = line.trim();
+                if (l.isEmpty()) continue;
+                if (l.startsWith("#EXTINF")) {
+                    int c = l.indexOf(',');
+                    title = c >= 0 ? l.substring(c + 1).trim() : null;
+                } else if (!l.startsWith("#")) {
+                    entries.add(new String[]{l, title});
+                    title = null;
+                }
+            }
+        }
+        int streams = 0;
+        for (String[] e : entries) if (isUrl(e[0])) streams++;
+        int n = 0;
+        for (String[] e : entries) {
+            String loc = e[0], title = e[1] == null || e[1].isEmpty() ? null : e[1];
+            if (isUrl(loc)) {
+                n++;
+                out.add(Track.stream(loc, title != null ? title : streams > 1 ? base + " " + n : base));
+            } else {
+                File f = new File(loc).isAbsolute() ? new File(loc) : new File(dir, loc);
+                if (f.isFile()) out.add(Track.file(f));
+            }
+        }
+        return out;
+    }
+
+    static boolean isUrl(String s) {
+        String l = s.toLowerCase(Locale.ROOT);
+        return l.startsWith("http://") || l.startsWith("https://");
+    }
+
+    /** Saves a station as "<name>.m3u" in a folder (created if needed). */
+    static void addStation(File dir, String name, String url) throws IOException {
+        if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Can't create folder");
+        String file = name.replaceAll("[\\\\/:*?\"<>|]", "").trim();
+        if (file.isEmpty() || file.startsWith(".")) file = "station";
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(new File(dir, file + ".m3u")), StandardCharsets.UTF_8)) {
+            w.write("#EXTM3U\n#EXTINF:-1," + name.replace('\n', ' ') + "\n" + url.trim() + "\n");
+        }
+    }
+
+    /**
+     * If a stream URL points at a playlist (.pls / .m3u, e.g. a station's "listen live" link), download it and
+     * return the first real stream inside. Otherwise returns the URL unchanged. Call off the main thread.
+     */
+    static String resolveStream(String url) {
+        // StreamTheWorld links name one numbered server (e.g. 19003.live.streamtheworld.com/STATION.mp3) and those
+        // servers rotate; their official redirect always points at a live one.
+        java.util.regex.Matcher stw = java.util.regex.Pattern
+                .compile("(?i)^https?://\\d+\\.live\\.streamtheworld\\.com(?::\\d+)?/([A-Za-z0-9_]+?)(?:_SC)?(\\.mp3|\\.aac)?(?:[?#].*)?$")
+                .matcher(url.trim());
+        if (stw.matches()) {
+            String ext = stw.group(2) == null ? ".mp3" : stw.group(2).toLowerCase(Locale.ROOT);
+            return "https://playerservices.streamtheworld.com/api/livestream-redirect/" + stw.group(1) + ext;
+        }
+        String path = url.toLowerCase(Locale.ROOT).replaceAll("[?#].*$", "");
+        if (!(path.endsWith(".pls") || path.endsWith(".m3u"))) return url;
+        java.net.HttpURLConnection c = null;
+        try {
+            c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            c.setConnectTimeout(6000);
+            c.setReadTimeout(6000);
+            c.setInstanceFollowRedirects(true);
+            byte[] buf = new byte[64 * 1024];
+            int len = 0, r;
+            try (java.io.InputStream in = c.getInputStream()) {
+                while (len < buf.length && (r = in.read(buf, len, buf.length - len)) > 0) len += r;
+            }
+            for (String line : new String(buf, 0, len, StandardCharsets.UTF_8).split("\\r?\\n")) {
+                String l = line.trim();
+                int eq = l.indexOf('=');
+                if (path.endsWith(".pls") && eq > 0 && l.toLowerCase(Locale.ROOT).startsWith("file")) l = l.substring(eq + 1).trim();
+                if (isUrl(l)) return l;
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.disconnect();
+        }
+        return url;
+    }
+
     static List<File> listAudio(File dir) {
         List<File> out = new ArrayList<>();
         collect(dir, out);
