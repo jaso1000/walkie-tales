@@ -50,6 +50,7 @@ Folders without a picture get one automatically (setting: *Find missing covers o
 - **Music and audiobooks:** Apple's keyless iTunes Search API. It searches with the album/artist tags from the files if they have them, otherwise the folder name.
 - **Radio stations:** station logos from radio-browser.info.
 - **Kid-safe matching:** a result is only kept if its name genuinely matches, nothing marked explicit is ever used, and a guess from a folder name alone only accepts children's/family results. (Without that rule, "Demo Songs" found a whiskey-bottle album.)
+- **Each track's own picture while it plays:** if a music file has a picture built in (like a single's cover), the player and the remote show it during that track. The Library tile keeps the folder's picture.
 - **Your own pictures win:** a `cover.jpg` (or any image) you add always takes precedence, and so does art embedded in the music files.
 - **Wrong picture?** Tap that link under the folder in the remote's Library. It's removed and never fetched again for that folder. *Find missing covers* retries on demand. Otherwise folders with no match are retried weekly.
 - Searching sends folder names (or album tags) to Apple and radio-browser.info.

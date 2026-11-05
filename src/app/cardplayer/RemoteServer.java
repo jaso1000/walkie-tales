@@ -194,7 +194,7 @@ final class RemoteServer {
             }
 
             if (method.equals("GET") && path.equals("/api/cover")) {
-                serveCover(out, query.get("folder"));
+                serveCover(out, query.get("folder"), query.containsKey("now"));
                 return;
             }
             if (method.equals("PUT") && path.equals("/api/upload")) {
@@ -232,9 +232,15 @@ final class RemoteServer {
         return MessageDigest.isEqual(bytes(given.trim()), bytes(pin(ctx)));
     }
 
-    private void serveCover(OutputStream out, String folder) throws Exception {
+    /** A folder's picture; with "now", the picture built into the track playing now (if it has one). */
+    private void serveCover(OutputStream out, String folder, boolean now) throws Exception {
         File dir = safeFolder(folder);
-        Bitmap b = dir != null && dir.isDirectory() ? Ui.loadCover(dir) : null;
+        Bitmap b = null;
+        if (now) {
+            String src = MainActivity.nowSource;
+            if (src != null && dir != null && src.startsWith(dir.getAbsolutePath() + File.separator)) b = Ui.embeddedArt(new File(src));
+        }
+        if (b == null) b = dir != null && dir.isDirectory() ? Ui.loadCover(dir) : null;
         if (b == null) { send(out, 404, "text/plain", bytes("No cover")); return; }
         ByteArrayOutputStream bo = new ByteArrayOutputStream();
         b.compress(Bitmap.CompressFormat.JPEG, 85, bo);

@@ -964,6 +964,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void startTrack(int i, int posMs, boolean play, int failures) {
         releasePlayer();
         index = i;
+        nowSource = tracks.get(i).live ? null : tracks.get(i).source;
+        showTrackArt();
         if (tracks.get(i).live) {
             startStream(i, play);
             return;
@@ -2147,18 +2149,63 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         }
     }
 
+    Bitmap folderArt;      // the folder's own picture (or its letter tile)
+    int folderAccent;
+    int shownArt;          // which picture is on screen: 0 = the folder's, otherwise a hash of the track's
+    int artToken;
+
     void applyTheme(String f) {
         boolean all = Store.ALL.equals(f);
         Bitmap cover = all ? null : Ui.loadCover(new File(Store.root(), f));
-        accent = all ? 0xFFE0559A : Ui.colorFor(f);
-        if (cover != null) accent = Ui.dominantColor(cover, accent); // theme follows the cover art
+        int a = all ? 0xFFE0559A : Ui.colorFor(f);
+        if (cover != null) a = Ui.dominantColor(cover, a); // theme follows the cover art
+        folderAccent = a;
+        folderArt = cover != null ? cover : Ui.letterArt(all ? "★" : f.substring(0, 1).toUpperCase(Locale.ROOT), a);
+        shownArt = 0;
+        showArt(folderArt, a);
+    }
+
+    void showArt(Bitmap b, int a) {
+        accent = a;
         backdrop.setColors(new int[]{Ui.shade(accent, 0.45f), 0xFF0B0B10});
         Ui.roundBg(playBtn).setColor(accent);
-        setArt(cover != null ? cover
-                : Ui.letterArt(all ? "★" : f.substring(0, 1).toUpperCase(Locale.ROOT), accent));
+        setArt(b);
         shownVolume = -1;
         renderVolume();
     }
+
+    /**
+     * While a track plays, show the picture built into that file (e.g. each song's own single cover);
+     * tracks without one show the folder's picture. The library tile always keeps the folder's picture.
+     */
+    void showTrackArt() {
+        if (folder == null || tracks.isEmpty() || index >= tracks.size()) return;
+        final Track t = tracks.get(index);
+        final int token = ++artToken;
+        if (t.live) { if (shownArt != 0) { shownArt = 0; showArt(folderArt, folderAccent); } return; }
+        new Thread(() -> {
+            byte[] pic = null;
+            MediaMetadataRetriever r = new MediaMetadataRetriever();
+            try {
+                r.setDataSource(t.source);
+                pic = r.getEmbeddedPicture();
+            } catch (Exception ignored) {
+            } finally {
+                try { r.release(); } catch (Exception ignored) { }
+            }
+            final int key = pic == null ? 0 : java.util.Arrays.hashCode(pic) | 1;
+            final Bitmap b = pic == null || key == shownArt ? null : Ui.decode(null, pic);
+            h.post(() -> {
+                if (token != artToken || key == shownArt) return; // a newer track, or the same picture again
+                if (key == 0 || b == null) { shownArt = 0; showArt(folderArt, folderAccent); return; }
+                shownArt = key;
+                showArt(b, Ui.dominantColor(b, folderAccent));
+            });
+        }, "track-art").start();
+    }
+
+    /** Path of the track playing now (for the remote's picture). */
+    static volatile String nowSource;
 
     void pop() {
         setBreathing(false);

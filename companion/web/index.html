@@ -416,15 +416,17 @@
     $('#sub').textContent = !s.folder ? 'Tap a card on the player, or pick something in the Library'
       : s.live ? (s.trackCount > 1 ? 'Station ' + (s.trackIndex + 1) + ' of ' + s.trackCount : 'Live radio') + ' · ' + s.track
       : 'Track ' + (s.trackIndex + 1) + ' of ' + s.trackCount + ' · ' + s.track;
-    if (coverFor !== s.folder) {
-      coverFor = s.folder;
-      const c = $('#cover'); c.textContent = '';
+    const artKey = s.folder + '|' + (s.live ? '' : s.track); // each track can have its own picture
+    if (coverFor !== artKey) {
+      const sameFolder = coverFor && coverFor.split('|')[0] === s.folder;
+      coverFor = artKey;
+      const c = $('#cover'); if (!sameFolder) c.textContent = '';
       if (s.folder && s.folder !== '@all') {
         const img = new Image(); img.alt = '';
         img.onload = () => { c.textContent = ''; c.appendChild(img); };
         img.onerror = () => { c.textContent = s.folder.charAt(0).toUpperCase(); c.style.background = s.accent; };
-        c.style.background = s.accent; c.textContent = s.folder.charAt(0).toUpperCase();
-        img.src = coverUrl(s.folder);
+        if (!sameFolder) { c.style.background = s.accent; c.textContent = s.folder.charAt(0).toUpperCase(); }
+        img.src = coverUrl(s.folder) + '&now=1&t=' + encodeURIComponent(s.trackIndex);
       } else { c.style.background = ''; c.textContent = s.folder === '@all' ? '★' : '♪'; }
     }
     $('#playIcon').innerHTML = s.playing ? '<path d="M6,19h4V5H6v14zM14,5v14h4V5h-4z"/>' : '<path d="M8,5v14l11,-7z"/>';
