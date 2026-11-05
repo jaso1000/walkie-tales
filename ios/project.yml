@@ -1,0 +1,47 @@
+name: WalkieTales
+options:
+  bundleIdPrefix: app.cardplayer
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.17"
+    CURRENT_PROJECT_VERSION: "18"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+    ENABLE_BITCODE: "NO"
+targets:
+  WalkieTales:
+    type: application
+    platform: iOS
+    sources:
+      - path: WalkieTales/Sources
+      - path: WalkieTales/Resources
+        buildPhase: resources
+    info:
+      path: WalkieTales/Info.plist
+      properties:
+        CFBundleDisplayName: WalkieTales
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [audio]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: The remote control on your phone connects to the player over Wi-Fi.
+        NSBonjourServices: [_http._tcp]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cardplayer.ios
+        INFOPLIST_FILE: WalkieTales/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
