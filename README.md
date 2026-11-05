@@ -122,13 +122,23 @@ Handy for testing without a card: `adb shell am start -n app.cardplayer/.MainAct
 - **Pick the no-Google ("vanilla") build** (`lineage-23.2-…-hammerhead-signed.zip`, not `…_gms_go_2gb…`). WalkieTales doesn't use any Google services. The first player was flashed with the Google build, and Play Services only costs battery and RAM. The one thing you lose is a text-to-speech voice for "Say the name out loud". Install one separately if you want that feature.
 - **Windows:** fastboot needs Google's USB driver (`android_winusb.inf`).
 
+## Phone setup notes (Galaxy Note 3 / hlte, SM-N9005)
+
+- **ROM:** unofficial LineageOS 21.0 by html6405 (Android 14, XDA thread "[ROM][UNOFFICIAL][14] LineageOS 21.0 for Samsung Galaxy Note 3"). Flash it without Google apps. It needs TWRP 3.3 or newer (official `twrp-3.7.0_9-0-hlte.img` works). If the phone already has an older TWRP, write the new one from it (`dd` to the recovery partition) with no Odin. Otherwise use Odin/Heimdall.
+- **Install:** format data, wipe system/cache/dalvik, then flash the zip. First boot takes ~7 minutes.
+- **Quirks:**
+  - `adb install` needs `--no-streaming`.
+  - `screencap` doesn't work, so read the screen with `uiautomator dump`.
+  - Some users report random reboots on LOS 21; the fallback is the same developer's LineageOS 20.
+- **NFC:** the antenna is on the original Samsung battery (EB-B800BE with NFC). With a replacement battery the NFC chip works but never sees a card. Use a genuine NFC battery or an NFC antenna sticker.
+
 ### Making another player: checklist
 
 1. Unlock the bootloader, then flash TWRP, repartition and sideload the **vanilla** ROM (see above). Skip adding a Google account during setup.
 2. Turn on Developer options → USB debugging.
 3. `bash build.sh`, then run the install commands above (install, file access, home screen, device owner). Use the same `debug.keystore` so updates install over every player.
 4. App info → Wi-Fi data usage → **Allow network access** (LineageOS blocks new apps by default).
-5. `bash tools/phone-tune.sh` disables unused apps and background scanning, lets the screen sleep on the charger, and lets the remote reach the player while its screen is off (`--undo` reverses it). Then `adb reboot`.
+5. `bash tools/phone-tune.sh` disables unused apps and background scanning, switches off the mobile radio (no SIM needed; Wi-Fi and Bluetooth stay on), lets the screen sleep on the charger, and lets the remote reach the player while its screen is off (`--undo` reverses it). With two phones connected, pick one with `ANDROID_SERIAL=...`. Then `adb reboot`.
 6. Give the phone a DHCP reservation in the router and copy music into `Music/Cards/`.
 
 ## Project layout
