@@ -80,76 +80,59 @@ public class SettingsActivity extends Activity {
 
         section("Your child");
         String kid = prefs.getString("kid_name", "").trim();
-        row("Name", kid.isEmpty() ? "Not set — used for a friendly “Good morning, …!”" : kid, v -> editName());
+        row("Name", kid.isEmpty() ? "Not set" : kid, v -> editName());
 
         section("Cards");
-        toggle("Use NFC cards",
-                "Turn off on phones without working NFC. The player then works by browsing only.",
-                "cards", true);
-        row("Link a card", "Choose what it plays, then tap the card on the phone", v -> pickLinkTarget(folders));
+        toggle("Use NFC cards", null, "cards", true);
+        row("Link a card", null, v -> pickLinkTarget(folders));
         row("Linked cards", cards.isEmpty() ? "None yet" : cards.size() + (cards.size() == 1 ? " card" : " cards"),
                 v -> showCards());
 
         section("Library");
         if (folders.isEmpty()) {
-            row("No folders yet", "Copy folders of music into Music/Cards/ on the phone — one folder per card.", null);
+            row("No folders yet", "Add folders of music to Music/Cards", null);
         }
         for (String f : folders) row(f, folderSummary(f, cards), v -> folderOptions(f));
         row("Shuffle everything", "Play every folder mixed together", v -> playNow(Store.ALL));
-        toggle("Find missing covers online",
-                "Looks up pictures for folders without one (Apple's iTunes catalogue for music and audiobooks, "
-                        + "radio-browser.info for station logos). Sends folder names to search. Your own cover.jpg always wins.",
-                "find_art", true);
+        toggle("Find missing covers online", null, "find_art", true);
 
         section("Sound");
         seek("Maximum volume", "max_volume", 10, 100, 70);
         toggle("Volume buttons on screen", null, "show_volume", true);
-        toggle("Fade in", "Start music gently instead of all at once", "fade_in", true);
-        toggle("Say the name out loud", "Announce what's playing when a card is tapped (Android text-to-speech)",
-                "announce", false);
+        toggle("Fade in", null, "fade_in", true);
+        toggle("Say the name out loud", null, "announce", false);
 
         section("Bedtime");
         timeRow("Bedtime starts", "quiet_start", 19 * 60);
         timeRow("Bedtime ends", "quiet_end", 7 * 60);
-        toggle("Screen off at bedtime",
-                "The screen goes black 30 seconds after the last touch. Music, cards and the remote keep working; "
-                        + "a tap shows the player again.",
-                "bedtime_dark", false);
-        toggle("Quieter at bedtime", "Use a lower volume limit overnight", "quiet", false);
+        toggle("Screen off at bedtime", "Goes black 30 seconds after the last touch", "bedtime_dark", false);
+        toggle("Quieter at bedtime", null, "quiet", false);
         seek("Bedtime maximum volume", "quiet_volume", 10, 100, 40);
 
         section("Browsing");
-        toggle("Browse without cards",
-                "Shows a ▦ button so kids can pick from the library on screen. Turn off for cards only (always on while cards are off).",
-                "browse", true);
-        toggle("Pick a track from the list", "Tap the track name on the player to see every track", "track_list", true);
+        toggle("Library button", null, "browse", true);
+        toggle("Tracks button", null, "track_list", true);
 
         section("How cards work");
-        toggle("Play while the card rests on the phone",
-                "Lift the card off to pause (Toniebox style). When off, tap to play and tap again to pause.",
-                "rest_mode", false);
+        toggle("Pause when the card is lifted off", null, "rest_mode", false);
 
         section("Screen");
         cycle("Dim the screen after", "dim_after", new int[]{30, 90, 300, 0},
                 new String[]{"30 seconds", "90 seconds", "5 minutes", "Never"}, 90);
         cycle("Keep the screen on", "screen_on", new int[]{0, 2, 1},
-                new String[]{"Only while charging (saves battery; music keeps playing with the screen off)",
-                        "While charging or playing", "Always"}, 0);
+                new String[]{"Only while charging", "While charging or playing", "Always"}, 0);
         cycle("Screen turns off after", "screen_timeout", new int[]{30, 60, 120, 300},
                 new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, 60);
-        toggle("Night light", "Show a warm glow instead of a dark screen when idle", "night_light", false);
-        toggle("Clock on the night light", "A soft bedside clock on the glow", "night_clock", true);
-        toggle("Clock and battery", "Show the time and battery at the top", "show_status", true);
+        toggle("Night light", null, "night_light", false);
+        toggle("Clock on the night light", null, "night_clock", true);
+        toggle("Clock and battery", null, "show_status", true);
 
         section("Safety");
-        toggle("Grown-up check", "Ask a quick sum (like 27 + 14) before opening these settings", "gate", true);
+        toggle("Grown-up sum before settings", null, "gate", true);
         lockToggle();
         if (Kiosk.isOwner(this)) {
-            toggle("Power button menu",
-                    "When off, holding the power button does nothing, so the player can't be switched off. "
-                            + "(Holding it for about 15 seconds still force-restarts the phone.)",
-                    "power_menu", true);
-            row("Restart the phone", "Turns it off and on again. The player opens by itself afterwards.",
+            toggle("Power button can switch it off", null, "power_menu", true);
+            row("Restart the phone", null,
                     v -> confirm("Restart the phone?", "It takes about a minute.", () -> {
                         if (!Kiosk.reboot(this)) {
                             new AlertDialog.Builder(this, DIALOG).setMessage("Android didn't allow the restart.")
@@ -157,19 +140,15 @@ public class SettingsActivity extends Activity {
                         }
                     }));
         }
-        row("Home screen app", "Make WalkieTales (or the normal launcher) the home screen",
-                v -> openSystem(Settings.ACTION_HOME_SETTINGS));
-        row("Android settings", "Wi-Fi, Bluetooth speakers, brightness… The lock comes back when you return to the player.",
-                v -> openSystem(Settings.ACTION_SETTINGS));
+        row("Home screen app", null, v -> openSystem(Settings.ACTION_HOME_SETTINGS));
+        row("Android settings", "Wi-Fi, Bluetooth, brightness", v -> openSystem(Settings.ACTION_SETTINGS));
 
         section("Remote control");
-        toggle("Remote control", "Control the player from your phone's browser or the Docker companion, over Wi-Fi",
-                "remote", true);
+        toggle("Remote control", null, "remote", true);
         String addr = RemoteServer.address();
         row(addr != null ? addr : "Not on Wi-Fi",
-                addr != null ? "Open this on your phone (same Wi-Fi).  PIN: " + RemoteServer.pin(this)
-                        : "Connect the player to Wi-Fi to use the remote.  PIN: " + RemoteServer.pin(this), null);
-        row("Change PIN", "Any phone using the old PIN will need the new one", v -> confirm("Make a new PIN?",
+                "PIN: " + RemoteServer.pin(this), null);
+        row("Change PIN", null, v -> confirm("Make a new PIN?",
                 "Remote controls will need the new PIN.", () -> {
                     RemoteServer.newPin(this);
                     build();
@@ -180,12 +159,9 @@ public class SettingsActivity extends Activity {
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         long free = Store.root().getParentFile() != null ? Store.root().getParentFile().getUsableSpace() : 0;
         row("WalkieTales " + version,
-                "Music folder: Music/Cards  ·  " + String.format(Locale.ROOT, "%.1f GB free", free / 1e9)
-                        + "\nCard links are saved in Music/Cards/cards.txt", null);
+                String.format(Locale.ROOT, "%.1f GB free", free / 1e9), null);
         if (Kiosk.isOwner(this)) {
-            row("Release kiosk control",
-                    "WalkieTales is the device owner (that's what blocks the pull-down). Release it before uninstalling "
-                            + "the app or giving the phone back to normal use.",
+            row("Release kiosk control", "Only before uninstalling or reusing the phone",
                     v -> confirm("Release kiosk control?",
                             "The notification shade, Home and Recents will work again, and the lock can only be "
                                     + "restored with a computer (adb).", () -> {
@@ -348,10 +324,7 @@ public class SettingsActivity extends Activity {
 
     void lockToggle() {
         boolean owner = Kiosk.isOwner(this);
-        Switch sw = toggle("Lock to this app",
-                owner ? "Blocks the notification pull-down, Home and Recents. Settings stay reachable here."
-                        : "Pins WalkieTales so it can't be swiped away (the pull-down still works without kiosk setup).",
-                "kiosk_lock", owner);
+        Switch sw = toggle("Lock to this app", null, "kiosk_lock", owner);
         sw.setChecked(Kiosk.wanted(this) || Kiosk.isLocked(this));
         sw.setOnCheckedChangeListener((b, on) -> {
             prefs.edit().putBoolean("kiosk_lock", on).apply();

@@ -192,9 +192,8 @@
       <div class="dots" id="dots"></div>
       <button class="rb" id="volUp" title="Louder"><svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg></button>
     </div>
-    <div class="hint" id="volHint"></div>
     <div class="set" style="border-top:1px solid var(--line);margin-top:12px;padding-bottom:0">
-      <div class="grow">Maximum volume<small id="capHint">How loud the player is allowed to go</small>
+      <div class="grow">Maximum volume
         <input type="range" id="np_max" min="10" max="100" step="5"></div>
       <span class="val" id="np_max_v"></span>
     </div>
@@ -205,7 +204,6 @@
     <div class="row">
       <button class="btn" id="screenBtn">Turn the screen off</button>
     </div>
-    <div class="hint" id="screenHint" style="text-align:left">Switches the player's screen off and ignores taps, so it can't be woken up. Music keeps playing, and you can turn it back on from here.</div>
   </div>
 
   <div class="card">
@@ -220,7 +218,6 @@
       <input type="text" id="msgText" maxlength="120" placeholder="Dinner's ready! 🍝">
       <button class="btn" id="msgSend" style="flex:none">Send</button>
     </div>
-    <div class="hint" style="text-align:left">Shows on the player for 20 seconds (and is read out if “Say the name out loud” is on).</div>
   </div>
 
   <div class="card">
@@ -242,7 +239,6 @@
     <div class="row" style="margin-top:14px">
       <button class="btn ghost" id="findCovers">Find missing covers</button>
     </div>
-    <div class="hint" style="text-align:left">Folders without a picture get one automatically from Apple's iTunes catalogue (music &amp; audiobooks) or radio-browser.info (station logos). Your own <b>cover.jpg</b> always wins.</div>
   </div>
   <div class="card">
     <h2>Add a radio station</h2>
@@ -256,7 +252,6 @@
       <input type="text" id="stFolder" list="folderNames" placeholder="Folder (optional; leave blank for its own)">
       <button class="btn" id="stGo" style="flex:none">Add</button>
     </div>
-    <div class="hint" style="text-align:left">A station works like a folder: tap it in the Library, link a card to it, or put several stations in one folder and use ⏭ to flip between them. Add a <b>cover.jpg</b> to the folder for a logo.</div>
   </div>
   <div class="card">
     <h2>Add music</h2>
@@ -270,7 +265,7 @@
     <div class="row" style="margin-top:10px">
       <button class="btn" id="upGo">Upload</button>
     </div>
-    <div class="hint" style="text-align:left">Tip: add an image named <b>cover.jpg</b> to give the folder a picture. <span id="free"></span></div>
+    <div class="hint" style="text-align:left"><span id="free"></span></div>
     <div class="up-list" id="upList"></div>
   </div>
 </div></section>
@@ -285,7 +280,7 @@
       <select id="linkTarget"></select>
       <button class="btn" id="linkGo" style="flex:none">Link</button>
     </div>
-    <div class="hint" style="text-align:left">Choose what the card should do, press Link, then tap the card on the back of the player within 30 seconds.</div>
+    <div class="hint" style="text-align:left">After pressing Link, tap the card on the player within 30 seconds.</div>
   </div>
   <div class="card">
     <h2>Linked cards</h2>
@@ -297,7 +292,7 @@
 <section id="tab-set"><div class="wrap">
   <div class="card">
     <h2>Your child</h2>
-    <div class="set"><div class="grow">Name<small>For the “Good morning, …!” greeting</small></div></div>
+    <div class="set"><div class="grow">Child's name</div></div>
     <input type="text" id="s_kid_name" maxlength="40" placeholder="Name">
   </div>
   <div class="card" id="setSound"><h2>Sound</h2></div>
@@ -438,10 +433,7 @@
     // volume dots
     const d = $('#dots'); d.textContent = '';
     for (let i = 1; i <= s.volume.cap; i++) { const dot = el('i', i <= s.volume.level ? 'on' : ''); dot.onclick = () => act('/api/volume', { level: i }); d.appendChild(dot); }
-    const capPct = Math.round(s.volume.cap * 100 / s.volume.max);
     if (capFor !== (cur ? cur.id : 'one')) { capFor = cur ? cur.id : 'one'; loadCap(); }
-    $('#capHint').textContent = s.volume.quiet ? 'Bedtime limit is lower right now (change it in Settings → Bedtime)' : 'How loud the player is allowed to go';
-    $('#volHint').textContent = 'Level ' + Math.min(s.volume.level, s.volume.cap) + ' of ' + s.volume.cap + ' · limit ' + capPct + '% of max' + (s.volume.quiet ? ' (bedtime)' : '');
     // sleep chips
     const chips = $('#sleepChips'); chips.textContent = '';
     [0, 15, 30, 45, 60, 90].forEach(m => {
@@ -450,9 +442,6 @@
     });
     $('#screenBtn').textContent = s.screenOff ? 'Turn the screen back on' : 'Turn the screen off';
     $('#screenBtn').classList.toggle('ghost', !!s.screenOff);
-    $('#screenHint').textContent = s.screenOff ? 'The screen is off and taps are ignored. Music and the remote still work.'
-      : 'Switches the player’s screen off and ignores taps, so it can’t be woken up. Music keeps playing, and you can turn it back on from here.'
-        + (s.dark ? ' (It’s black right now for bedtime; a tap shows it again.)' : '');
     $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
     // track list
     renderTracks(s);
@@ -476,7 +465,6 @@
     for (let i = from; i < to; i++) {
       const r = el('div', i === s.trackIndex ? 'now' : ''); const g = el('span', 'grow');
       g.appendChild(el('span', '', (i + 1) + '. ' + list[i]));
-      if (i === s.trackIndex) g.appendChild(el('small', '', s.playing ? 'Playing now' : 'Paused here'));
       r.appendChild(g); r.style.cursor = 'pointer'; r.onclick = () => act('/api/track', { index: i }); tl.appendChild(r);
     }
     more.hidden = !big;
@@ -566,7 +554,7 @@
       g.appendChild(t);
       if (f.name !== '@all') { const o = el('option'); o.value = f.name; dl.appendChild(o); }
     });
-    $('#free').textContent = lib.freeBytes ? '(' + (lib.freeBytes / 1e9).toFixed(1) + ' GB free on the player)' : '';
+    $('#free').textContent = lib.freeBytes ? (lib.freeBytes / 1e9).toFixed(1) + ' GB free on the player' : '';
     // link targets
     const sel = $('#linkTarget'); const keep = sel.value; sel.textContent = '';
     lib.folders.forEach(f => { const o = el('option', '', '🎵 ' + f.name); o.value = f.name; sel.appendChild(o); });
@@ -637,12 +625,13 @@
 
   // ---------------------------------------------------------------- settings
   const SWITCHES = {
-    setSound: [['show_volume', 'Volume buttons on the player'], ['fade_in', 'Fade in', 'Start music gently'], ['announce', 'Say the name out loud', 'Announce what’s playing (text-to-speech)']],
-    setQuiet: [['bedtime_dark', 'Screen off at bedtime', 'Black screen 30 s after the last touch; music, cards and the remote keep working'], ['quiet', 'Quieter at bedtime', 'Lower volume limit overnight']],
-    setPlay: [['find_art', 'Find missing covers online', 'iTunes / radio-browser.info, using folder names'], ['cards', 'Use NFC cards', 'Off = browse-only player (for phones without working NFC)'], ['browse', 'Browse without cards', 'Show the ▦ library button (always on while cards are off)'], ['track_list', 'Pick a track from the list'], ['rest_mode', 'Play while the card rests on the phone', 'Lift the card to pause (Toniebox style)']],
-    setScreen: [['night_light', 'Night light', 'Warm glow when idle'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery on the player']],
-    setSafety: [['gate', 'Grown-up check', 'Ask a sum before the settings open on the player'], ['power_menu', 'Power button menu', 'Off = holding the power button can’t switch the player off']],
+    setSound: [['show_volume', 'Volume buttons on the player'], ['fade_in', 'Fade in'], ['announce', 'Say the name out loud']],
+    setQuiet: [['bedtime_dark', 'Screen off at bedtime', 'Goes black 30 s after the last touch'], ['quiet', 'Quieter at bedtime']],
+    setPlay: [['find_art', 'Find missing covers online'], ['cards', 'Use NFC cards'], ['browse', 'Library button on the player'], ['track_list', 'Track list on the player'], ['rest_mode', 'Pause when the card is lifted off']],
+    setScreen: [['night_light', 'Night light'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery on the player']],
+    setSafety: [['gate', 'Grown-up sum before settings'], ['power_menu', 'Power button can switch it off']],
   };
+
   let built = false;
   function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; showCap(); toast('Saved'); poll(); }).catch(err); }
   function sw(k, title, sub) {
@@ -692,7 +681,7 @@
       else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
       else inp.value = v;
     }
-    $('#about').textContent = 'WalkieTales ' + (st ? st.version : '') + (st && st.locked ? ' · kiosk lock on' : '') + '. Per-folder shuffle/repeat and the remote PIN are set on the player.';
+    $('#about').textContent = 'WalkieTales ' + (st ? st.version : '');
   }
 
   // ---------------------------------------------------------------- players
