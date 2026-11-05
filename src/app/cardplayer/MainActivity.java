@@ -181,6 +181,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         server = new RemoteServer(this, this::remote);
         syncRemote();
         initMediaSession();
+        watchNetwork();
         h.postDelayed(() -> findCovers(false), 15_000); // give Wi-Fi a moment after boot
     }
 
@@ -244,6 +245,33 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             try { if (ready() && !isLive()) md.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, mp.getDuration()); } catch (Exception ignored) { }
             session.setMetadata(md.build());
         }
+    }
+
+    // ================================================================ internet (radio needs it)
+
+    boolean online() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Exception e) {
+            return true; // can't tell: don't hide anything
+        }
+    }
+
+    /** Wi-Fi came or went: refresh the library so radio stations appear / disappear. */
+    void watchNetwork() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            cm.registerDefaultNetworkCallback(new android.net.ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(android.net.Network n) { h.postDelayed(MainActivity.this::networkChanged, 500); }
+                @Override public void onLost(android.net.Network n) { h.postDelayed(MainActivity.this::networkChanged, 500); }
+            });
+        } catch (Exception ignored) { }
+    }
+
+    void networkChanged() {
+        if (browsing) openBrowser();
     }
 
     void syncRemote() {
@@ -1707,7 +1735,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         final int build = ++browseBuild;
         grid.removeAllViews();
         final List<String> items = new ArrayList<>();
-        for (String f : Store.folders()) if (!Store.listTracks(f).isEmpty()) items.add(f);
+        boolean online = online();
+        for (String f : Store.folders()) {
+            if (Store.listTracks(f).isEmpty()) continue;
+            if (!online && Store.isLiveOnly(f)) continue; // no internet: radio stations can't play, so don't offer them
+            items.add(f);
+        }
         if (items.size() > 1) items.add(Store.ALL);
 
         if (items.isEmpty()) {
