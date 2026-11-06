@@ -131,6 +131,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     int shownVolume = -1;
     ValueAnimator fade;
     ObjectAnimator breathe;
+    int themeToken;
 
     FrameLayout rootView, browser;
     LinearLayout grid;
@@ -933,9 +934,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         List<Track> list;
         if (all) {
             list = new ArrayList<>();
-            for (String d : Store.folders()) for (Track t : Store.listTracks(d)) if (!t.live) list.add(t); // no radio in "Everything"
+            for (Store.FolderInfo d : Store.library()) for (Track t : d.trackList) if (!t.live) list.add(t); // no radio in "Everything"
         } else {
-            list = Store.listTracks(f);
+            list = new ArrayList<>(Store.info(f).trackList); // a copy: shuffling mustn't change the remembered order
         }
         if (list.isEmpty()) {
             flash(all ? "There's no music on the phone yet" : "No music in “" + f + "” yet", 4000);
@@ -1760,7 +1761,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             browser.setAlpha(0f);
             browser.setTranslationY(dp(40));
             browser.setVisibility(View.VISIBLE);
-            browser.animate().alpha(1f).translationY(0).setDuration(220).withLayer().start();
+            browser.animate().alpha(1f).translationY(0).setDuration(220).withLayer()
+                    .withEndAction(() -> { if (browsing && breathe.isStarted()) breathe.pause(); }) // hidden behind the Library
+                    .start();
         }
         new Thread(() -> {
             final List<Store.FolderInfo> now = Store.library();
@@ -1893,6 +1896,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!browsing) return;
         browsing = false;
         browseBuild++;
+        if (breathe.isPaused()) breathe.resume();
         browser.animate().alpha(0f).translationY(dp(40)).setDuration(180)
                 .withEndAction(() -> browser.setVisibility(View.GONE)).start();
     }
@@ -2200,14 +2204,32 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     int artToken;
 
     void applyTheme(String f) {
-        boolean all = Store.ALL.equals(f);
-        Bitmap cover = all ? null : Ui.loadCover(new File(Store.root(), f));
+        final boolean all = Store.ALL.equals(f);
+        final int token = ++themeToken;
+        // Show the Library's small copy straight away, then swap in the sharper picture from the background.
+        Bitmap quick = all ? null : Ui.cachedTile(Store.info(f));
         int a = all ? 0xFFE0559A : Ui.colorFor(f);
-        if (cover != null) a = Ui.dominantColor(cover, a); // theme follows the cover art
+        final boolean hadQuick = quick != null;
+        if (hadQuick) a = Ui.dominantColor(quick, a); // theme follows the cover art
+        final int fallback = a;
         folderAccent = a;
-        folderArt = cover != null ? cover : Ui.letterArt(all ? "★" : f.substring(0, 1).toUpperCase(Locale.ROOT), a);
+        folderArt = hadQuick ? quick : Ui.letterArt(all ? "★" : f.substring(0, 1).toUpperCase(Locale.ROOT), a);
         shownArt = 0;
         showArt(folderArt, a);
+        if (all) return;
+        new Thread(() -> {
+            final Bitmap full = Ui.loadCover(new File(Store.root(), f));
+            if (full == null) return;
+            final int color = hadQuick ? fallback : Ui.dominantColor(full, fallback);
+            h.post(() -> {
+                if (token != themeToken) return; // another folder was opened meanwhile
+                folderArt = full;
+                folderAccent = color;
+                if (shownArt != 0) return; // the track's own picture is showing
+                if (hadQuick) art.setImageBitmap(full);
+                else showArt(full, color);
+            });
+        }, "folder-art").start();
     }
 
     void showArt(Bitmap b, int a) {

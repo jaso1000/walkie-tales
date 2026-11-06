@@ -206,10 +206,12 @@ final class Store {
         final boolean live;
         final long stamp; // changes when anything in the folder does
         final List<File> watched;
+        final List<Track> trackList;
 
-        FolderInfo(String name, int tracks, boolean live, long stamp, List<File> watched) {
+        FolderInfo(String name, List<Track> trackList, boolean live, long stamp, List<File> watched) {
             this.name = name;
-            this.tracks = tracks;
+            this.trackList = trackList;
+            this.tracks = trackList.size();
             this.live = live;
             this.stamp = stamp;
             this.watched = watched;
@@ -226,16 +228,19 @@ final class Store {
     static synchronized List<FolderInfo> library() {
         List<String> names = folders();
         List<FolderInfo> out = new ArrayList<>();
-        for (String n : names) {
-            FolderInfo i = FOLDER_INFO.get(n);
-            if (i == null || stampOf(i.watched) != i.stamp) {
-                i = readFolder(n);
-                FOLDER_INFO.put(n, i);
-            }
-            out.add(i);
-        }
+        for (String n : names) out.add(info(n));
         FOLDER_INFO.keySet().retainAll(names);
         return out;
+    }
+
+    /** One folder, re-read only if it changed. */
+    static synchronized FolderInfo info(String name) {
+        FolderInfo i = FOLDER_INFO.get(name);
+        if (i == null || stampOf(i.watched) != i.stamp) {
+            i = readFolder(name);
+            FOLDER_INFO.put(name, i);
+        }
+        return i;
     }
 
     private static FolderInfo readFolder(String name) {
@@ -246,7 +251,7 @@ final class Store {
         List<Track> t = listTracks(name);
         boolean live = !t.isEmpty();
         for (Track x : t) if (!x.live) { live = false; break; }
-        return new FolderInfo(name, t.size(), live, stamp, watched);
+        return new FolderInfo(name, Collections.unmodifiableList(t), live, stamp, watched);
     }
 
     private static void watchFolder(File dir, List<File> out) {
