@@ -118,6 +118,49 @@ final class Ui {
      * found online (cover.auto.jpg). A picture you add yourself always wins over the automatic one.
      */
     static Bitmap loadCover(File dir) {
+        return loadCover(dir, 800, null);
+    }
+
+    // ---- small copies of the covers for the Library, kept so it opens instantly
+
+    private static final Bitmap NO_COVER = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8);
+    private static final android.util.LruCache<String, Bitmap> TILES = new android.util.LruCache<String, Bitmap>(40 * 1024 * 1024) {
+        @Override protected int sizeOf(String k, Bitmap b) { return b.getByteCount(); }
+    };
+
+    static int tileSize(Context c) {
+        return Math.min(c.getResources().getDisplayMetrics().widthPixels / 2, 640);
+    }
+
+    /** A Library tile's cover if it's already in memory (returns null if not, or if the folder has none). */
+    static Bitmap cachedTile(Store.FolderInfo i) {
+        Bitmap b = TILES.get(i.name + "|" + i.stamp);
+        return b == NO_COVER ? null : b;
+    }
+
+    /** A Library tile's cover, reading and remembering it if needed. */
+    static Bitmap tile(Context c, Store.FolderInfo i) {
+        String key = i.name + "|" + i.stamp;
+        Bitmap b = TILES.get(key);
+        if (b == null) {
+            b = loadCover(new File(Store.root(), i.name), tileSize(c), Bitmap.Config.RGB_565);
+            TILES.put(key, b != null ? b : NO_COVER);
+        }
+        return b == NO_COVER ? null : b;
+    }
+
+    /** The coloured letter shown for a folder with no cover. */
+    static Bitmap letterTile(Context c, String name, String letter, int color) {
+        String key = "letter|" + name;
+        Bitmap b = TILES.get(key);
+        if (b == null) {
+            b = letterArt(letter, color, tileSize(c));
+            TILES.put(key, b);
+        }
+        return b;
+    }
+
+    private static Bitmap loadCover(File dir, int maxSize, Bitmap.Config config) {
         File[] files = dir.listFiles();
         File auto = null;
         if (files != null) {
@@ -127,25 +170,29 @@ final class Ui {
                 if (!(n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp"))) continue;
                 if (n.equals(ArtFinder.AUTO_COVER)) { auto = f; continue; }
                 if (any == null) any = f;
-                for (String c : COVER_NAMES) if (n.startsWith(c + ".")) return decode(f, null);
+                for (String c : COVER_NAMES) if (n.startsWith(c + ".")) return decode(f, null, maxSize, config);
             }
-            if (any != null) return decode(any, null);
+            if (any != null) return decode(any, null, maxSize, config);
         }
         List<File> t = Store.listAudio(dir);
         if (!t.isEmpty()) {
-            Bitmap b = embeddedArt(t.get(0));
+            Bitmap b = embeddedArt(t.get(0), maxSize, config);
             if (b != null) return b;
         }
-        if (auto != null) return decode(auto, null);
+        if (auto != null) return decode(auto, null, maxSize, config);
         return null;
     }
 
     static Bitmap embeddedArt(File track) {
+        return embeddedArt(track, 800, null);
+    }
+
+    private static Bitmap embeddedArt(File track, int maxSize, Bitmap.Config config) {
         MediaMetadataRetriever r = new MediaMetadataRetriever();
         try {
             r.setDataSource(track.getAbsolutePath());
             byte[] pic = r.getEmbeddedPicture();
-            if (pic != null) return decode(null, pic);
+            if (pic != null) return decode(null, pic, maxSize, config);
         } catch (Exception ignored) {
         } finally {
             try { r.release(); } catch (Exception ignored) { }
@@ -154,15 +201,20 @@ final class Ui {
     }
 
     static Bitmap decode(File f, byte[] bytes) {
+        return decode(f, bytes, 800, null);
+    }
+
+    private static Bitmap decode(File f, byte[] bytes, int maxSize, Bitmap.Config config) {
         try {
             BitmapFactory.Options o = new BitmapFactory.Options();
             o.inJustDecodeBounds = true;
             if (f != null) BitmapFactory.decodeFile(f.getAbsolutePath(), o);
             else BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
             int s = 1;
-            while (Math.max(o.outWidth, o.outHeight) / (s * 2) >= 800) s *= 2;
+            while (Math.max(o.outWidth, o.outHeight) / (s * 2) >= maxSize) s *= 2;
             o = new BitmapFactory.Options();
             o.inSampleSize = s;
+            if (config != null) o.inPreferredConfig = config;
             return f != null ? BitmapFactory.decodeFile(f.getAbsolutePath(), o)
                     : BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
         } catch (OutOfMemoryError | RuntimeException e) {
@@ -171,7 +223,10 @@ final class Ui {
     }
 
     static Bitmap letterArt(String letter, int c) {
-        int s = 640;
+        return letterArt(letter, c, 640);
+    }
+
+    static Bitmap letterArt(String letter, int c, int s) {
         Bitmap b = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(b);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);

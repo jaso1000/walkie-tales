@@ -199,6 +199,75 @@ final class Store {
         return out;
     }
 
+    /** What the Library needs to know about a folder, remembered so opening it doesn't re-read every file. */
+    static final class FolderInfo {
+        final String name;
+        final int tracks;
+        final boolean live;
+        final long stamp; // changes when anything in the folder does
+        final List<File> watched;
+
+        FolderInfo(String name, int tracks, boolean live, long stamp, List<File> watched) {
+            this.name = name;
+            this.tracks = tracks;
+            this.live = live;
+            this.stamp = stamp;
+            this.watched = watched;
+        }
+    }
+
+    private static final Map<String, FolderInfo> FOLDER_INFO = new java.util.HashMap<>();
+
+    /**
+     * Every folder, re-reading only the ones that changed. Adding or removing a file changes its directory's
+     * time, so checking the directories and playlists is enough. A folder's first read can be slow: call off the
+     * main thread when nothing's remembered yet.
+     */
+    static synchronized List<FolderInfo> library() {
+        List<String> names = folders();
+        List<FolderInfo> out = new ArrayList<>();
+        for (String n : names) {
+            FolderInfo i = FOLDER_INFO.get(n);
+            if (i == null || stampOf(i.watched) != i.stamp) {
+                i = readFolder(n);
+                FOLDER_INFO.put(n, i);
+            }
+            out.add(i);
+        }
+        FOLDER_INFO.keySet().retainAll(names);
+        return out;
+    }
+
+    private static FolderInfo readFolder(String name) {
+        File dir = new File(root(), name);
+        List<File> watched = new ArrayList<>();
+        watchFolder(dir, watched);
+        long stamp = stampOf(watched); // taken first, so a change during the read is noticed next time
+        List<Track> t = listTracks(name);
+        boolean live = !t.isEmpty();
+        for (Track x : t) if (!x.live) { live = false; break; }
+        return new FolderInfo(name, t.size(), live, stamp, watched);
+    }
+
+    private static void watchFolder(File dir, List<File> out) {
+        out.add(dir);
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            String n = f.getName().toLowerCase(Locale.ROOT);
+            boolean playlist = false;
+            for (String e : PLAYLIST_EXT) if (n.endsWith(e)) playlist = true;
+            if (playlist) out.add(f);
+            else if (!n.startsWith(".") && f.isDirectory()) watchFolder(f, out);
+        }
+    }
+
+    private static long stampOf(List<File> files) {
+        long s = files.size();
+        for (File f : files) s = s * 31 + f.lastModified();
+        return s;
+    }
+
     /** True when a folder holds only streams (a radio-station folder). */
     static boolean isLiveOnly(String folder) {
         List<Track> t = listTracks(folder);

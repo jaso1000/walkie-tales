@@ -162,10 +162,10 @@ public class SettingsActivity extends Activity {
     void buildLibrary() {
         header("Library", true);
         Map<String, String> cards = Store.loadCards();
-        List<String> folders = Store.folders();
+        List<Store.FolderInfo> folders = Store.library();
         panel("Folders");
         if (folders.isEmpty()) row("No folders yet", "Add folders of music to Music/Cards", null);
-        for (String f : folders) link(f, folderSummary(f, cards), v -> folderOptions(f));
+        for (Store.FolderInfo i : folders) link(i.name, folderSummary(i, cards), v -> folderOptions(i.name));
         link("Shuffle everything", null, v -> playNow(Store.ALL));
         panel("Covers");
         toggle("Find missing covers online", null, "find_art", true);
@@ -424,17 +424,18 @@ public class SettingsActivity extends Activity {
                 .show();
     }
 
-    String folderSummary(String f, Map<String, String> cards) {
-        int n = Store.listTracks(f).size();
+    String folderSummary(Store.FolderInfo info, Map<String, String> cards) {
+        String f = info.name;
+        int n = info.tracks;
         int c = Store.cardsFor(cards, f);
         StringBuilder sb = new StringBuilder();
-        if (Store.isLiveOnly(f)) sb.append(n == 1 ? "live radio" : n + " radio stations");
+        if (info.live) sb.append(n == 1 ? "live radio" : n + " radio stations");
         else sb.append(n).append(n == 1 ? " track" : " tracks");
         sb.append("  ·  ").append(c == 0 ? "no card" : c == 1 ? "1 card" : c + " cards");
         if (prefs.getBoolean("shuffle:" + f, false)) sb.append("  ·  shuffle");
         if (prefs.getBoolean("repeat:" + f, false)) sb.append("  ·  repeat");
         if (!prefs.getBoolean("resume:" + f, true)) sb.append("  ·  always from the start");
-        if (new File(Store.root(), f).isDirectory() && Ui.loadCover(new File(Store.root(), f)) == null) sb.append("  ·  no cover");
+        if (Ui.tile(this, info) == null) sb.append("  ·  no cover");
         return sb.toString();
     }
 

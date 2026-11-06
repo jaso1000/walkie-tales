@@ -228,6 +228,14 @@
   </div>
 
   <div class="card">
+    <h2>Find this player</h2>
+    <div class="row">
+      <button class="btn" id="findBtn">Ring the player</button>
+    </div>
+    <div class="hint" style="text-align:left">Rings loudly for 30 seconds, even over the volume limits. Tap its screen to stop it.</div>
+  </div>
+
+  <div class="card">
     <h2>Sleep timer</h2>
     <div class="chips" id="sleepChips"></div>
     <div class="hint" id="sleepHint" style="text-align:left"></div>
@@ -495,6 +503,8 @@
     });
     $('#screenBtn').textContent = s.screenOff ? 'Turn the screen back on' : 'Turn the screen off';
     $('#screenBtn').classList.toggle('ghost', !!s.screenOff);
+    $('#findBtn').textContent = s.finding ? 'Stop ringing' : 'Ring the player';
+    $('#findBtn').classList.toggle('danger', !!s.finding);
     $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
     // track list
     renderTracks(s);
@@ -570,6 +580,7 @@
   $('#volUp').onclick = () => act('/api/volume', { delta: 1 });
   $('#restart').onclick = () => act('/api/restart');
   $('#stop').onclick = () => act('/api/stop');
+  $('#findBtn').onclick = () => act('/api/find', { on: !(st && st.finding) }).then(r => toast(r && r.finding ? 'Ringing…' : 'Stopped'));
   $('#screenBtn').onclick = () => act('/api/screen', { off: !(st && st.screenOff) }).then(r => toast(r && r.screenOff ? 'Screen off' : 'Screen on'));
   $('#msgSend').onclick = () => { const t = $('#msgText').value.trim(); if (!t) return; act('/api/message', { text: t }).then(() => { $('#msgText').value = ''; toast('Sent'); }); };
   $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };

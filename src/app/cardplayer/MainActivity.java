@@ -17,7 +17,9 @@ import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
+import android.media.AudioFormat;
 import android.media.AudioManager;
+import android.media.AudioTrack;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -134,6 +136,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     LinearLayout grid;
     boolean browsing;
     int browseBuild;
+    List<Store.FolderInfo> libSnapshot;
+    boolean preloading;
     View nightView, statusGroup, volumeRow, browseBtn, blackout, chipsRow;
     GradientDrawable backdrop;
     ImageView art, moon;
@@ -319,6 +323,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     @Override
     protected void onResume() {
         super.onResume();
+        preloadLibrary();
         reloadCards();
         applySettings();
         hideSystemBars();
@@ -402,6 +407,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 break;
             }
             case "/api/sleep": setSleep(b.optInt("minutes", 0)); break;
+            case "/api/find": if (b.optBoolean("on", true)) startFinding(); else stopFinding(); break;
             case "/api/screen": setScreenLocked(b.optBoolean("off", !screenLocked)); break;
             case "/api/message": {
                 String t = b.optString("text").trim();
@@ -505,6 +511,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         s.put("locked", Kiosk.isLocked(this));
         s.put("nfc", nfcState);
         s.put("screenOff", screenLocked);
+        s.put("finding", findTone != null);
         s.put("bedtime", bedtimeNow());
         s.put("dark", blackout.getVisibility() == View.VISIBLE);
         return s;
@@ -512,14 +519,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     JSONObject library() throws Exception {
         JSONArray arr = new JSONArray();
-        for (String f : Store.folders()) {
+        for (Store.FolderInfo i : Store.library()) {
+            String f = i.name;
             JSONObject o = new JSONObject();
             o.put("name", f);
-            o.put("tracks", Store.listTracks(f).size());
-            o.put("live", Store.isLiveOnly(f));
+            o.put("tracks", i.tracks);
+            o.put("live", i.live);
             o.put("autoCover", ArtFinder.hasAuto(f));
             o.put("cards", Store.cardsFor(cards, f));
-            o.put("info", tileInfo(f));
+            o.put("info", tileInfo(f, i.tracks, i.live));
             o.put("color", String.format(Locale.ROOT, "#%06X", Ui.colorFor(f) & 0xFFFFFF));
             o.put("shuffle", prefs.getBoolean("shuffle:" + f, false));
             o.put("repeat", prefs.getBoolean("repeat:" + f, false));
@@ -579,6 +587,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopFinding();
         h.removeCallbacksAndMessages(null);
         if (receiversOn) {
             try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) { }
@@ -603,6 +612,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     public boolean dispatchTouchEvent(MotionEvent ev) {
         // When the screen is dimmed, the first touch only wakes it (so a sleepy tap can't press a button).
         int a = ev.getActionMasked();
+        if (findTone != null) { // ringing so a lost player can be found: any touch stops it
+            if (a == MotionEvent.ACTION_DOWN) stopFinding();
+            return true;
+        }
         if (screenLocked) { // switched off from the remote: touches do nothing, and the screen goes back off
             if (a == MotionEvent.ACTION_DOWN) scheduleScreenOff(800);
             return true;
@@ -1738,15 +1751,48 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void openBrowser() {
         if (!canBrowse()) return;
         final int build = ++browseBuild;
-        grid.removeAllViews();
-        final List<String> items = new ArrayList<>();
-        boolean online = online();
-        for (String f : Store.folders()) {
-            if (Store.listTracks(f).isEmpty()) continue;
-            if (!online && Store.isLiveOnly(f)) continue; // no internet: radio stations can't play, so don't offer them
-            items.add(f);
+        final List<Store.FolderInfo> shown = libSnapshot;
+        // Show it straight away from what's remembered, then check for changes in the background.
+        if (shown != null) renderBrowser(shown, build);
+        else grid.removeAllViews();
+        if (!browsing) {
+            browsing = true;
+            browser.setAlpha(0f);
+            browser.setTranslationY(dp(40));
+            browser.setVisibility(View.VISIBLE);
+            browser.animate().alpha(1f).translationY(0).setDuration(220).withLayer().start();
         }
-        if (items.size() > 1) items.add(Store.ALL);
+        new Thread(() -> {
+            final List<Store.FolderInfo> now = Store.library();
+            h.post(() -> {
+                libSnapshot = now;
+                if (build == browseBuild && !now.equals(shown)) renderBrowser(now, build);
+            });
+        }, "library").start();
+    }
+
+    /** Read the library once in the background, so the first time it's opened is quick too. */
+    void preloadLibrary() {
+        if (libSnapshot != null || preloading) return;
+        preloading = true;
+        final Context app = getApplicationContext();
+        new Thread(() -> {
+            List<Store.FolderInfo> now = Store.library();
+            h.post(() -> { if (libSnapshot == null) libSnapshot = now; preloading = false; });
+            for (Store.FolderInfo i : now) if (i.tracks > 0) Ui.tile(app, i);
+        }, "library-preload").start();
+    }
+
+    void renderBrowser(List<Store.FolderInfo> library, int build) {
+        grid.removeAllViews();
+        final List<Store.FolderInfo> items = new ArrayList<>();
+        boolean online = online();
+        for (Store.FolderInfo i : library) {
+            if (i.tracks == 0) continue;
+            if (!online && i.live) continue; // no internet: radio stations can't play, so don't offer them
+            items.add(i);
+        }
+        boolean withAll = items.size() > 1;
 
         if (items.isEmpty()) {
             TextView empty = Ui.text(this, "No music yet.\n\nGrown-ups: copy folders of music into Music/Cards/ on the phone.",
@@ -1758,10 +1804,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
         int gap = dp(16);
         int tile = (getResources().getDisplayMetrics().widthPixels - dp(40) - gap) / 2;
-        final List<ImageView> arts = new ArrayList<>();
+        final List<Runnable> slowCovers = new ArrayList<>();
+        final Context app = getApplicationContext();
         LinearLayout row = null;
-        for (int i = 0; i < items.size(); i++) {
-            final String f = items.get(i);
+        int count = items.size() + (withAll ? 1 : 0);
+        for (int i = 0; i < count; i++) {
+            final Store.FolderInfo fi = i < items.size() ? items.get(i) : null;
+            final String f = fi != null ? fi.name : Store.ALL;
             if (i % 2 == 0) {
                 row = new LinearLayout(this);
                 LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
@@ -1774,7 +1823,18 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             cell.setOrientation(LinearLayout.VERTICAL);
             ImageView img = new ImageView(this);
             img.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            img.setImageBitmap(Ui.letterArt(all ? "★" : f.substring(0, 1).toUpperCase(Locale.ROOT), c));
+            img.setBackgroundColor(c);
+            final String letter = all ? "★" : f.substring(0, 1).toUpperCase(Locale.ROOT);
+            Bitmap known = fi != null ? Ui.cachedTile(fi) : null;
+            if (known != null) {
+                img.setImageBitmap(known);
+            } else {
+                slowCovers.add(() -> { // read off the main thread
+                    Bitmap cover = fi != null ? Ui.tile(app, fi) : null;
+                    final Bitmap show = cover != null ? cover : Ui.letterTile(app, f, letter, c);
+                    h.post(() -> { if (build == browseBuild) img.setImageBitmap(show); });
+                });
+            }
             img.setOutlineProvider(new ViewOutlineProvider() {
                 @Override public void getOutline(View v, Outline o) {
                     o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(20));
@@ -1789,7 +1849,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             name.setPadding(dp(4), dp(8), dp(4), 0);
             if (f.equals(folder)) name.setTextColor(Ui.tint(c, 0.35f));
             cell.addView(name, new LinearLayout.LayoutParams(tile, -2));
-            TextView info = Ui.text(this, tileInfo(f), 13, 0x8CFFFFFF, false);
+            TextView info = Ui.text(this, tileInfo(f, fi != null ? fi.tracks : 0, fi != null && fi.live), 13, 0x8CFFFFFF, false);
             info.setPadding(dp(4), dp(2), dp(4), 0);
             cell.addView(info, new LinearLayout.LayoutParams(tile, -2));
             cell.setOnClickListener(v -> {
@@ -1806,37 +1866,22 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(tile, -2);
             if (i % 2 == 0) cl.rightMargin = gap;
             row.addView(cell, cl);
-            arts.add(all ? null : img);
         }
 
-        // Load real cover art off the main thread.
-        new Thread(() -> {
-            for (int i = 0; i < items.size(); i++) {
-                if (build != browseBuild) return;
-                ImageView img = arts.get(i);
-                if (img == null) continue;
-                Bitmap cover = Ui.loadCover(new File(Store.root(), items.get(i)));
-                if (cover != null) h.post(() -> { if (build == browseBuild) img.setImageBitmap(cover); });
-            }
-        }, "covers").start();
-
-        if (!browsing) {
-            browsing = true;
-            browser.setAlpha(0f);
-            browser.setTranslationY(dp(40));
-            browser.setVisibility(View.VISIBLE);
-            browser.animate().alpha(1f).translationY(0).setDuration(220).start();
+        if (!slowCovers.isEmpty()) {
+            new Thread(() -> {
+                for (Runnable r : slowCovers) {
+                    if (build != browseBuild) return;
+                    r.run();
+                }
+            }, "covers").start();
         }
     }
 
-    String tileInfo(String f) {
+    String tileInfo(String f, int n, boolean live) {
         if (f.equals(folder) && ready() && mp.isPlaying()) return "Now playing";
         if (Store.ALL.equals(f)) return "Shuffle it all";
-        if (Store.isLiveOnly(f)) {
-            int s = Store.listTracks(f).size();
-            return s == 1 ? "Live radio" : s + " radio stations";
-        }
-        int n = Store.listTracks(f).size();
+        if (live) return n == 1 ? "Live radio" : n + " radio stations";
         int at = 0;
         try { at = Integer.parseInt(prefs.getString("pos:" + f, "0:0").split(":")[0]); } catch (Exception ignored) { }
         boolean resumes = prefs.getBoolean("resume:" + f, true) && !prefs.getBoolean("shuffle:" + f, false);
@@ -2396,6 +2441,96 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     };
 
     @SuppressWarnings("deprecation")
+    // ---- ringing from the remote, to find a lost player. Ignores the volume limits, and stops by itself.
+
+    static final long FIND_MS = 30_000;
+    AudioTrack findTone;
+    PowerManager.WakeLock findWake;
+    int findOldVolume;
+    boolean findWasLocked;
+    final Runnable findTimeout = this::stopFinding;
+
+    void startFinding() {
+        if (findTone != null) { // already ringing: just start the 30 seconds again
+            h.removeCallbacks(findTimeout);
+            h.postDelayed(findTimeout, FIND_MS);
+            return;
+        }
+        pause();
+        findWasLocked = screenLocked;
+        if (screenLocked) setScreenLocked(false);
+        wake();
+        findOldVolume = audio.getStreamVolume(AudioManager.STREAM_ALARM);
+        try {
+            audio.setStreamVolume(AudioManager.STREAM_ALARM, audio.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0);
+        } catch (Exception ignored) { } // Do Not Disturb can refuse this
+        try {
+            short[] tone = findPattern(44100);
+            AudioTrack t = new AudioTrack.Builder()
+                    .setAudioAttributes(new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                    .setAudioFormat(new AudioFormat.Builder().setSampleRate(44100)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .setBufferSizeInBytes(tone.length * 2)
+                    .build();
+            t.write(tone, 0, tone.length);
+            t.setLoopPoints(0, tone.length, -1);
+            t.play();
+            findTone = t;
+        } catch (Exception e) {
+            restoreFindVolume();
+            flash("Couldn't ring", 5000);
+            if (findWasLocked) setScreenLocked(true);
+            throw new IllegalStateException("The player couldn't ring");
+        }
+        try {
+            findWake = ((PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "WalkieTales:find");
+            findWake.acquire(FIND_MS + 2000);
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v != null) v.vibrate(VibrationEffect.createWaveform(new long[]{0, 500, 500}, 0));
+        } catch (Exception ignored) { }
+        flash("Here I am! Tap the screen to stop", FIND_MS);
+        h.postDelayed(findTimeout, FIND_MS);
+    }
+
+    void stopFinding() {
+        if (findTone == null) return;
+        h.removeCallbacks(findTimeout);
+        try { findTone.stop(); } catch (Exception ignored) { }
+        findTone.release();
+        findTone = null;
+        restoreFindVolume();
+        try {
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v != null) v.cancel();
+        } catch (Exception ignored) { }
+        if (findWake != null && findWake.isHeld()) findWake.release();
+        findWake = null;
+        flash("", 1);
+        if (findWasLocked) setScreenLocked(true);
+    }
+
+    void restoreFindVolume() {
+        try { audio.setStreamVolume(AudioManager.STREAM_ALARM, findOldVolume, 0); } catch (Exception ignored) { }
+    }
+
+    /** A two-note beep followed by a short gap, to loop. */
+    static short[] findPattern(int rate) {
+        int note = rate / 5, gap = rate * 2 / 5, fade = rate / 200;
+        short[] s = new short[note * 2 + gap];
+        for (int i = 0; i < note * 2; i++) {
+            int inNote = i % note;
+            double hz = i < note ? 1760 : 2349;
+            double edge = Math.min(1, Math.min(inNote, note - 1 - inNote) / (double) fade);
+            s[i] = (short) (Math.sin(2 * Math.PI * hz * i / rate) * 32000 * edge);
+        }
+        return s;
+    }
+
     void buzz() {
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
