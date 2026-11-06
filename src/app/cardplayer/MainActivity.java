@@ -1075,12 +1075,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     void play() {
-        if (mp == null) return;
-        if (preparing) { // still connecting to a station: start as soon as it's ready
+        if (preparing) { // still connecting to a station (mp may not exist yet): start as soon as it's ready
             wantPlay = true;
             updateUi();
             return;
         }
+        if (mp == null) return;
         if (focusRequest == null) {
             focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(attrs())
