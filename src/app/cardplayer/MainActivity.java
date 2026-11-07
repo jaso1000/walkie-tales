@@ -142,7 +142,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     View nightView, statusGroup, volumeRow, browseBtn, blackout, chipsRow;
     GradientDrawable backdrop;
     ImageView art, moon;
-    TextView title, subtitle, status, timePos, timeDur, battery, sleepText, tracksText;
+    TextView title, subtitle, status, timePos, timeDur, sleepText, tracksText;
+    BatteryView battery;
     LinearLayout tracksBtn;
     SeekBar seek;
     boolean scrubbing;
@@ -1277,11 +1278,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             long left = Math.max(0, sleepAt - SystemClock.elapsedRealtime());
             sleepText.setText(((left + 59_999) / 60_000) + "m");
             moon.setColorFilter(0xFFFFD54F);
-            moon.setAlpha(1f);
         } else {
             sleepText.setText("");
-            moon.clearColorFilter();
-            moon.setAlpha(0.5f);
+            moon.setColorFilter(Color.WHITE); // same look as the other round buttons
         }
     }
 
@@ -1406,39 +1405,37 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         col.setClipChildren(false);
         rootView.addView(col, new FrameLayout.LayoutParams(-1, -1));
 
-        // ---- top bar: clock · battery ........ sleep timer · settings cog
-        LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout sg = new LinearLayout(this);
-        sg.setGravity(Gravity.CENTER_VERTICAL);
+        // ---- top bar: battery on the left, clock in the middle, sleep timer and settings cog on the right
+        FrameLayout top = new FrameLayout(this);
+        FrameLayout sg = new FrameLayout(this); // the battery and clock, which can be hidden together
+        battery = new BatteryView(this);
+        sg.addView(battery, new FrameLayout.LayoutParams(dp(62), dp(26), Gravity.START | Gravity.CENTER_VERTICAL));
         TextClock clock = new TextClock(this);
         clock.setTextSize(17);
         clock.setTextColor(0xD9FFFFFF);
         clock.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        sg.addView(clock);
-        battery = Ui.text(this, "", 14, 0x99FFFFFF, false);
-        battery.setPadding(dp(12), 0, 0, 0);
-        sg.addView(battery);
+        sg.addView(clock, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         statusGroup = sg;
-        top.addView(sg);
-        top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        top.addView(sg, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout topRight = new LinearLayout(this);
+        topRight.setGravity(Gravity.CENTER_VERTICAL);
         sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true);
-        sleepText.setPadding(dp(6), 0, 0, 0);
-        top.addView(sleepText);
-        moon = new ImageView(this);
-        moon.setImageResource(R.drawable.ic_moon);
-        moon.setPadding(dp(11), dp(11), dp(11), dp(11));
+        sleepText.setPadding(0, 0, dp(6), 0);
+        topRight.addView(sleepText);
+        moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 11);
+        moon.setElevation(0);
         moon.setContentDescription("Sleep timer");
         moon.setOnClickListener(v -> cycleSleep());
-        top.addView(moon, new LinearLayout.LayoutParams(dp(46), dp(46)));
-        ImageView cog = new ImageView(this);
-        cog.setImageResource(R.drawable.ic_settings);
-        cog.setAlpha(0.55f);
-        cog.setPadding(dp(11), dp(11), dp(11), dp(11));
+        topRight.addView(moon, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        ImageButton cog = Ui.roundButton(this, R.drawable.ic_settings, 0x26FFFFFF, 11);
+        cog.setElevation(0);
         cog.setContentDescription("Grown-up settings (press and hold)");
         cog.setOnClickListener(v -> flash("Grown-ups: press and hold ⚙", 2000));
         cog.setOnLongClickListener(v -> { openSettings(); return true; });
-        top.addView(cog, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        LinearLayout.LayoutParams cogLp = new LinearLayout.LayoutParams(dp(46), dp(46));
+        cogLp.leftMargin = dp(10);
+        topRight.addView(cog, cogLp);
+        top.addView(topRight, new FrameLayout.LayoutParams(-2, -1, Gravity.END | Gravity.CENTER_VERTICAL));
         col.addView(top, new LinearLayout.LayoutParams(-1, dp(46)));
 
         // ---- artwork: lives in a box that takes all leftover height, and stays square inside it,
@@ -2573,8 +2570,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             if (level < 0) return;
             int pct = Math.round(level * 100f / scale);
             batteryPct = pct;
-            battery.setText(pct + "%" + (charging ? " · charging" : ""));
-            battery.setTextColor(charging ? 0xCC8BE38B : pct <= 15 ? 0xFFFF7A7A : 0x99FFFFFF);
+            battery.set(pct, charging);
         }
     };
 
