@@ -1409,7 +1409,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         FrameLayout top = new FrameLayout(this);
         FrameLayout sg = new FrameLayout(this); // the battery and clock, which can be hidden together
         battery = new BatteryView(this);
-        sg.addView(battery, new FrameLayout.LayoutParams(dp(62), dp(26), Gravity.START | Gravity.CENTER_VERTICAL));
+        sg.addView(battery, new FrameLayout.LayoutParams(dp(52), dp(22), Gravity.START | Gravity.CENTER_VERTICAL));
         TextClock clock = new TextClock(this);
         clock.setTextSize(17);
         clock.setTextColor(0xD9FFFFFF);
@@ -1422,17 +1422,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true);
         sleepText.setPadding(0, 0, dp(6), 0);
         topRight.addView(sleepText);
-        moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 11);
+        moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 9);
         moon.setElevation(0);
         moon.setContentDescription("Sleep timer");
         moon.setOnClickListener(v -> cycleSleep());
-        topRight.addView(moon, new LinearLayout.LayoutParams(dp(46), dp(46)));
-        ImageButton cog = Ui.roundButton(this, R.drawable.ic_settings, 0x26FFFFFF, 11);
+        topRight.addView(moon, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        ImageButton cog = Ui.roundButton(this, R.drawable.ic_settings, 0x26FFFFFF, 9);
         cog.setElevation(0);
         cog.setContentDescription("Grown-up settings (press and hold)");
         cog.setOnClickListener(v -> flash("Grown-ups: press and hold ⚙", 2000));
         cog.setOnLongClickListener(v -> { openSettings(); return true; });
-        LinearLayout.LayoutParams cogLp = new LinearLayout.LayoutParams(dp(46), dp(46));
+        LinearLayout.LayoutParams cogLp = new LinearLayout.LayoutParams(dp(38), dp(38));
         cogLp.leftMargin = dp(10);
         topRight.addView(cog, cogLp);
         top.addView(topRight, new FrameLayout.LayoutParams(-2, -1, Gravity.END | Gravity.CENTER_VERTICAL));
@@ -1452,7 +1452,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 }
             }
         };
-        col.addView(artBox, new LinearLayout.LayoutParams(-1, 0, 1f));
+        LinearLayout.LayoutParams artBoxLp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        artBoxLp.topMargin = dp(14); // a little breathing room below the top bar
+        col.addView(artBox, artBoxLp);
         art = new ImageView(this);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setOutlineProvider(new ViewOutlineProvider() {

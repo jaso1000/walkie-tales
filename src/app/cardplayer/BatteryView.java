@@ -36,7 +36,7 @@ final class BatteryView extends View {
         if (pct < 0) return;
         float d = getResources().getDisplayMetrics().density;
         float w = getWidth(), h = getHeight();
-        float tipW = 3 * d, line = 1.5f * d, radius = 6 * d;
+        float tipW = 2.5f * d, line = 1.5f * d, radius = 5 * d;
         float bodyRight = w - tipW - d;
 
         // the charge inside
@@ -60,7 +60,7 @@ final class BatteryView extends View {
 
         // the number, with a bolt beside it while charging
         paint.setColor(0xFFFFFFFF);
-        paint.setTextSize(12.5f * d * getResources().getConfiguration().fontScale);
+        paint.setTextSize(11f * d * getResources().getConfiguration().fontScale);
         String text = pct + "%";
         Paint.FontMetrics fm = paint.getFontMetrics();
         float textW = paint.measureText(text);
