@@ -1807,9 +1807,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         scroll.setVerticalScrollBarEnabled(false);
         grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
-        grid.setPadding(0, dp(18), 0, dp(24)); // a little room under the search box
+        grid.setPadding(0, dp(6), 0, dp(24));
         scroll.addView(grid);
-        bcol.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        scroll.setVerticalFadingEdgeEnabled(true); // covers fade out under the search box instead of being cut off
+        scroll.setFadingEdgeLength(dp(18));
+        LinearLayout.LayoutParams scl = new LinearLayout.LayoutParams(-1, 0, 1f);
+        scl.topMargin = dp(12); // a gap under the search box that stays put while scrolling
+        bcol.addView(scroll, scl);
         // Types as a tab bar along the bottom: always visible, under the thumbs, never needs scrolling.
         libChips = new LinearLayout(this);
         libChips.setPadding(dp(6), dp(8), dp(6), dp(10));
