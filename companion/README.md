@@ -34,7 +34,7 @@ Tip: give the player phone a fixed IP address (a DHCP reservation in your router
 - **Volume:** tap the dots or −/+. The player's volume limit still applies.
 - **Sleep timer:** off, 15, 30, 45, 60 or 90 minutes.
 - **Message:** send a short message to the player's screen.
-- **Library:** tap a folder to play it, and upload music or `cover.jpg` into new or existing folders.
+- **Library:** tap a folder to play it, upload music or `cover.jpg` into new or existing folders, and delete a folder.
 - **Cards:** link a card to a folder or action (then tap the card on the player), and unlink cards.
 - **Settings:** child's name, max volume, quiet hours, fade-in, spoken titles, browsing, track list, Toniebox mode,
   dimming, keep-screen-on, night light and clock, grown-up check.

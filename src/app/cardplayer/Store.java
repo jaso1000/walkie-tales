@@ -113,6 +113,18 @@ final class Store {
         return new File(Environment.getExternalStorageDirectory(), "Music/Cards");
     }
 
+    /** Deletes a folder inside the music root and everything in it. Never follows a path outside the root. */
+    static boolean deleteTree(File f) {
+        try {
+            String rootPath = root().getCanonicalPath() + File.separator;
+            if (!f.getCanonicalPath().startsWith(rootPath)) return false;
+        } catch (IOException e) { return false; }
+        File[] kids = f.isDirectory() ? f.listFiles() : null;
+        boolean ok = true;
+        if (kids != null) for (File k : kids) ok &= deleteTree(k);
+        return f.delete() && ok;
+    }
+
     /** Card links live next to the music so they survive reinstalling the app. */
     static File cardsFile() {
         return new File(root(), "cards.txt");
