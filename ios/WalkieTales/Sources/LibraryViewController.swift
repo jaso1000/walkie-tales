@@ -106,7 +106,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             empty.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
             empty.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
             empty.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 80),
-            collection.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 12),
+            collection.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 20),
             collection.bottomAnchor.constraint(equalTo: chipScroll.topAnchor),
         ])
         reload()

@@ -1807,17 +1807,18 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         scroll.setVerticalScrollBarEnabled(false);
         grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
-        grid.setPadding(0, dp(8), 0, dp(24));
+        grid.setPadding(0, dp(18), 0, dp(24)); // a little room under the search box
         scroll.addView(grid);
         bcol.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         // Types as a tab bar along the bottom: always visible, under the thumbs, never needs scrolling.
         libChips = new LinearLayout(this);
         libChips.setPadding(dp(6), dp(8), dp(6), dp(10));
         libChips.setBackgroundColor(0xFF15151D);
-        LinearLayout.LayoutParams tabs = new LinearLayout.LayoutParams(-1, -2);
-        tabs.leftMargin = tabs.rightMargin = -dp(20); // full width: the column has 20dp sides
-        bcol.addView(libChips, tabs);
-        browser.addView(bcol, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout bouter = new LinearLayout(this); // the Library column, then the tab bar edge to edge under it
+        bouter.setOrientation(LinearLayout.VERTICAL);
+        bouter.addView(bcol, new LinearLayout.LayoutParams(-1, 0, 1f));
+        bouter.addView(libChips, new LinearLayout.LayoutParams(-1, -2));
+        browser.addView(bouter, new FrameLayout.LayoutParams(-1, -1));
         rootView.addView(browser, new FrameLayout.LayoutParams(-1, -1));
 
         // ---- night light overlay (shown instead of a dark screen when idle)
