@@ -683,6 +683,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void applySettings() {
         volumeRow.setVisibility(prefs.getBoolean("show_volume", true) ? View.VISIBLE : View.GONE);
         statusGroup.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
+        battery.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
         if (phones != null) {
             phones.setVisibility(prefs.getBoolean("headphones_button", true) && Headphones.hasBluetooth(this) ? View.VISIBLE : View.GONE);
             updateHeadphones();
@@ -1419,35 +1420,41 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         col.setClipChildren(false);
         rootView.addView(col, new FrameLayout.LayoutParams(-1, -1));
 
-        // ---- top bar: battery on the left, clock in the middle, sleep timer and settings cog on the right
-        FrameLayout top = new FrameLayout(this);
-        FrameLayout sg = new FrameLayout(this); // the battery and clock, which can be hidden together
+        // ---- top bar: battery and sleep timer on the left, clock in the middle, headphones and settings cog on the right
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout topLeft = new LinearLayout(this);
+        topLeft.setGravity(Gravity.CENTER_VERTICAL);
         battery = new BatteryView(this);
-        sg.addView(battery, new FrameLayout.LayoutParams(dp(52), dp(22), Gravity.START | Gravity.CENTER_VERTICAL));
+        LinearLayout.LayoutParams batLp = new LinearLayout.LayoutParams(dp(52), dp(22));
+        batLp.rightMargin = dp(10);
+        topLeft.addView(battery, batLp);
+        moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 9);
+        moon.setElevation(0);
+        moon.setContentDescription("Sleep timer");
+        moon.setOnClickListener(v -> cycleSleep());
+        topLeft.addView(moon, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true);
+        sleepText.setPadding(dp(6), 0, 0, 0);
+        topLeft.addView(sleepText);
+        top.addView(topLeft, new LinearLayout.LayoutParams(-2, -1));
+        // The clock sits in the space between the two groups, so it never runs into the timer's minutes.
+        FrameLayout mid = new FrameLayout(this);
         TextClock clock = new TextClock(this);
         clock.setTextSize(17);
         clock.setTextColor(0xD9FFFFFF);
         clock.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        sg.addView(clock, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-        statusGroup = sg;
-        top.addView(sg, new FrameLayout.LayoutParams(-1, -1));
+        clock.setSingleLine(true);
+        mid.addView(clock, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        statusGroup = clock; // "Clock and battery" hides the clock here and the battery in applySettings()
+        top.addView(mid, new LinearLayout.LayoutParams(0, -1, 1f));
         LinearLayout topRight = new LinearLayout(this);
         topRight.setGravity(Gravity.CENTER_VERTICAL);
-        sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true);
-        sleepText.setPadding(0, 0, dp(6), 0);
-        topRight.addView(sleepText);
         phones = Ui.roundButton(this, R.drawable.ic_headphones, 0x26FFFFFF, 9);
         phones.setElevation(0);
         phones.setContentDescription("Headphones");
         phones.setOnClickListener(v -> toggleHeadphones());
         topRight.addView(phones, new LinearLayout.LayoutParams(dp(38), dp(38)));
-        moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 9);
-        moon.setElevation(0);
-        moon.setContentDescription("Sleep timer");
-        moon.setOnClickListener(v -> cycleSleep());
-        LinearLayout.LayoutParams moonLp = new LinearLayout.LayoutParams(dp(38), dp(38));
-        moonLp.leftMargin = dp(10);
-        topRight.addView(moon, moonLp);
         ImageButton cog = Ui.roundButton(this, R.drawable.ic_settings, 0x26FFFFFF, 9);
         cog.setElevation(0);
         cog.setContentDescription("Grown-up settings (press and hold)");
@@ -1456,7 +1463,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         LinearLayout.LayoutParams cogLp = new LinearLayout.LayoutParams(dp(38), dp(38));
         cogLp.leftMargin = dp(10);
         topRight.addView(cog, cogLp);
-        top.addView(topRight, new FrameLayout.LayoutParams(-2, -1, Gravity.END | Gravity.CENTER_VERTICAL));
+        top.addView(topRight, new LinearLayout.LayoutParams(-2, -1));
         col.addView(top, new LinearLayout.LayoutParams(-1, dp(46)));
 
         // ---- artwork: lives in a box that takes all leftover height, and stays square inside it,
