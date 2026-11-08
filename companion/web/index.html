@@ -616,7 +616,7 @@
   function render(s) {
     const firstName = !st || st.name !== s.name;
     st = s; lastPoll = Date.now();
-    if (firstName) showWho();
+    if (firstName) { if (cur && s.name) syncName(cur, s.name); showWho(); }
     document.documentElement.style.setProperty('--accent', s.folder ? s.accent : '#6c4cf1');
     const b = $('#batt');
     if (s.battery >= 0) { b.hidden = false; b.textContent = (s.charging ? '⚡ ' : '') + s.battery + '%'; b.style.color = s.battery <= 15 && !s.charging ? 'var(--bad)' : ''; }
@@ -1704,7 +1704,7 @@
         if (r.status === 401) { sm.textContent = 'Needs its PIN · ' + short(p.url); continue; }
         const s = await r.json();
         if (!r.ok) throw new Error(s.error);
-        if (!p.name && s.name) row.querySelector('b').textContent = s.name + '’s player';
+        if (s.name) syncName(p, s.name);
         sm.textContent = (s.screenOff ? 'Screen off · ' : '') + (s.playing ? '▶ ' + (s.title || '') : s.title ? 'Paused · ' + s.title : 'Nothing playing')
           + (s.battery >= 0 ? ' · ' + s.battery + '%' : '');
         av.style.background = s.accent || '';
@@ -1715,6 +1715,17 @@
       } catch (e) { sm.textContent = 'Offline · ' + short(p.url); }
     }
   }
+  // The player's own name (Grown-up settings → Child's name) is the one shown here: copy it into the list
+  // whenever we hear from a player, so renaming it on the device shows up on the remote.
+  function syncName(p, name) {
+    name = (name || '').trim();
+    if (!name || !players || p.name === name) return;
+    p.name = name;
+    plApi('/players/' + p.id, 'PATCH', { name }).catch(() => {});
+    if (cur && cur.id === p.id) showWho();
+    const row = document.querySelector('.pl[data-id="' + p.id + '"] b'); if (row) row.textContent = name;
+    if (typeof renderUpTargets === 'function') renderUpTargets();
+  }
   async function plApi(path, method, body) {
     const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
@@ -1722,7 +1733,7 @@
     return j;
   }
   function playerMenu(p) {
-    const name = prompt('Name for this player.\n(Clear the name and press OK to remove it from the list.)', label(p));
+    const name = prompt('Name for this player (it changes on the player too).\n(Clear the name and press OK to remove it from the list.)', label(p));
     if (name === null) return;
     if (!name.trim()) {
       if (!confirm('Remove “' + label(p) + '” from this list? Nothing on the player itself changes.')) return;
@@ -1733,7 +1744,12 @@
       }).catch(err);
       return;
     }
-    plApi('/players/' + p.id, 'PATCH', { name: name.trim() }).then(async () => { await loadPlayers(); renderPlayers(); showWho(); pollAll(); }).catch(err);
+    // rename the device too (when this phone knows its PIN), so the two names stay the same
+    const k = cur && p.id === cur.id ? pin : store.get(pinKey(p.id));
+    const onDevice = k ? fetch('/p/' + p.id + '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Pin': k },
+      body: JSON.stringify({ kid_name: name.trim() }) }).catch(() => {}) : Promise.resolve();
+    Promise.all([onDevice, plApi('/players/' + p.id, 'PATCH', { name: name.trim() })])
+      .then(async () => { await loadPlayers(); renderPlayers(); showWho(); pollAll(); if (cur && p.id === cur.id) poll(); }).catch(err);
   }
   $('#who').onclick = () => { if (players) openPlayers(); };
   $('#plClose').onclick = () => { $('#players').classList.remove('on'); if (!cur && players && players.length) choose(players[0]); else poll(); };
