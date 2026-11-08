@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import UIKit
 
@@ -143,6 +144,57 @@ enum Store {
         let t = readTracks(folder)
         trackLock.lock(); trackCache[folder] = (st, t); trackLock.unlock()
         return t
+    }
+
+    // MARK: categories (Library: All, Music, Podcasts, Audiobooks, Radio) — same rules as Android's Store.detectCategory
+
+    static let categories = ["music", "podcast", "audiobook", "radio"]
+    private static var catCache: [String: (stamp: Double, cat: String)] = [:]
+    private static let catLock = NSLock()
+
+    /// The grown-up's choice from the remote, or the guess.
+    static func category(_ folder: String) -> String {
+        if let c = ud.string(forKey: "cat:" + folder), categories.contains(c) { return c }
+        return autoCategory(folder)
+    }
+
+    static func setCategory(_ folder: String, _ c: String?) {
+        if let c = c { ud.set(c, forKey: "cat:" + folder) } else { ud.removeObject(forKey: "cat:" + folder) }
+    }
+
+    /// What the folder looks like, remembered until it changes: genre tags ("Podcast", "Audiobook", "Spoken Word"),
+    /// .m4b files and words in the names.
+    static func autoCategory(_ folder: String) -> String {
+        let st = stamp(folder)
+        catLock.lock()
+        if let c = catCache[folder], c.stamp == st { catLock.unlock(); return c.cat }
+        catLock.unlock()
+        let saved = ud.string(forKey: "autocat:" + folder)?.split(separator: "|").map(String.init)
+        if let s = saved, s.count == 2, Double(s[0]) == st { catLock.lock(); catCache[folder] = (st, s[1]); catLock.unlock(); return s[1] }
+        let cat = detectCategory(folder)
+        ud.set("\(st)|\(cat)", forKey: "autocat:" + folder)
+        catLock.lock(); catCache[folder] = (st, cat); catLock.unlock()
+        return cat
+    }
+
+    private static func detectCategory(_ folder: String) -> String {
+        let tracks = listTracks(folder)
+        if !tracks.isEmpty && tracks.allSatisfy({ $0.live }) { return "radio" }
+        let files = tracks.filter { !$0.live }.map { $0.source }
+        var genres = ""
+        for u in files.prefix(3) {
+            let meta = AVURLAsset(url: u).metadata
+            let ids: [AVMetadataIdentifier] = [.id3MetadataContentType, .iTunesMetadataUserGenre, .quickTimeMetadataGenre]
+            for id in ids { for item in AVMetadataItem.metadataItems(from: meta, filteredByIdentifier: id) { genres += (item.stringValue ?? "") + " " } }
+        }
+        let g = genres.lowercased()
+        let names = ([folder] + files.prefix(5).map { $0.lastPathComponent }).joined(separator: " ")
+        func has(_ pattern: String) -> Bool { names.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil }
+        if g.contains("podcast") || has("podcast|\\bepisode\\b|\\bep\\.? ?\\d") { return "podcast" }
+        if files.contains(where: { $0.pathExtension.lowercased() == "m4b" }) || g.contains("audiobook") || g.contains("audio book")
+            || g.contains("spoken") || g.contains("speech") || g.contains("story")
+            || has("audio ?book|\\bstor(y|ies)\\b|\\bchapter\\b|\\bnarrated\\b|\\bread by\\b|\\bunabridged\\b|\\btales\\b") { return "audiobook" }
+        return "music"
     }
 
     private static func readTracks(_ folder: String) -> [Track] {

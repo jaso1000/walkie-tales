@@ -221,9 +221,11 @@ final class Store {
         final long stamp; // changes when anything in the folder does
         final List<File> watched;
         final List<Track> trackList;
+        final String autoCategory; // what the folder looks like: music, podcast, audiobook or radio
 
-        FolderInfo(String name, List<Track> trackList, boolean live, long stamp, List<File> watched) {
+        FolderInfo(String name, List<Track> trackList, boolean live, long stamp, List<File> watched, String autoCategory) {
             this.name = name;
+            this.autoCategory = autoCategory;
             this.trackList = trackList;
             this.tracks = trackList.size();
             this.live = live;
@@ -265,7 +267,55 @@ final class Store {
         List<Track> t = listTracks(name);
         boolean live = !t.isEmpty();
         for (Track x : t) if (!x.live) { live = false; break; }
-        return new FolderInfo(name, Collections.unmodifiableList(t), live, stamp, watched);
+        return new FolderInfo(name, Collections.unmodifiableList(t), live, stamp, watched, detectCategory(name, t, live));
+    }
+
+    // ------------------------------------------------------------ categories (Library: All, Music, Podcasts, Audiobooks)
+
+    static final String[] CATEGORIES = {"music", "podcast", "audiobook", "radio"};
+    private static final java.util.regex.Pattern PODCAST_WORDS =
+            java.util.regex.Pattern.compile("podcast|\\bepisode\\b|\\bep\\.? ?\\d", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern BOOK_WORDS =
+            java.util.regex.Pattern.compile("audio ?book|\\bstor(y|ies)\\b|\\bchapter\\b|\\bnarrated\\b|\\bread by\\b|\\bunabridged\\b|\\btales\\b",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Guess what a folder is from the songs' genre tags (a podcast app tags "Podcast", audiobooks "Audiobook" or
+     * "Spoken Word"), .m4b files, and words in the names. Grown-ups can override it from the remote.
+     */
+    static String detectCategory(String name, List<Track> tracks, boolean live) {
+        if (live) return "radio";
+        StringBuilder genres = new StringBuilder();
+        int checked = 0;
+        boolean m4b = false;
+        for (Track t : tracks) {
+            if (t.live) continue;
+            if (t.source.toLowerCase(Locale.ROOT).endsWith(".m4b")) m4b = true;
+            if (checked >= 3) continue;
+            checked++;
+            android.media.MediaMetadataRetriever r = new android.media.MediaMetadataRetriever();
+            try {
+                r.setDataSource(t.source);
+                String g = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_GENRE);
+                if (g != null) genres.append(g).append(' ');
+            } catch (Exception ignored) {
+            } finally {
+                try { r.release(); } catch (Exception ignored) { }
+            }
+        }
+        String g = genres.toString().toLowerCase(Locale.ROOT);
+        StringBuilder names = new StringBuilder(name).append(' ');
+        for (int i = 0; i < Math.min(5, tracks.size()); i++) names.append(new File(tracks.get(i).source).getName()).append(' ');
+        if (g.contains("podcast") || PODCAST_WORDS.matcher(names).find()) return "podcast";
+        if (m4b || g.contains("audiobook") || g.contains("audio book") || g.contains("spoken") || g.contains("speech")
+                || g.contains("story") || BOOK_WORDS.matcher(names).find()) return "audiobook";
+        return "music";
+    }
+
+    /** The category shown in the Library: the grown-up's choice, or the guess. */
+    static String category(SharedPreferences prefs, FolderInfo i) {
+        String c = prefs.getString("cat:" + i.name, "");
+        return c.isEmpty() ? i.autoCategory : c;
     }
 
     private static void watchFolder(File dir, List<File> out) {

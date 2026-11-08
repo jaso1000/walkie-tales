@@ -3,9 +3,18 @@ import SystemConfiguration
 import UIKit
 
 /// "Pick something": a grid of covers (works without cards).
-final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UITextFieldDelegate {
     var onPick: ((String) -> Void)?
-    private var items: [String] = []
+    var onPickTrack: ((String, URL) -> Void)?   // the search found a song: play that one
+    private var all: [String] = []               // every folder that can play now
+    private var items: [String] = []             // what's shown after the category and search
+    private var hits: [String: Track] = [:]      // folder -> the song the search found
+    private var cat = "all", query = ""
+    private let search = UITextField()
+    private let chips = UIStackView()
+    private let chipScroll = UIScrollView()
+    private let empty = UILabel()
+    private static let cats = [("all", "All"), ("music", "Music"), ("podcast", "Podcasts"), ("audiobook", "Audiobooks"), ("radio", "Radio")]
     private var collection: UICollectionView!
     private var covers: [String: UIImage] = [:]
 
@@ -26,6 +35,39 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         head.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(head)
 
+        search.attributedPlaceholder = NSAttributedString(string: "Search", attributes: [.foregroundColor: UIColor(white: 1, alpha: 0.5)])
+        search.textColor = .white
+        search.font = .systemFont(ofSize: 17)
+        search.backgroundColor = UIColor(white: 1, alpha: 0.1)
+        search.layer.cornerRadius = 16
+        search.layer.cornerCurve = .continuous
+        search.returnKeyType = .search
+        search.clearButtonMode = .whileEditing
+        search.autocorrectionType = .no
+        search.delegate = self
+        let glass = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+        glass.tintColor = UIColor(white: 1, alpha: 0.5)
+        glass.contentMode = .center
+        glass.frame = CGRect(x: 0, y: 0, width: 40, height: 20)
+        search.leftView = glass
+        search.leftViewMode = .always
+        search.addTarget(self, action: #selector(searchChanged), for: .editingChanged)
+        search.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(search)
+        chips.spacing = 8
+        chips.translatesAutoresizingMaskIntoConstraints = false
+        chipScroll.showsHorizontalScrollIndicator = false
+        chipScroll.translatesAutoresizingMaskIntoConstraints = false
+        chipScroll.addSubview(chips)
+        view.addSubview(chipScroll)
+        empty.textColor = UIColor(white: 1, alpha: 0.7)
+        empty.font = .systemFont(ofSize: 17)
+        empty.textAlignment = .center
+        empty.numberOfLines = 0
+        empty.isHidden = true
+        empty.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(empty)
+
         let layout = UICollectionViewFlowLayout()
         layout.minimumInteritemSpacing = 16
         layout.minimumLineSpacing = 18
@@ -44,22 +86,59 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             head.heightAnchor.constraint(equalToConstant: 56),
             collection.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             collection.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            collection.topAnchor.constraint(equalTo: head.bottomAnchor),
+            search.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            search.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            search.topAnchor.constraint(equalTo: head.bottomAnchor, constant: 4),
+            search.heightAnchor.constraint(equalToConstant: 46),
+            chipScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            chipScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            chipScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 12),
+            chipScroll.heightAnchor.constraint(equalToConstant: 40),
+            chips.leadingAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.leadingAnchor),
+            chips.trailingAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.trailingAnchor),
+            chips.topAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.topAnchor),
+            chips.bottomAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.bottomAnchor),
+            chips.heightAnchor.constraint(equalTo: chipScroll.frameLayoutGuide.heightAnchor),
+            empty.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
+            empty.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
+            empty.topAnchor.constraint(equalTo: chipScroll.bottomAnchor, constant: 60),
+            collection.topAnchor.constraint(equalTo: chipScroll.bottomAnchor, constant: 8),
             collection.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         reload()
     }
 
-    @objc private func closeTapped() { dismiss(animated: true) }
+    @objc private func closeTapped() { view.endEditing(true); dismiss(animated: true) }
+    @objc private func searchChanged() { query = (search.text ?? "").trimmingCharacters(in: .whitespaces); applyFilter() }
+    func textFieldShouldReturn(_ t: UITextField) -> Bool { t.resignFirstResponder(); return true }
 
     /// No internet: radio stations can't play, so don't offer them.
     func reload() {
         let online = Reachability.online
-        items = Store.folders().filter { f in
+        all = Store.folders().filter { f in
             let t = Store.listTracks(f)
             return !t.isEmpty && (online || !t.allSatisfy { $0.live })
         }
-        if items.count > 1 { items.append(Store.ALL) }
+        applyFilter()
+    }
+
+    /// The category buttons and the search box decide which folders show.
+    private func applyFilter() {
+        let cats = Dictionary(uniqueKeysWithValues: all.map { ($0, Store.category($0)) })
+        let present = Set(cats.values)
+        if cat != "all" && !present.contains(cat) { cat = "all" }
+        renderChips(present)
+        let q = query.lowercased()
+        hits = [:]
+        items = all.filter { f in
+            if cat != "all" && cats[f] != cat { return false }
+            if q.isEmpty || f.lowercased().contains(q) { return true }
+            if let t = Store.listTracks(f).first(where: { $0.name.lowercased().contains(q) }) { hits[f] = t; return true }
+            return false
+        }
+        if items.count > 1 && cat == "all" && q.isEmpty { items.append(Store.ALL) }
+        empty.isHidden = !items.isEmpty || (q.isEmpty && cat == "all")
+        empty.text = q.isEmpty ? "Nothing here yet" : "Nothing called “\(query)”"
         for f in items where f != Store.ALL { if let c = Art.cachedTile(f) { covers[f] = c } } // remembered: show at once
         collection?.reloadData()
         let list = items.filter { $0 != Store.ALL && covers[$0] == nil }
@@ -72,6 +151,29 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
                     }
                 }
             }
+        }
+    }
+
+    private func renderChips(_ present: Set<String>) {
+        chips.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let kinds = Self.cats.filter { $0.0 != "all" && present.contains($0.0) }.count
+        chipScroll.isHidden = kinds < 2 // one kind only: nothing to choose between
+        for (key, label) in Self.cats where key == "all" || present.contains(key) {
+            let on = key == cat
+            let b = UIButton(type: .system)
+            b.setTitle(label, for: .normal)
+            b.titleLabel?.font = .systemFont(ofSize: 16, weight: on ? .bold : .regular)
+            b.setTitleColor(on ? .white : UIColor(white: 1, alpha: 0.8), for: .normal)
+            b.backgroundColor = on ? (Player.shared.folder.map { Art.colorFor($0) } ?? UIColor(red: 0.42, green: 0.3, blue: 0.95, alpha: 1)) : UIColor(white: 1, alpha: 0.1)
+            b.layer.cornerRadius = 20
+            b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 18, bottom: 8, right: 18)
+            b.addAction(UIAction { [weak self] _ in
+                guard let self = self, self.cat != key else { return }
+                self.cat = key
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                self.applyFilter()
+            }, for: .touchUpInside)
+            chips.addArrangedSubview(b)
         }
     }
 
@@ -96,7 +198,13 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         cell.image.image = covers[f] ?? Art.letter(all ? "★" : String(f.prefix(1)).uppercased(), color)
         cell.name.text = all ? "Everything" : f
         cell.name.textColor = f == Player.shared.folder ? Art.tint(color, 0.35) : .white
-        cell.info.text = Self.info(f, player: Player.shared)
+        if let hit = hits[f] {
+            cell.info.text = "♪ " + hit.name
+            cell.info.textColor = UIColor(white: 1, alpha: 0.9)
+        } else {
+            cell.info.text = Self.info(f, player: Player.shared)
+            cell.info.textColor = UIColor(white: 1, alpha: 0.55)
+        }
         return cell
     }
 
@@ -107,7 +215,9 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
     func collectionView(_ c: UICollectionView, didSelectItemAt ip: IndexPath) {
         let f = items[ip.item]
-        dismiss(animated: true) { self.onPick?(f) }
+        view.endEditing(true)
+        if let hit = hits[f] { dismiss(animated: true) { self.onPickTrack?(f, hit.source) } }
+        else { dismiss(animated: true) { self.onPick?(f) } }
     }
 }
 

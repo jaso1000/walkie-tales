@@ -68,8 +68,17 @@ extension PlayerViewController {
             guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
             if p.folder == f { p.stop() }
             do { try FileManager.default.removeItem(at: Store.dir(f)) } catch { throw RemoteError("Couldn't delete \(f)") }
+            Store.setCategory(f, nil)
             flash("Deleted “\(f)”", 3)
             libraryChanged()
+        case "/api/folder/category": // remote → folder menu → Type: auto, music, podcast, audiobook or radio
+            let f = b["folder"] as? String ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
+            let c = b["category"] as? String ?? "auto"
+            if c == "auto" { Store.setCategory(f, nil) }
+            else if Store.categories.contains(c) { Store.setCategory(f, c) }
+            else { throw RemoteError("Unknown category \(c)") }
+            (presentedViewController as? LibraryViewController)?.reload()
         case "/api/file/rename": // remote → song list → rename, or "Tidy names"
             let f = b["folder"] as? String ?? ""
             guard Store.safeName(f) != nil, Store.folders().contains(f),
@@ -176,6 +185,7 @@ extension PlayerViewController {
                 "name": f, "tracks": tracks.count, "live": Store.isLiveOnly(f), "autoCover": Art.hasAuto(f), "cards": 0,
                 "info": LibraryViewController.info(f, player: p), "color": Art.hex(Art.colorFor(f)),
                 "shuffle": Store.flag("shuffle", f, false), "repeat": Store.flag("repeat", f, false),
+                "category": Store.category(f), "autoCategory": Store.autoCategory(f),
             ])
         }
         var free: Int64 = 0

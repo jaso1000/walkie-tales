@@ -587,6 +587,12 @@ final class PlayerViewController: UIViewController {
     @objc func openLibrary() {
         guard canBrowse else { return }
         let l = LibraryViewController()
+        l.onPickTrack = { [weak self] f, source in
+            guard let self = self else { return }
+            self.p.open(f, play: true)
+            if let i = self.p.tracks.firstIndex(where: { $0.source == source }) { self.p.start(i, play: true) }
+            self.pop()
+        }
         l.onPick = { [weak self] f in
             guard let self = self else { return }
             if f == self.p.folder, self.p.player != nil { if !self.p.isPlaying { self.p.play() } } else { self.p.open(f, play: true) }

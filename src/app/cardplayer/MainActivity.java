@@ -135,6 +135,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     FrameLayout rootView, browser;
     LinearLayout grid;
+    EditText libSearch;          // Library: search box
+    LinearLayout libChips;       // Library: All / Music / Podcasts / Audiobooks / Radio
+    String libCat = "all", libQuery = "";
     boolean browsing;
     int browseBuild;
     List<Store.FolderInfo> libSnapshot;
@@ -468,9 +471,21 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
                 if (f.equals(folder)) stopAll();
                 if (!Store.deleteTree(dir)) throw new IllegalStateException("Couldn't delete everything in " + f);
+                prefs.edit().remove("cat:" + f).apply();
                 if (cards.values().removeIf(f::equals)) { Store.saveCards(cards); cardsStamp = Store.cardsFile().lastModified(); }
                 flash("Deleted “" + f + "”", 3000);
                 if (browsing) openBrowser();
+                break;
+            }
+            case "/api/folder/category": { // remote → folder menu → Type: auto, music, podcast, audiobook or radio
+                String f = b.getString("folder");
+                File dir = RemoteServer.safeFolder(f);
+                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
+                String c = b.optString("category", "auto");
+                if (c.equals("auto")) prefs.edit().remove("cat:" + f).apply();
+                else if (java.util.Arrays.asList(Store.CATEGORIES).contains(c)) prefs.edit().putString("cat:" + f, c).apply();
+                else throw new IllegalArgumentException("Unknown category " + c);
+                if (browsing && libSnapshot != null) renderBrowser(libSnapshot, browseBuild);
                 break;
             }
             case "/api/file/rename": { // remote → song list → rename, or "Tidy names"
@@ -597,6 +612,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             o.put("cards", Store.cardsFor(cards, f));
             o.put("info", tileInfo(f, i.tracks, i.live));
             o.put("color", String.format(Locale.ROOT, "#%06X", Ui.colorFor(f) & 0xFFFFFF));
+            o.put("category", Store.category(prefs, i));
+            o.put("autoCategory", i.autoCategory);
             o.put("shuffle", prefs.getBoolean("shuffle:" + f, false));
             o.put("repeat", prefs.getBoolean("repeat:" + f, false));
             arr.put(o);
@@ -1760,6 +1777,38 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         close.setOnClickListener(v -> closeBrowser());
         bhead.addView(close, sized(48, 0));
         bcol.addView(bhead, new LinearLayout.LayoutParams(-1, dp(56)));
+        libSearch = new EditText(this);
+        libSearch.setSingleLine(true);
+        libSearch.setHint("🔍  Search");
+        libSearch.setHintTextColor(0x80FFFFFF);
+        libSearch.setTextColor(Color.WHITE);
+        libSearch.setTextSize(17);
+        libSearch.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        GradientDrawable sbg = new GradientDrawable();
+        sbg.setColor(0x1AFFFFFF);
+        sbg.setCornerRadius(dp(16));
+        libSearch.setBackground(sbg);
+        libSearch.setPadding(dp(16), dp(10), dp(16), dp(10));
+        libSearch.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence c, int a, int b, int d) { }
+            @Override public void onTextChanged(CharSequence c, int a, int b, int d) { }
+            @Override public void afterTextChanged(android.text.Editable e) {
+                String q = e.toString().trim();
+                if (q.equals(libQuery)) return;
+                libQuery = q;
+                if (browsing && libSnapshot != null) renderBrowser(libSnapshot, browseBuild);
+            }
+        });
+        libSearch.setOnEditorActionListener((v, id, ev) -> { hideKeyboard(); return true; });
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
+        slp.topMargin = dp(4);
+        bcol.addView(libSearch, slp);
+        android.widget.HorizontalScrollView chipScroll = new android.widget.HorizontalScrollView(this);
+        chipScroll.setHorizontalScrollBarEnabled(false);
+        libChips = new LinearLayout(this);
+        libChips.setPadding(0, dp(12), 0, dp(4));
+        chipScroll.addView(libChips);
+        bcol.addView(chipScroll, new LinearLayout.LayoutParams(-1, -2));
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         grid = new LinearLayout(this);
@@ -1881,14 +1930,32 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         grid.removeAllViews();
         final List<Store.FolderInfo> items = new ArrayList<>();
         boolean online = online();
+        final java.util.Map<String, Track> trackHit = new java.util.HashMap<>(); // folder -> the song the search found
+        java.util.Set<String> present = new java.util.LinkedHashSet<>();
+        String q = libQuery.toLowerCase(Locale.ROOT);
         for (Store.FolderInfo i : library) {
             if (i.tracks == 0) continue;
             if (!online && i.live) continue; // no internet: radio stations can't play, so don't offer them
+            String cat = Store.category(prefs, i);
+            present.add(cat);
+            if (!libCat.equals("all") && !libCat.equals(cat)) continue;
+            if (!q.isEmpty() && !i.name.toLowerCase(Locale.ROOT).contains(q)) {
+                Track hit = null;
+                for (Track t : i.trackList) if (t.name.toLowerCase(Locale.ROOT).contains(q)) { hit = t; break; }
+                if (hit == null) continue;
+                trackHit.put(i.name, hit);
+            }
             items.add(i);
         }
-        boolean withAll = items.size() > 1;
+        renderLibChips(present);
+        boolean withAll = items.size() > 1 && libCat.equals("all") && q.isEmpty();
 
-        if (items.isEmpty()) {
+        if (items.isEmpty() && (!q.isEmpty() || !libCat.equals("all"))) {
+            TextView none = Ui.text(this, q.isEmpty() ? "Nothing here yet" : "Nothing called “" + libQuery + "”", 17, 0xB3FFFFFF, false);
+            none.setGravity(Gravity.CENTER);
+            none.setPadding(dp(16), dp(48), dp(16), 0);
+            grid.addView(none);
+        } else if (items.isEmpty()) {
             TextView empty = Ui.text(this, "No music yet.\n\nGrown-ups: copy folders of music into Music/Cards/ on the phone.",
                     17, 0xB3FFFFFF, false);
             empty.setGravity(Gravity.CENTER);
@@ -1943,12 +2010,21 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             name.setPadding(dp(4), dp(8), dp(4), 0);
             if (f.equals(folder)) name.setTextColor(Ui.tint(c, 0.35f));
             cell.addView(name, new LinearLayout.LayoutParams(tile, -2));
-            TextView info = Ui.text(this, tileInfo(f, fi != null ? fi.tracks : 0, fi != null && fi.live), 13, 0x8CFFFFFF, false);
+            final Track hit = fi != null ? trackHit.get(fi.name) : null;
+            TextView info = Ui.text(this, hit != null ? "♪ " + hit.name : tileInfo(f, fi != null ? fi.tracks : 0, fi != null && fi.live), 13,
+                    hit != null ? 0xE6FFFFFF : 0x8CFFFFFF, false);
+            info.setMaxLines(2);
+            info.setEllipsize(TextUtils.TruncateAt.END);
             info.setPadding(dp(4), dp(2), dp(4), 0);
             cell.addView(info, new LinearLayout.LayoutParams(tile, -2));
             cell.setOnClickListener(v -> {
                 closeBrowser();
-                if (f.equals(folder) && mp != null) {
+                if (hit != null) { // the search found a song in this folder: play that song
+                    savePosition();
+                    folderCard = null;
+                    openFolder(f, true);
+                    for (int k = 0; k < tracks.size(); k++) if (tracks.get(k).source.equals(hit.source)) { startTrack(k, 0, true, 0); break; }
+                } else if (f.equals(folder) && mp != null) {
                     if (preparing || !mp.isPlaying()) play();
                 } else {
                     savePosition();
@@ -1972,6 +2048,43 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         }
     }
 
+    static final String[][] LIB_CATS = {{"all", "All"}, {"music", "Music"}, {"podcast", "Podcasts"}, {"audiobook", "Audiobooks"}, {"radio", "Radio"}};
+
+    /** The category buttons: All, plus one for each kind the player actually has. */
+    void renderLibChips(java.util.Set<String> present) {
+        if (!libCat.equals("all") && !present.contains(libCat)) libCat = "all";
+        libChips.removeAllViews();
+        int kinds = 0;
+        for (String[] c : LIB_CATS) if (!c[0].equals("all") && present.contains(c[0])) kinds++;
+        libChips.setVisibility(kinds > 1 ? View.VISIBLE : View.GONE); // one kind only: nothing to choose between
+        for (String[] c : LIB_CATS) {
+            if (!c[0].equals("all") && !present.contains(c[0])) continue;
+            boolean on = c[0].equals(libCat);
+            TextView chip = Ui.text(this, c[1], 16, on ? Color.WHITE : 0xCCFFFFFF, on);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(20));
+            bg.setColor(on ? accent : 0x1AFFFFFF);
+            chip.setBackground(bg);
+            chip.setPadding(dp(18), dp(9), dp(18), dp(9));
+            final String key = c[0];
+            chip.setOnClickListener(v -> {
+                if (key.equals(libCat)) return;
+                libCat = key;
+                pop();
+                if (libSnapshot != null) renderBrowser(libSnapshot, browseBuild);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+            lp.rightMargin = dp(8);
+            libChips.addView(chip, lp);
+        }
+    }
+
+    void hideKeyboard() {
+        android.view.inputmethod.InputMethodManager im = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (im != null && libSearch != null) im.hideSoftInputFromWindow(libSearch.getWindowToken(), 0);
+        if (libSearch != null) libSearch.clearFocus();
+    }
+
     String tileInfo(String f, int n, boolean live) {
         if (f.equals(folder) && ready() && mp.isPlaying()) return "Now playing";
         if (Store.ALL.equals(f)) return "Shuffle it all";
@@ -1986,6 +2099,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void closeBrowser() {
         if (!browsing) return;
         browsing = false;
+        hideKeyboard();
+        if (libSearch != null && !libQuery.isEmpty()) { libQuery = ""; libSearch.setText(""); } // next time starts fresh
         browseBuild++;
         if (breathe.isPaused()) breathe.resume();
         browser.animate().alpha(0f).translationY(dp(40)).setDuration(180)

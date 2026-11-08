@@ -260,6 +260,14 @@
   .drop svg { width: 34px; height: 34px; fill: color-mix(in srgb, var(--accent) 60%, #fff); }
   .drop b { font-size: 16px; } .drop small { color: var(--muted); font-size: 13px; }
   .drop.has { border-style: solid; border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+  .lib-tools { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .lib-tools input { border-radius: 14px; padding: 10px 14px 10px 38px;
+    background: var(--panel2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%239a9aae' d='M15.5,14h-0.79l-0.28,-0.27A6.47,6.47 0 0,0 16,9.5 6.5,6.5 0 1,0 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z'/%3E%3C/svg%3E") no-repeat 12px center / 18px; }
+  .lib-tools .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .lib-tools .chips::-webkit-scrollbar { display: none; }
+  .lib-tools .chip { white-space: nowrap; }
+  .type-row { margin: 4px 0 14px; }
+  .type-row .label { margin-top: 0; }
   input[type=file].hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 </style>
 </head>
@@ -317,6 +325,10 @@
     <h2>Library</h2>
     <button class="btn small" id="addMusicBtn">＋ Music</button>
     <button class="btn ghost small" id="addRadioBtn">＋ Radio</button>
+  </div>
+  <div class="lib-tools" id="libTools" hidden>
+    <input type="text" id="libSearch" placeholder="Search folders" autocomplete="off">
+    <div class="chips" id="libCats"></div>
   </div>
   <button class="up-pill" id="upPill" hidden><span id="upPillText">Uploading…</span><progress id="upPillBar" max="1000" value="0"></progress></button>
   <div class="grid" id="grid"></div>
@@ -433,6 +445,7 @@
 <div class="overlay" id="sheetFolder"><div class="sheet">
   <div class="sheet-head"><h2 id="fdTitle"></h2><button class="btn ghost" data-close>Close</button></div>
   <p class="sub" id="fdSub"></p>
+  <div class="type-row" id="fdTypeRow" hidden><span class="label">Type</span><div class="chips" id="fdType"></div></div>
   <div class="actions" id="fdActions"></div>
 </div></div>
 
@@ -702,8 +715,14 @@
     const g = $('#grid'); g.textContent = '';
     const dl = $('#folderNames'); dl.textContent = '';
     if (!lib.folders.length) g.appendChild(el('div', 'hint', 'No music yet. Tap ＋ Music to add some.'));
-    const items = lib.folders.slice();
-    if (items.length > 1) items.push({ name: '@all', info: 'Shuffle it all', color: '#E0559A' });
+    const cats = new Set(lib.folders.map(f => f.category).filter(Boolean));
+    $('#libTools').hidden = lib.folders.length < 5 && cats.size < 2;
+    if (libCat !== 'all' && !cats.has(libCat)) libCat = 'all';
+    renderLibCats(cats);
+    const q = $('#libSearch').value.trim().toLowerCase();
+    const items = lib.folders.filter(f => (libCat === 'all' || f.category === libCat) && (!q || f.name.toLowerCase().includes(q)));
+    if (items.length > 1 && libCat === 'all' && !q) items.push({ name: '@all', info: 'Shuffle it all', color: '#E0559A' });
+    if (!items.length && lib.folders.length) g.appendChild(el('div', 'hint', q ? 'Nothing called “' + $('#libSearch').value.trim() + '”' : 'Nothing here yet'));
     items.forEach(f => {
       const t = el('div', 'tile'); t.dataset.folder = f.name;
       const a = el('div', 'art', f.name === '@all' ? '★' : f.name.charAt(0).toUpperCase());
@@ -730,7 +749,20 @@
     if (keep) sel.value = keep;
   }
 
-  let lastLibFolder;
+  let lastLibFolder, libCat = 'all';
+  const CATS = [['all', 'All'], ['music', 'Music'], ['podcast', 'Podcasts'], ['audiobook', 'Audiobooks'], ['radio', 'Radio']];
+  const CAT_ONE = { music: 'Music', podcast: 'Podcast', audiobook: 'Audiobook', radio: 'Radio' };
+  function renderLibCats(present) {
+    const box = $('#libCats'); box.textContent = '';
+    box.hidden = [...present].length < 2;
+    CATS.filter(([k]) => k === 'all' || present.has(k)).forEach(([k, label]) => {
+      const c = el('button', 'chip' + (k === libCat ? ' on' : ''), label);
+      c.onclick = () => { libCat = k; loadLibrary(); };
+      box.appendChild(c);
+    });
+  }
+  let libSearchT;
+  $('#libSearch').oninput = () => { clearTimeout(libSearchT); libSearchT = setTimeout(loadLibrary, 150); };
   function playFolder(name) {
     act('/api/play', { folder: name }).then(() => { toast('Playing ' + (name === '@all' ? 'everything' : name)); document.querySelector('nav button[data-tab=now]').click(); });
   }
@@ -752,6 +784,23 @@
   function folderMenu(f) {
     $('#fdTitle').textContent = f.name;
     $('#fdSub').textContent = f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '');
+    const tr = $('#fdTypeRow'), tb = $('#fdType'); tb.textContent = '';
+    tr.hidden = !f.category; // older players don't know about types
+    if (f.category) {
+      const over = f.category !== f.autoCategory ? f.category : null;
+      [['auto', 'Auto (' + (CAT_ONE[f.autoCategory] || f.autoCategory) + ')']].concat(Object.entries(CAT_ONE)).forEach(([k, label]) => {
+        if (k === 'radio' && !f.live && f.autoCategory !== 'radio' && f.category !== 'radio') return;
+        const on = k === 'auto' ? !over : over === k;
+        const c = el('button', 'chip' + (on ? ' on' : ''), label);
+        c.onclick = async () => {
+          const targets = sgTargets(); let done = 0;
+          for (const t of targets) { try { await tapi(t, '/api/folder/category', { folder: f.name, category: k }); done++; } catch (e) { /* that player doesn't have this folder */ } }
+          toast(f.name + ': ' + (k === 'auto' ? 'type chosen automatically' : CAT_ONE[k]) + (targets.length > 1 ? ' on ' + done + ' players' : ''));
+          closeSheet('sheetFolder'); loadLibrary();
+        };
+        tb.appendChild(c);
+      });
+    }
     const box = $('#fdActions'); box.textContent = '';
     const add = (cls, icon, text, fn) => { const b = el('button', 'btn ' + cls); b.innerHTML = ICON[icon]; b.appendChild(el('span', '', text)); b.onclick = () => { closeSheet('sheetFolder'); fn(); }; box.appendChild(b); };
     add('', 'play', 'Play', () => playFolder(f.name));
