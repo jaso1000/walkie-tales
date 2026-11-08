@@ -110,6 +110,13 @@ adb shell cmd package set-home-activity app.cardplayer/.MainActivity    # make i
 adb shell dpm set-device-owner app.cardplayer/.AdminReceiver            # full kiosk (needs no accounts on the phone)
 ```
 
+On **Android 10 and older** (for example a stock Galaxy S10) there's no all-files access; grant storage instead of the `appops` line:
+
+```bash
+adb shell pm grant app.cardplayer android.permission.READ_EXTERNAL_STORAGE
+adb shell pm grant app.cardplayer android.permission.WRITE_EXTERNAL_STORAGE
+```
+
 On LineageOS, new apps have no network access. Enable it in *App info → Wi-Fi data usage → Allow network access*, or the remote won't work.
 
 **Undo the kiosk:** *Grown-up settings → About → Release kiosk control*. Do this before uninstalling.
@@ -131,6 +138,12 @@ Handy for testing without a card: `adb shell am start -n app.cardplayer/.MainAct
   - `screencap` doesn't work, so read the screen with `uiautomator dump`.
   - Some users report random reboots on LOS 21; the fallback is the same developer's LineageOS 20.
 - **NFC:** the antenna is on the original Samsung battery (EB-B800BE with NFC). With a replacement battery the NFC chip works but never sees a card. Use a genuine NFC battery or an NFC antenna sticker.
+
+## Phone setup notes (stock Samsung, e.g. Galaxy S10)
+
+- No custom ROM needed: factory reset, skip every account (device owner needs none), turn on USB debugging, then install as above.
+- `tools/phone-tune.sh` disables about 130 Samsung, Google and preloaded apps (reversible with `--undo`).
+- One UI turns Wi-Fi **and** Bluetooth off with airplane mode. The script turns Wi-Fi back on; switch Bluetooth on by hand in *Android settings → Bluetooth* (adb can't). Both are remembered after that.
 
 ### Making another player: checklist
 
