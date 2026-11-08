@@ -167,12 +167,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             let on = key == cat
             let color = Art.color(hex)
             let card = UIControl()
-            card.backgroundColor = on ? color : color.withAlphaComponent(0.19) // a soft tint of its own colour
+            card.backgroundColor = on ? color : .clear
             card.layer.cornerRadius = 18
             card.layer.cornerCurve = .continuous
-            let p = UILabel(); p.text = pic; p.font = .systemFont(ofSize: 28); p.textAlignment = .center; p.alpha = on ? 1 : 0.92
+            let p = UILabel(); p.text = pic; p.font = .systemFont(ofSize: 28); p.textAlignment = .center; p.alpha = on ? 1 : 0.75
             let l = UILabel(); l.text = label; l.font = .systemFont(ofSize: 12, weight: on ? .bold : .medium)
-            l.textColor = on ? .white : UIColor(white: 1, alpha: 0.87); l.textAlignment = .center
+            l.textColor = on ? .white : UIColor(white: 1, alpha: 0.75); l.textAlignment = .center
             let s = UIStackView(arrangedSubviews: [p, l]); s.axis = .vertical; s.alignment = .center; s.spacing = 1
             s.isUserInteractionEnabled = false
             s.translatesAutoresizingMaskIntoConstraints = false

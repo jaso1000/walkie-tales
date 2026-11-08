@@ -2069,16 +2069,16 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setGravity(Gravity.CENTER);
-            GradientDrawable bg = on ? new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{color, Ui.shade(color, 0.6f)})
-                    : new GradientDrawable();
-            if (!on) bg.setColor((color & 0x00FFFFFF) | 0x30000000); // a soft tint of its own colour
-            bg.setCornerRadius(dp(18));
-            card.setBackground(bg);
+            if (on) {
+                GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{color, Ui.shade(color, 0.6f)});
+                bg.setCornerRadius(dp(18));
+                card.setBackground(bg);
+            }
             TextView pic = Ui.text(this, c[2], 28, Color.WHITE, false);
             pic.setGravity(Gravity.CENTER);
-            pic.setAlpha(on ? 1f : 0.92f);
+            pic.setAlpha(on ? 1f : 0.75f);
             card.addView(pic, new LinearLayout.LayoutParams(-2, -2));
-            TextView label = Ui.text(this, c[1], 12, on ? Color.WHITE : 0xDDFFFFFF, on);
+            TextView label = Ui.text(this, c[1], 12, on ? Color.WHITE : 0xBFFFFFFF, on);
             label.setGravity(Gravity.CENTER);
             label.setSingleLine(true);
             card.addView(label, new LinearLayout.LayoutParams(-2, -2));
