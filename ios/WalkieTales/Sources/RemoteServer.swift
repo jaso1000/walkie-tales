@@ -187,16 +187,27 @@ final class RemoteServer {
     }
 
     private func upload(_ c: NWConnection, req: Request, len: Int, first: Data) {
-        guard let folder = Store.safeName(req.query["folder"]), let name = Store.safeName(req.query["name"]) else {
+        guard var folder = Store.safeName(req.query["folder"]), var name = Store.safeName(req.query["name"]) else {
             sendJson(c, 400, ["error": "Bad folder or file name"]); return
         }
         guard len > 0 else { sendJson(c, 411, ["error": "Content-Length required"]); return }
         guard len <= RemoteServer.maxUpload else { sendJson(c, 413, ["error": "File too large"]); return }
-        let d = Store.dir(folder)
-        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
-        let tmp = d.appendingPathComponent("." + name + ".part")
-        FileManager.default.createFile(atPath: tmp.path, contents: nil)
-        guard let fh = try? FileHandle(forWritingTo: tmp) else { sendJson(c, 500, ["error": "Can't write"]); return }
+        // The iPhone's storage refuses characters newer than its iOS knows (e.g. 🪭 on iOS 15),
+        // so if saving fails, try again with emoji taken out of the names.
+        var d = Store.dir(folder), tmp = d
+        func openPart() -> FileHandle? {
+            d = Store.dir(folder)
+            try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+            tmp = d.appendingPathComponent("." + name + ".part")
+            FileManager.default.createFile(atPath: tmp.path, contents: nil)
+            return try? FileHandle(forWritingTo: tmp)
+        }
+        var handle = openPart()
+        if handle == nil, let f2 = Store.safeName(Store.plainName(folder)), let n2 = Store.safeName(Store.plainName(name)),
+           f2 != folder || n2 != name {
+            folder = f2; name = n2; handle = openPart()
+        }
+        guard let fh = handle else { sendJson(c, 500, ["error": "Can't write"]); return }
         fh.write(first)
         var got = first.count
         func finish() {

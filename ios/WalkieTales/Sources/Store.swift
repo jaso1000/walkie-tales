@@ -97,6 +97,12 @@ enum Store {
             .sorted { natLess($0, $1) }
     }
 
+    /// The name without emoji and other pictographs, with spaces tidied up.
+    static func plainName(_ s: String) -> String {
+        let kept = s.unicodeScalars.filter { !($0.properties.isEmoji && $0.value > 0xFF) && $0.value != 0xFE0F && $0.value != 0x200D }
+        return String(String.UnicodeScalarView(kept)).split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+    }
+
     static func dir(_ folder: String) -> URL { root.appendingPathComponent(folder, isDirectory: true) }
 
     /// Audio files in a folder (including subfolders), naturally sorted by path.

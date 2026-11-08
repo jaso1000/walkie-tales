@@ -83,6 +83,10 @@ api -X POST -d '{"show_volume":true,"browse":true}' $B/api/settings > /dev/null
 say -o /tmp/u.aiff "This song was uploaded from the remote." && afconvert /tmp/u.aiff /tmp/u.m4a -f m4af -d aac
 log "--- upload: $(curl -s -m 20 -X PUT -H "X-Pin: $PIN" --data-binary @/tmp/u.m4a "$B/api/upload?folder=Uploaded&name=Remote%20Song.m4a")"
 log "--- library after upload: $(api $B/api/library | python3 -c 'import json,sys; print([(f["name"],f["tracks"]) for f in json.load(sys.stdin)["folders"]])')"
+log "--- upload with a new emoji: $(curl -s -m 20 -X PUT -H "X-Pin: $PIN" --data-binary @/tmp/u.m4a "$B/api/upload?folder=Delete%20Me&name=%F0%9F%AA%AD%20The%20Fan.m4a")"
+log "--- delete folder: $(api -X POST -d '{"folder":"Delete Me"}' $B/api/folder/delete | head -c 80)"
+log "--- library after delete: $(api $B/api/library | python3 -c 'import json,sys; n=[f["name"] for f in json.load(sys.stdin)["folders"]]; print("Delete Me gone" if "Delete Me" not in n else "STILL THERE", n)')"
+log "--- delete missing folder: $(api -X POST -d '{"folder":"Nope"}' $B/api/folder/delete)"
 log "--- cover endpoint: $(curl -s -m 10 -o /tmp/cv.jpg -w '%{http_code} %{content_type}' -H "X-Pin: $PIN" "$B/api/cover?folder=Dinosaur%20Songs")"
 log "--- headphones fields: $(api $B/api/status | python3 -c 'import json,sys; s=json.load(sys.stdin); print("bluetooth",s.get("bluetooth"),"headphones",s.get("headphones"),"finding",s.get("finding"))')"
 log "--- ring: $(api -X POST -d '{"on":true}' $B/api/find | python3 -c 'import json,sys; s=json.load(sys.stdin); print("finding",s["finding"],"msg",s["message"])')"

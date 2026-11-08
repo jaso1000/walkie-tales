@@ -54,6 +54,13 @@ extension PlayerViewController {
             guard let f = Store.safeName(b["folder"] as? String) else { throw RemoteError("Bad folder") }
             ArtFinder.reject(f)
             if p.folder == f { applyTheme(); lastIndex = -1; updateUi() }
+        case "/api/folder/delete": // remote → Library → "Delete": remove a folder and everything in it
+            let f = b["folder"] as? String ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
+            if p.folder == f { p.stop() }
+            do { try FileManager.default.removeItem(at: Store.dir(f)) } catch { throw RemoteError("Couldn't delete \(f)") }
+            flash("Deleted “\(f)”", 3)
+            libraryChanged()
         case "/api/station":
             let name = String((b["name"] as? String ?? "").trimmingCharacters(in: .whitespaces).prefix(60))
             let url = (b["url"] as? String ?? "").trimmingCharacters(in: .whitespaces)
