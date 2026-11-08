@@ -19,7 +19,9 @@ final class Player: NSObject {
 
     /// A song was renamed (to != nil) or deleted from the remote: keep the play queue pointing at real files.
     func fileChanged(from: URL, to: URL?) {
-        guard let i = tracks.firstIndex(where: { $0.source.standardizedFileURL == from.standardizedFileURL }) else { return }
+        // iOS can name the same file /var/… or /private/var/…, so compare the resolved paths.
+        let key = { (u: URL) in u.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL.path + "/" + u.lastPathComponent }
+        guard let i = tracks.firstIndex(where: { !$0.live && key($0.source) == key(from) }) else { return }
         if let to = to { tracks[i] = Track(source: to, name: Store.cleanName(to), live: false) }
         else if i != index { tracks.remove(at: i); if i < index { index -= 1 } } // a playing track finishes first
     }

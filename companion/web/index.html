@@ -20,6 +20,7 @@
     --radius: 18px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); min-height: 100vh; }
@@ -181,9 +182,9 @@
   #who .caret { display: none; width: 22px; height: 22px; fill: var(--muted); flex: none; }
   #who.multi { cursor: pointer; }
   #who.multi .caret { display: block; }
-  #players, #songs { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 11; align-items: flex-end; justify-content: center; }
-  #players.on, #songs.on { display: flex; }
-  #players .sheet, #songs .sheet { width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; background: var(--panel); border-radius: 24px 24px 0 0;
+  .overlay, #players, #songs { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 11; align-items: flex-end; justify-content: center; }
+  .overlay.on, #players.on, #songs.on { display: flex; }
+  .overlay .sheet, #players .sheet, #songs .sheet { width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; background: var(--panel); border-radius: 24px 24px 0 0;
     padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); animation: up .22s ease; }
   @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
   .pl { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; cursor: pointer; }
@@ -204,6 +205,62 @@
   .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
     background: #2b2b3a; padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .25s; pointer-events: none; z-index: 20; max-width: 90vw; }
   .toast.on { opacity: 1; }
+
+  /* ---- redesign: player card, quick actions, sheets, library tiles, add music ---- */
+  .np .vol { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .np .vol .rb { width: 44px; height: 44px; background: rgba(255,255,255,.10); }
+  .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .qa { background: var(--panel); border: 0; border-radius: 16px; padding: 12px 4px 10px; display: flex; flex-direction: column;
+    align-items: center; gap: 2px; cursor: pointer; min-width: 0; transition: background .15s, transform .1s; }
+  .qa:active { transform: scale(.96); }
+  .qa .ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 4px;
+    background: color-mix(in srgb, var(--accent) 20%, transparent); }
+  .qa .ic svg { width: 22px; height: 22px; fill: color-mix(in srgb, var(--accent) 55%, #fff); }
+  .qa b { font-size: 13px; font-weight: 700; }
+  .qa small { font-size: 11.5px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
+  .qa.on { background: color-mix(in srgb, var(--accent) 26%, var(--panel)); }
+  .qa.on small { color: var(--text); }
+  .qa.alarm { background: color-mix(in srgb, var(--bad) 30%, var(--panel)); animation: ring 1s ease-in-out infinite; }
+  .qa.alarm .ic { background: var(--bad); } .qa.alarm .ic svg { fill: #fff; }
+  @keyframes ring { 50% { transform: scale(1.04); } }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .card-head h2 { margin: 0; }
+  .card-head small { color: var(--muted); font-size: 13px; }
+  .sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .sheet-head h2 { margin: 0; flex: 1; font-size: 20px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sheet-head .btn { flex: none; padding: 8px 14px; }
+  .sheet .sub { color: var(--muted); font-size: 14px; margin: -6px 0 12px; }
+  .label { display: block; color: var(--muted); font-size: 13px; margin: 14px 0 6px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .presets .chip { font-size: 14px; padding: 7px 12px; }
+  .actions { display: flex; flex-direction: column; gap: 8px; }
+  .actions .btn { width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+  .actions .btn svg { width: 22px; height: 22px; fill: currentColor; flex: none; }
+
+  .lib-head { display: flex; align-items: center; gap: 8px; margin: 2px 0 14px; }
+  .lib-head h2 { flex: 1; margin: 0; font-size: 24px; }
+  .btn.small { padding: 9px 14px; font-size: 15px; flex: none; }
+  .lib-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 18px; color: var(--muted); font-size: 13px; }
+  .linkbtn { background: none; border: 0; color: color-mix(in srgb, var(--accent) 60%, #fff); font-weight: 600; cursor: pointer; padding: 6px 0; font-size: 14px; }
+  .tile { position: relative; }
+  .tile b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+  .tile .more { position: absolute; top: 8px; right: 8px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 0;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(6px); display: grid; place-items: center; cursor: pointer; }
+  .tile .more svg { width: 20px; height: 20px; fill: #fff; }
+  .tile.now .art { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .tile .badge-now { position: absolute; left: 8px; bottom: 8px; z-index: 2; background: var(--accent); color: #fff; font-size: 12px;
+    font-weight: 700; padding: 3px 9px; border-radius: 99px; }
+  .up-pill { width: 100%; display: flex; align-items: center; gap: 10px; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; cursor: pointer; text-align: left; }
+  .up-pill span { flex: 1; font-size: 14px; }
+  .up-pill progress { width: 90px; flex: none; }
+  .drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+    border: 2px dashed var(--line); border-radius: 16px; padding: 22px 14px; cursor: pointer; background: var(--panel2); transition: .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel2)); }
+  .drop svg { width: 34px; height: 34px; fill: color-mix(in srgb, var(--accent) 60%, #fff); }
+  .drop b { font-size: 16px; } .drop small { color: var(--muted); font-size: 13px; }
+  .drop.has { border-style: solid; border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+  input[type=file].hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -228,54 +285,23 @@
       <button class="rb big" id="play" title="Play / pause"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8,5v14l11,-7z"/></svg></button>
       <button class="rb" id="next" title="Next"><svg viewBox="0 0 24 24"><path d="M6,18l8.5,-6L6,6v12zM16,6v12h2V6h-2z"/></svg></button>
     </div>
-    <div class="msg" id="msg"></div>
-  </div>
-
-  <div class="card">
-    <h2>Volume</h2>
     <div class="vol">
       <button class="rb" id="volDown" title="Quieter"><svg viewBox="0 0 24 24"><path d="M18.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM5,9v6h4l5,5V4L9,9H5z"/></svg></button>
       <div class="dots" id="dots"></div>
       <button class="rb" id="volUp" title="Louder"><svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg></button>
     </div>
-    <div class="set" style="border-top:1px solid var(--line);margin-top:12px;padding-bottom:0">
-      <div class="grow">Maximum volume
-        <input type="range" id="np_max" min="10" max="100" step="5"></div>
-      <span class="val" id="np_max_v"></span>
-    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="quick">
+    <button class="qa" id="qaSleep" title="Sleep timer"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12.3,22c-5.5,0 -10,-4.5 -10,-10 0,-4.7 3.2,-8.6 7.7,-9.7a8,8 0 0,0 10,10C19,17.3 16.9,22 12.3,22z"/></svg></span><b>Sleep</b><small id="qaSleepTxt">Off</small></button>
+    <button class="qa" id="screenBtn" title="Turn the player's screen off or on"><span class="ic"><svg viewBox="0 0 24 24"><path d="M17,1H7C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3c0,-1.1 -0.9,-2 -2,-2zM17,19H7V5h10v14z"/></svg></span><b>Screen</b><small id="qaScreenTxt">Turn off</small></button>
+    <button class="qa" id="findBtn" title="Ring loudly for 30 seconds, even over the volume limits. Tap its screen to stop it."><span class="ic"><svg viewBox="0 0 24 24"><path d="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.9,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32V4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z"/></svg></span><b>Ring</b><small id="qaFindTxt">Find it</small></button>
+    <button class="qa" id="qaMsg" title="Show a message on the player's screen"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20,2H4C2.9,2 2,2.9 2,4v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z"/></svg></span><b>Message</b><small>To screen</small></button>
   </div>
 
   <div class="card">
-    <h2>Screen</h2>
-    <div class="row">
-      <button class="btn" id="screenBtn">Turn the screen off</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Find this player</h2>
-    <div class="row">
-      <button class="btn" id="findBtn">Ring the player</button>
-    </div>
-    <div class="hint" style="text-align:left">Rings loudly for 30 seconds, even over the volume limits. Tap its screen to stop it.</div>
-  </div>
-
-  <div class="card">
-    <h2>Sleep timer</h2>
-    <div class="chips" id="sleepChips"></div>
-    <div class="hint" id="sleepHint" style="text-align:left"></div>
-  </div>
-
-  <div class="card">
-    <h2>Send a message to the screen</h2>
-    <div class="row">
-      <input type="text" id="msgText" maxlength="120" placeholder="Dinner's ready! 🍝">
-      <button class="btn" id="msgSend" style="flex:none">Send</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Track list</h2>
+    <div class="card-head"><h2>Up next</h2><small id="tlCount"></small></div>
     <div class="list" id="trackList"><div><span class="grow"><small>Nothing loaded</small></span></div></div>
     <button class="btn ghost" id="tlMore" style="width:100%;margin-top:10px" hidden></button>
     <div class="row" style="margin-top:12px">
@@ -287,47 +313,15 @@
 
 <!-- ================= LIBRARY ================= -->
 <section id="tab-lib"><div class="wrap">
-  <div class="card">
+  <div class="lib-head">
     <h2>Library</h2>
-    <div class="grid" id="grid"></div>
-    <div class="row" style="margin-top:14px">
-      <button class="btn ghost" id="findCovers">Find missing covers</button>
-    </div>
+    <button class="btn small" id="addMusicBtn">＋ Music</button>
+    <button class="btn ghost small" id="addRadioBtn">＋ Radio</button>
   </div>
-  <div class="card">
-    <h2>Add a radio station</h2>
-    <div class="row" style="margin-bottom:10px">
-      <input type="text" id="stName" maxlength="60" placeholder="Station name (e.g. Kids Radio)">
-    </div>
-    <div class="row" style="margin-bottom:10px">
-      <input type="text" id="stUrl" inputmode="url" placeholder="Stream address: https://… (.mp3, .aac, .pls or .m3u link)">
-    </div>
-    <div class="row">
-      <input type="text" id="stFolder" list="folderNames" placeholder="Folder (optional; leave blank for its own)">
-      <button class="btn" id="stGo" style="flex:none">Add</button>
-    </div>
-    <div class="targets" hidden style="margin-top:12px"><small style="color:var(--muted)">Add to</small><div class="chips target-list" style="margin-top:6px"></div></div>
-  </div>
-  <div class="card">
-    <h2>Add music</h2>
-    <div class="row" style="margin-bottom:10px">
-      <input type="text" id="upFolder" list="folderNames" placeholder="Folder name (one folder per card)">
-      <datalist id="folderNames"></datalist>
-    </div>
-    <div class="row">
-      <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
-    </div>
-    <label class="check"><input type="checkbox" id="upTidy"> Tidy song names (e.g. “01 - So Yesterday.mp3”)</label>
-    <div class="up-preview" id="upPreview" hidden></div>
-    <div class="targets" hidden style="margin-top:12px"><small style="color:var(--muted)">Upload to</small><div class="chips target-list" style="margin-top:6px"></div></div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn" id="upGo">Upload</button>
-      <button class="btn ghost" id="upRetry" hidden style="flex:none">Retry failed</button>
-    </div>
-    <div class="hint" style="text-align:left;margin-top:6px">Songs a player already has are skipped, so you can upload a whole album again to fill in gaps.</div>
-    <div class="hint" style="text-align:left"><span id="free"></span></div>
-    <div class="up-list" id="upList"></div>
-  </div>
+  <button class="up-pill" id="upPill" hidden><span id="upPillText">Uploading…</span><progress id="upPillBar" max="1000" value="0"></progress></button>
+  <div class="grid" id="grid"></div>
+  <div class="lib-foot"><span id="free"></span><button class="linkbtn" id="findCovers">Find missing covers</button></div>
+  <datalist id="folderNames"></datalist>
 </div></section>
 
 <!-- ================= CARDS ================= -->
@@ -418,6 +412,60 @@
     <div class="hint" style="text-align:left">The address is on the player in <b>Grown-up settings → Remote control</b>.</div>
     <div class="row" style="margin-top:12px"><button class="btn ghost" id="plScan">Find players on the Wi-Fi</button></div>
   </div>
+</div></div>
+
+<div class="overlay" id="sheetSleep"><div class="sheet">
+  <div class="sheet-head"><h2>Sleep timer</h2><button class="btn ghost" data-close>Done</button></div>
+  <p class="sub">Music fades out and stops after:</p>
+  <div class="chips" id="sleepChips"></div>
+  <div class="hint" id="sleepHint" style="text-align:left"></div>
+</div></div>
+
+<div class="overlay" id="sheetMsg"><div class="sheet">
+  <div class="sheet-head"><h2>Message to the screen</h2><button class="btn ghost" data-close>Close</button></div>
+  <div class="row">
+    <input type="text" id="msgText" maxlength="120" placeholder="Type a message…">
+    <button class="btn" id="msgSend" style="flex:none">Send</button>
+  </div>
+  <div class="presets" id="msgPresets"></div>
+</div></div>
+
+<div class="overlay" id="sheetFolder"><div class="sheet">
+  <div class="sheet-head"><h2 id="fdTitle"></h2><button class="btn ghost" data-close>Close</button></div>
+  <p class="sub" id="fdSub"></p>
+  <div class="actions" id="fdActions"></div>
+</div></div>
+
+<div class="overlay" id="sheetMusic"><div class="sheet">
+  <div class="sheet-head"><h2>Add music</h2><button class="btn ghost" data-close>Close</button></div>
+  <label class="drop" id="upDrop" for="upFiles">
+    <svg viewBox="0 0 24 24"><path d="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z"/></svg>
+    <b id="upDropTitle">Choose songs</b><small id="upDropSub">MP3, M4A, FLAC… and a cover picture if you have one</small>
+  </label>
+  <input type="file" class="hidden-file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
+  <span class="label">Folder (one per album or card)</span>
+  <input type="text" id="upFolder" list="folderNames" placeholder="e.g. Hilary Duff - Metamorphosis">
+  <label class="check"><input type="checkbox" id="upTidy"> Tidy song names (“01 - So Yesterday.mp3”)</label>
+  <div class="up-preview" id="upPreview" hidden></div>
+  <div class="targets" hidden><span class="label">Send to</span><div class="chips target-list"></div></div>
+  <div class="row" style="margin-top:16px">
+    <button class="btn" id="upGo">Upload</button>
+    <button class="btn ghost" id="upRetry" hidden style="flex:none">Retry failed</button>
+  </div>
+  <div class="hint" style="text-align:left;margin-top:8px">Songs a player already has are skipped, so uploading a whole album again just fills in the gaps.</div>
+  <div class="up-list" id="upList"></div>
+</div></div>
+
+<div class="overlay" id="sheetRadio"><div class="sheet">
+  <div class="sheet-head"><h2>Add a radio station</h2><button class="btn ghost" data-close>Close</button></div>
+  <span class="label" style="margin-top:0">Station name</span>
+  <input type="text" id="stName" maxlength="60" placeholder="e.g. ABC Kids listen">
+  <span class="label">Stream address</span>
+  <input type="text" id="stUrl" inputmode="url" placeholder="https://… (.mp3, .aac, .m3u8, .pls or .m3u)">
+  <span class="label">Folder (optional)</span>
+  <input type="text" id="stFolder" list="folderNames" placeholder="Leave blank for its own folder">
+  <div class="targets" hidden><span class="label">Add to</span><div class="chips target-list"></div></div>
+  <div class="row" style="margin-top:16px"><button class="btn" id="stGo">Add station</button></div>
 </div></div>
 
 <div id="songs"><div class="sheet">
@@ -540,13 +588,16 @@
     const chips = $('#sleepChips'); chips.textContent = '';
     [0, 15, 30, 45, 60, 90].forEach(m => {
       const c = el('button', 'chip' + ((m === 0 && !s.sleepMinutesLeft) ? ' on' : ''), m ? m + ' min' : 'Off');
-      c.onclick = () => act('/api/sleep', { minutes: m }); chips.appendChild(c);
+      c.onclick = () => act('/api/sleep', { minutes: m }).then(() => { toast(m ? 'Music stops in ' + m + ' min' : 'Sleep timer off'); closeSheet('sheetSleep'); }); chips.appendChild(c);
     });
-    $('#screenBtn').textContent = s.screenOff ? 'Turn the screen back on' : 'Turn the screen off';
-    $('#screenBtn').classList.toggle('ghost', !!s.screenOff);
-    $('#findBtn').textContent = s.finding ? 'Stop ringing' : 'Ring the player';
-    $('#findBtn').classList.toggle('danger', !!s.finding);
+    $('#qaScreenTxt').textContent = s.screenOff ? 'Off · turn on' : 'Turn off';
+    $('#screenBtn').classList.toggle('on', !!s.screenOff);
+    $('#qaFindTxt').textContent = s.finding ? 'Tap to stop' : 'Find it';
+    $('#findBtn').classList.toggle('alarm', !!s.finding);
+    $('#qaSleepTxt').textContent = s.sleepMinutesLeft ? s.sleepMinutesLeft + ' min left' : 'Off';
+    $('#qaSleep').classList.toggle('on', !!s.sleepMinutesLeft);
     $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
+    if (lib && lastLibFolder !== s.folder) { lastLibFolder = s.folder; markNowTile(); }
     // track list
     renderTracks(s);
     // linking banner
@@ -572,6 +623,7 @@
       r.appendChild(g); r.style.cursor = 'pointer'; r.onclick = () => act('/api/track', { index: i }); tl.appendChild(r);
     }
     more.hidden = !big;
+    $('#tlCount').textContent = list.length ? (s.trackIndex + 1) + ' of ' + list.length : '';
     more.textContent = tlOpen ? 'Show fewer' : 'Show all ' + list.length + ' tracks';
   }
   $('#tlMore').onclick = () => {
@@ -586,14 +638,10 @@
   }
   function showCap() {
     if (!settings) return;
-    $('#np_max').value = settings.max_volume; $('#np_max_v').textContent = settings.max_volume + '%';
+
     const sm = document.getElementById('s_max_volume'); if (sm) { sm.value = settings.max_volume; $('#v_max_volume').textContent = settings.max_volume + '%'; }
   }
-  $('#np_max').oninput = () => { $('#np_max_v').textContent = $('#np_max').value + '%'; };
-  $('#np_max').onchange = () => {
-    const v = +$('#np_max').value;
-    api('/api/settings', { max_volume: v }).then(r => { settings = r.settings; showCap(); toast('Maximum volume ' + v + '%'); poll(); }).catch(err);
-  };
+
 
   function tickProgress() {
     if (!st) return;
@@ -623,7 +671,20 @@
   $('#stop').onclick = () => act('/api/stop');
   $('#findBtn').onclick = () => act('/api/find', { on: !(st && st.finding) }).then(r => toast(r && r.finding ? 'Ringing…' : 'Stopped'));
   $('#screenBtn').onclick = () => act('/api/screen', { off: !(st && st.screenOff) }).then(r => toast(r && r.screenOff ? 'Screen off' : 'Screen on'));
-  $('#msgSend').onclick = () => { const t = $('#msgText').value.trim(); if (!t) return; act('/api/message', { text: t }).then(() => { $('#msgText').value = ''; toast('Sent'); }); };
+  $('#msgSend').onclick = () => { const t = $('#msgText').value.trim(); if (!t) return; act('/api/message', { text: t }).then(() => { $('#msgText').value = ''; toast('Sent'); closeSheet('sheetMsg'); }); };
+  ['Dinner’s ready! 🍝', 'Bath time 🛁', 'Bedtime soon 🌙', 'Time to tidy up 🧸', 'Shoes on, we’re going out 👟', 'I love you ❤️'].forEach(t => {
+    const c = el('button', 'chip', t); c.onclick = () => { $('#msgText').value = t; $('#msgSend').click(); }; $('#msgPresets').appendChild(c);
+  });
+  $('#qaSleep').onclick = () => openSheet('sheetSleep');
+  $('#qaMsg').onclick = () => { openSheet('sheetMsg'); setTimeout(() => $('#msgText').focus(), 250); };
+
+  // ---------------------------------------------------------------- sheets (pop-ups from the bottom)
+  function openSheet(id) { $('#' + id).classList.add('on'); }
+  function closeSheet(id) { $('#' + id).classList.remove('on'); }
+  document.querySelectorAll('.overlay').forEach(o => {
+    o.addEventListener('click', (e) => { if (e.target === o || e.target.closest('[data-close]')) o.classList.remove('on'); });
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.overlay.on').forEach(o => o.classList.remove('on')); });
   $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };
 
   async function poll() {
@@ -640,35 +701,26 @@
     try { lib = await api('/api/library'); } catch (e) { return err(e); }
     const g = $('#grid'); g.textContent = '';
     const dl = $('#folderNames'); dl.textContent = '';
-    if (!lib.folders.length) g.appendChild(el('div', 'hint', 'No music yet — add some below.'));
+    if (!lib.folders.length) g.appendChild(el('div', 'hint', 'No music yet. Tap ＋ Music to add some.'));
     const items = lib.folders.slice();
     if (items.length > 1) items.push({ name: '@all', info: 'Shuffle it all', color: '#E0559A' });
     items.forEach(f => {
-      const t = el('div', 'tile'); const a = el('div', 'art', f.name === '@all' ? '★' : f.name.charAt(0).toUpperCase());
+      const t = el('div', 'tile'); t.dataset.folder = f.name;
+      const a = el('div', 'art', f.name === '@all' ? '★' : f.name.charAt(0).toUpperCase());
       a.style.background = 'linear-gradient(135deg, ' + f.color + ', color-mix(in srgb, ' + f.color + ' 45%, #000))';
       if (f.name !== '@all') { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.onerror = () => img.remove(); img.src = coverUrl(f.name); a.appendChild(img); }
       t.appendChild(a); t.appendChild(el('b', '', f.name === '@all' ? 'Everything' : f.name));
       t.appendChild(el('small', '', f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '')));
-      if (f.autoCover) {
-        const w = el('small', '', 'Wrong picture?'); w.style.cssText = 'display:block;color:var(--accent);text-decoration:underline;margin-top:2px';
-        w.onclick = (e) => { e.stopPropagation(); if (confirm('Remove the picture found online for “' + f.name + '”? It won’t look again for this folder.'))
-          api('/api/covers/remove', { folder: f.name }).then(() => { toast('Picture removed'); loadLibrary(); }).catch(err); };
-        t.appendChild(w);
-      }
       if (f.name !== '@all') {
-        const links = el('div', 'links');
-        if (!f.live) { const sg = el('small', '', 'Songs'); sg.onclick = (e) => { e.stopPropagation(); openSongs(f.name); }; links.appendChild(sg); }
-        const d = el('small', 'del', 'Delete');
-        d.onclick = (e) => { e.stopPropagation();
-          const what = f.live ? 'the radio station' : f.tracks + (f.tracks === 1 ? ' track' : ' tracks');
-          if (confirm('Delete “' + f.name + '” (' + what + ') from ' + (cur ? cur.name : 'this player') + '? This can’t be undone.'))
-            api('/api/folder/delete', { folder: f.name }).then(() => { toast('Deleted ' + f.name); loadLibrary(); }).catch(err); };
-        links.appendChild(d); t.appendChild(links);
+        const m = el('button', 'more'); m.title = 'More'; m.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6,10a2,2 0 1,0 0,4a2,2 0 1,0 0,-4zM12,10a2,2 0 1,0 0,4a2,2 0 1,0 0,-4zM18,10a2,2 0 1,0 0,4a2,2 0 1,0 0,-4z"/></svg>';
+        m.onclick = (e) => { e.stopPropagation(); folderMenu(f); };
+        t.appendChild(m);
       }
-      t.onclick = () => act('/api/play', { folder: f.name }).then(() => { toast('Playing ' + (f.name === '@all' ? 'everything' : f.name)); document.querySelector('nav button[data-tab=now]').click(); });
+      t.onclick = () => playFolder(f.name);
       g.appendChild(t);
       if (f.name !== '@all') { const o = el('option'); o.value = f.name; dl.appendChild(o); }
     });
+    markNowTile();
     renderUpTargets();
     $('#free').textContent = lib.freeBytes ? (lib.freeBytes / 1e9).toFixed(1) + ' GB free on the player' : '';
     // link targets
@@ -677,6 +729,46 @@
     lib.actions.forEach(a => { const o = el('option', '', '⚙️ ' + a.label); o.value = a.target; sel.appendChild(o); });
     if (keep) sel.value = keep;
   }
+
+  let lastLibFolder;
+  function playFolder(name) {
+    act('/api/play', { folder: name }).then(() => { toast('Playing ' + (name === '@all' ? 'everything' : name)); document.querySelector('nav button[data-tab=now]').click(); });
+  }
+  function markNowTile() {
+    document.querySelectorAll('#grid .tile').forEach(t => {
+      const now = !!(st && st.folder && t.dataset.folder === st.folder);
+      t.classList.toggle('now', now);
+      const b = t.querySelector('.badge-now');
+      if (now && !b) { const n = el('span', 'badge-now', 'Playing'); t.querySelector('.art').appendChild(n); }
+      if (!now && b) b.remove();
+    });
+  }
+  const ICON = {
+    play: '<svg viewBox="0 0 24 24"><path d="M8,5v14l11,-7z"/></svg>',
+    songs: '<svg viewBox="0 0 24 24"><path d="M3,13h2v-2H3v2zM3,17h2v-2H3v2zM3,9h2V7H3v2zM7,13h14v-2H7v2zM7,17h14v-2H7v2zM7,7v2h14V7H7z"/></svg>',
+    pic: '<svg viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>',
+    del: '<svg viewBox="0 0 24 24"><path d="M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"/></svg>',
+  };
+  function folderMenu(f) {
+    $('#fdTitle').textContent = f.name;
+    $('#fdSub').textContent = f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '');
+    const box = $('#fdActions'); box.textContent = '';
+    const add = (cls, icon, text, fn) => { const b = el('button', 'btn ' + cls); b.innerHTML = ICON[icon]; b.appendChild(el('span', '', text)); b.onclick = () => { closeSheet('sheetFolder'); fn(); }; box.appendChild(b); };
+    add('', 'play', 'Play', () => playFolder(f.name));
+    if (!f.live) add('ghost', 'songs', 'Songs: rename, tidy, check players', () => openSongs(f.name));
+    if (f.autoCover) add('ghost', 'pic', 'Wrong picture? Remove it', () => {
+      if (confirm('Remove the picture found online for “' + f.name + '”? It won’t look again for this folder.'))
+        api('/api/covers/remove', { folder: f.name }).then(() => { toast('Picture removed'); loadLibrary(); }).catch(err);
+    });
+    add('danger', 'del', 'Delete folder', () => {
+      const what = f.live ? 'the radio station' : f.tracks + (f.tracks === 1 ? ' track' : ' tracks');
+      if (confirm('Delete “' + f.name + '” (' + what + ') from ' + (cur ? cur.name : 'this player') + '? This can’t be undone.'))
+        api('/api/folder/delete', { folder: f.name }).then(() => { toast('Deleted ' + f.name); loadLibrary(); }).catch(err);
+    });
+    openSheet('sheetFolder');
+  }
+  $('#addMusicBtn').onclick = () => openSheet('sheetMusic');
+  $('#addRadioBtn').onclick = () => openSheet('sheetRadio');
 
   $('#findCovers').onclick = () => {
     api('/api/covers/find', { force: true }).then(() => { toast('Looking for covers…'); setTimeout(loadLibrary, 6000); setTimeout(loadLibrary, 15000); }).catch(err);
@@ -700,7 +792,7 @@
         else toast('Added ' + name + (targets.length > 1 ? ' to ' + targets.length + ' players' : ''));
         if (bad.length < res.length) { $('#stName').value = ''; $('#stUrl').value = ''; $('#stFolder').value = ''; }
         loadLibrary();
-      }).finally(() => { $('#stGo').disabled = false; });
+      }).finally(() => { $('#stGo').disabled = false; if (!$('#stName').value) closeSheet('sheetRadio'); });
   };
 
   // Several players: pick which ones get the upload (remembered on this device). A player is only offered once
@@ -770,7 +862,7 @@
   const thisPlayer = () => ({ id: cur ? cur.id : null, name: cur ? label(cur) : 'This player', base, pin });
 
   // ---------------------------------------------------------------- uploads
-  // Every ticked player at once, skipping songs a player already has, retrying each song up to 3 times.
+  // Every ticked player at once, skipping songs a player already has, retrying a failed song 3 times before giving up.
   let upBusy = false, upLast = null;
   $('#upTidy').checked = store.get('cp_up_tidy') !== '0';
   function upNames(files) { return files.map(f => ({ file: f, name: $('#upTidy').checked ? tidyName(f.name) : f.name })); }
@@ -779,10 +871,50 @@
     const items = upNames([...$('#upFiles').files]).filter(i => i.name !== i.file.name);
     box.hidden = !items.length;
     if (!items.length) return;
-    box.appendChild(el('div', '', items.length + (items.length === 1 ? ' name' : ' names') + ' will be tidied:'));
-    items.forEach(i => { const d = el('div'); d.appendChild(el('span', '', i.file.name + ' → ')); d.appendChild(el('b', '', i.name)); box.appendChild(d); });
+    box.appendChild(el('div', '', 'Kids will see:'));
+    items.forEach(i => {
+      const m = i.name.replace(/\.[^.]+$/, '').match(/^(\d+) - (.+)$/);
+      const d = el('div'); d.title = i.file.name + ' → ' + i.name;
+      if (m) { d.appendChild(el('span', '', m[1] + '  ')); d.appendChild(el('b', '', m[2])); } else d.appendChild(el('b', '', i.name));
+      box.appendChild(d);
+    });
   }
-  $('#upFiles').onchange = showUpPreview;
+  // The folder name, guessed from the songs: "Hilary Duff - Metamorphosis - 01 - So Yesterday.mp3" -> "Hilary Duff - Metamorphosis".
+  function guessFolder(files) {
+    const heads = files.filter(f => AUDIO_RE.test(f.name)).map(f => {
+      const parts = f.name.replace(/\.[^.]+$/, '').split(/\s+-\s+/);
+      const ni = parts.findIndex((p, i) => i > 0 && i < parts.length - 1 && /^\d{1,3}$/.test(p));
+      return ni > 0 ? parts.slice(0, ni).join(' - ') : '';
+    });
+    return heads.length && heads[0] && heads.every(h => h === heads[0]) ? heads[0] : '';
+  }
+  let upAuto = '';
+  function filesChosen() {
+    const files = [...$('#upFiles').files];
+    const songs = files.filter(f => AUDIO_RE.test(f.name)).length, bytes = files.reduce((n, f) => n + f.size, 0);
+    $('#upDrop').classList.toggle('has', files.length > 0);
+    $('#upDropTitle').textContent = files.length ? (songs || files.length) + (songs ? (songs === 1 ? ' song' : ' songs') : ' files') + ' chosen' : 'Choose songs';
+    $('#upDropSub').textContent = files.length ? fmtSize(bytes) + (files.length > songs && songs ? ' · plus ' + (files.length - songs) + ' other' : '') + ' · tap to change' : 'MP3, M4A, FLAC… and a cover picture if you have one';
+    const g = guessFolder(files), box = $('#upFolder');
+    if (g && (!box.value.trim() || box.value === upAuto)) { box.value = g; upAuto = g; }
+    showUpPreview();
+  }
+  $('#upFiles').onchange = filesChosen;
+  const drop = $('#upDrop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => { if (e.dataTransfer && e.dataTransfer.files.length) { $('#upFiles').files = e.dataTransfer.files; filesChosen(); } });
+  $('#upPill').onclick = () => openSheet('sheetMusic');
+  function updatePill(job, done) {
+    const pill = $('#upPill'); pill.hidden = false;
+    const all = job.runs.reduce((n, r) => n + r.items.length, 0);
+    const ok = job.runs.reduce((n, r) => n + r.items.filter(i => i.state === 'ok' || i.state === 'skip').length, 0);
+    const bad = job.runs.reduce((n, r) => n + r.items.filter(i => i.state === 'fail').length, 0);
+    $('#upPillBar').value = Math.round(ok * 1000 / (all || 1));
+    $('#upPillText').textContent = done ? (bad ? '⚠ ' + bad + ' didn’t upload. Tap to retry.' : '✓ Upload finished: ' + job.folder)
+      : 'Uploading ' + job.folder + ' · ' + ok + ' of ' + all;
+    if (done && !bad) setTimeout(() => { if (!upBusy) pill.hidden = true; }, 8000);
+  }
   $('#upTidy').onchange = () => { store.set('cp_up_tidy', $('#upTidy').checked ? '1' : '0'); showUpPreview(); };
   window.addEventListener('beforeunload', (e) => { if (upBusy) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -806,12 +938,14 @@
   async function runUploads(job) {
     upBusy = true; $('#upGo').disabled = true; $('#upRetry').hidden = true;
     const list = $('#upList'); list.textContent = '';
+    const pillT = setInterval(() => updatePill(job, false), 700); updatePill(job, false);
     await Promise.all(job.runs.map(r => uploadToPlayer(job.folder, r, playerRow(list, r))));
-    upBusy = false; $('#upGo').disabled = false;
+    clearInterval(pillT); upBusy = false; $('#upGo').disabled = false;
     const failed = job.runs.reduce((n, r) => n + r.items.filter(i => i.state === 'fail').length, 0);
     const sent = job.runs.reduce((n, r) => n + r.items.filter(i => i.state === 'ok').length, 0);
     $('#upRetry').hidden = !failed;
-    if (!failed) { $('#upFiles').value = ''; showUpPreview(); }
+    updatePill(job, true);
+    if (!failed) { $('#upFiles').value = ''; filesChosen(); }
     toast(failed ? failed + (failed === 1 ? ' song' : ' songs') + ' didn’t make it. Tap Retry failed.'
       : sent ? 'All done' + (job.runs.length > 1 ? ' on ' + job.runs.length + ' players' : '') : 'Every player already had these songs');
     loadLibrary();
@@ -854,11 +988,11 @@
       if (it.state === 'ok' || it.state === 'skip') continue;
       if (have[it.name] === it.file.size) { it.state = 'skip'; ui.update(); continue; }
       for (let attempt = 1; ; attempt++) {
-        ui.say((attempt > 1 ? 'Trying again (' + attempt + ' of 3): ' : 'Sending ') + it.name);
+        ui.say((attempt > 1 ? 'Retry ' + (attempt - 1) + ' of 3: ' : 'Sending ') + it.name);
         try { await upload(folder, it.file, (p) => ui.update(it, p / 100), r.t, it.name); it.state = 'ok'; break; }
         catch (e) {
           it.err = e.message;
-          if (attempt >= 3 || e.message === 'PIN needed') { it.state = 'fail'; break; }
+          if (attempt >= 4 || e.message === 'PIN needed') { it.state = 'fail'; break; }
           await sleep(attempt * 3000);
         }
       }
