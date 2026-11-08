@@ -450,6 +450,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 coversChanged();
                 break;
             }
+            case "/api/folder/delete": { // remote → Library → "Delete": remove a folder and everything in it
+                String f = b.getString("folder");
+                File dir = RemoteServer.safeFolder(f);
+                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
+                if (f.equals(folder)) stopAll();
+                if (!Store.deleteTree(dir)) throw new IllegalStateException("Couldn't delete everything in " + f);
+                if (cards.values().removeIf(f::equals)) { Store.saveCards(cards); cardsStamp = Store.cardsFile().lastModified(); }
+                flash("Deleted “" + f + "”", 3000);
+                if (browsing) openBrowser();
+                break;
+            }
             case "/api/station": {
                 String name = b.optString("name").trim(), url = b.optString("url").trim();
                 String fold = b.optString("folder").trim();

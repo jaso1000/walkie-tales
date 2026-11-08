@@ -614,6 +614,14 @@
           api('/api/covers/remove', { folder: f.name }).then(() => { toast('Picture removed'); loadLibrary(); }).catch(err); };
         t.appendChild(w);
       }
+      if (f.name !== '@all') {
+        const d = el('small', '', 'Delete'); d.style.cssText = 'display:block;color:#d9534f;text-decoration:underline;margin-top:2px';
+        d.onclick = (e) => { e.stopPropagation();
+          const what = f.live ? 'the radio station' : f.tracks + (f.tracks === 1 ? ' track' : ' tracks');
+          if (confirm('Delete “' + f.name + '” (' + what + ') from ' + (cur ? cur.name : 'this player') + '? This can’t be undone.'))
+            api('/api/folder/delete', { folder: f.name }).then(() => { toast('Deleted ' + f.name); loadLibrary(); }).catch(err); };
+        t.appendChild(d);
+      }
       t.onclick = () => act('/api/play', { folder: f.name }).then(() => { toast('Playing ' + (f.name === '@all' ? 'everything' : f.name)); document.querySelector('nav button[data-tab=now]').click(); });
       g.appendChild(t);
       if (f.name !== '@all') { const o = el('option'); o.value = f.name; dl.appendChild(o); }
