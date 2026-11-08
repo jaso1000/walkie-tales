@@ -21,9 +21,9 @@ enum Store {
     // MARK: settings (same keys and defaults as Android)
 
     static let defaults: [(String, Any)] = [
-        ("kid_name", ""), ("max_volume", 70), ("show_volume", true), ("fade_in", true), ("announce", false),
+        ("kid_name", ""), ("max_volume", 70), ("show_volume", true), ("headphones_button", true), ("fade_in", true), ("announce", false),
         ("quiet", false), ("quiet_start", 19 * 60), ("quiet_end", 7 * 60), ("quiet_volume", 40), ("bedtime_dark", false),
-        ("cards", false), ("find_art", true), ("browse", true), ("track_list", true), ("rest_mode", false),
+        ("cards", false), ("find_art", true), ("browse", true), ("track_list", true), ("rest_mode", false), ("cards_awake", true),
         ("dim_after", 90), ("screen_on", 0), ("screen_timeout", 60), ("night_light", false), ("night_clock", true),
         ("show_status", true), ("gate", true), ("power_menu", true), ("remote", true),
     ]

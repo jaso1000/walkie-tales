@@ -140,6 +140,10 @@ final class RemoteServer {
             upload(c, req: req, len: len, first: rest)
             return
         }
+        if path == "/api/update" { // Android players update over Wi-Fi; an iPhone gets new versions through TrollStore
+            sendJson(c, 400, ["error": "iPhone players are updated with TrollStore, not over Wi-Fi"])
+            return
+        }
         if method == "GET" && path == "/api/cover" {
             DispatchQueue.main.async {
                 let data = RemoteServer.cover(folder: query["folder"], now: query["now"] != nil)

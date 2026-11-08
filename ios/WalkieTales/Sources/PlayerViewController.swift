@@ -16,9 +16,10 @@ final class PlayerViewController: UIViewController {
 
     // views
     let backdrop = CAGradientLayer()
-    let clock = UILabel(), battery = UILabel(), sleepLabel = UILabel()
-    let moon = UIButton(type: .system), cog = UIButton(type: .system)
-    let statusGroup = UIStackView()
+    let clock = UILabel(), sleepLabel = UILabel()
+    let battery = BatteryView()
+    let moon = RoundButton(), cog = RoundButton()
+    let phones = HeadphonesButton()
     let artBox = UIView(), art = UIImageView(), status = PaddedLabel()
     let titleLabel = UILabel(), subtitle = UILabel(), eq = UIImageView()
     let seek = UISlider(), timePos = UILabel(), timeDur = UILabel()
@@ -105,31 +106,53 @@ final class PlayerViewController: UIViewController {
             col.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -14),
         ])
 
-        // top bar
-        let top = UIStackView()
-        top.alignment = .center
+        // top bar (same as Android): battery and sleep timer on the left, the clock in the exact middle,
+        // headphones and the settings cog on the right. The timer's minutes show inside the moon button, so the
+        // left side never reaches the clock on a 4.7-inch screen.
+        let top = UIView()
         clock.font = .systemFont(ofSize: 17, weight: .medium)
         clock.textColor = UIColor(white: 1, alpha: 0.85)
-        battery.font = .systemFont(ofSize: 14)
-        battery.textColor = UIColor(white: 1, alpha: 0.6)
-        statusGroup.spacing = 12
-        statusGroup.addArrangedSubview(clock)
-        statusGroup.addArrangedSubview(battery)
-        top.addArrangedSubview(statusGroup)
-        top.addArrangedSubview(UIView())
+        clock.translatesAutoresizingMaskIntoConstraints = false
+        top.addSubview(clock)
+        battery.translatesAutoresizingMaskIntoConstraints = false
+        battery.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        battery.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        moon.setup(icon: "moon.fill", size: 38, color: UIColor(white: 1, alpha: 0.15), iconSize: 16)
+        moon.layer.shadowOpacity = 0
+        moon.accessibilityLabel = "Sleep timer"
+        moon.addTarget(self, action: #selector(cycleSleep), for: .touchUpInside)
         sleepLabel.font = .systemFont(ofSize: 14, weight: .bold)
         sleepLabel.textColor = UIColor(red: 1, green: 0.84, blue: 0.31, alpha: 1)
-        top.addArrangedSubview(sleepLabel)
-        configureIcon(moon, "moon.fill")
-        moon.addTarget(self, action: #selector(cycleSleep), for: .touchUpInside)
-        configureIcon(cog, "gearshape.fill")
-        cog.alpha = 0.55
+        sleepLabel.textAlignment = .center
+        sleepLabel.isUserInteractionEnabled = false
+        sleepLabel.translatesAutoresizingMaskIntoConstraints = false
+        moon.addSubview(sleepLabel)
+        NSLayoutConstraint.activate([sleepLabel.centerXAnchor.constraint(equalTo: moon.centerXAnchor),
+                                     sleepLabel.centerYAnchor.constraint(equalTo: moon.centerYAnchor)])
+        let left = UIStackView(arrangedSubviews: [battery, moon])
+        left.alignment = .center
+        left.spacing = 10
+        left.translatesAutoresizingMaskIntoConstraints = false
+        top.addSubview(left)
+        phones.onConnected = { [weak self] n in self?.flash("Headphones connected: \(n)", 3) }
+        cog.setup(icon: "gearshape.fill", size: 38, color: UIColor(white: 1, alpha: 0.15), iconSize: 16)
+        cog.layer.shadowOpacity = 0
+        cog.accessibilityLabel = "Grown-up settings (press and hold)"
         cog.addTarget(self, action: #selector(cogTapped), for: .touchUpInside)
         cog.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(cogHeld(_:))))
-        top.addArrangedSubview(moon)
-        top.addArrangedSubview(cog)
-        top.heightAnchor.constraint(equalToConstant: 46).isActive = true
+        let right = UIStackView(arrangedSubviews: [phones, cog])
+        right.alignment = .center
+        right.spacing = 10
+        right.translatesAutoresizingMaskIntoConstraints = false
+        top.addSubview(right)
+        NSLayoutConstraint.activate([
+            clock.centerXAnchor.constraint(equalTo: top.centerXAnchor), clock.centerYAnchor.constraint(equalTo: top.centerYAnchor),
+            left.leadingAnchor.constraint(equalTo: top.leadingAnchor), left.centerYAnchor.constraint(equalTo: top.centerYAnchor),
+            right.trailingAnchor.constraint(equalTo: top.trailingAnchor), right.centerYAnchor.constraint(equalTo: top.centerYAnchor),
+            top.heightAnchor.constraint(equalToConstant: 46),
+        ])
         col.addArrangedSubview(top)
+        col.setCustomSpacing(14, after: top) // a little breathing room between the top bar and the cover
 
         // artwork (square, as big as the leftover space allows)
         col.addArrangedSubview(artBox)
@@ -281,13 +304,6 @@ final class PlayerViewController: UIViewController {
         night.addSubview(nightClock)
         NSLayoutConstraint.activate([nightClock.centerXAnchor.constraint(equalTo: night.centerXAnchor),
                                      nightClock.topAnchor.constraint(equalTo: night.safeAreaLayoutGuide.topAnchor, constant: 110)])
-    }
-
-    func configureIcon(_ b: UIButton, _ name: String) {
-        b.setImage(UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)), for: .normal)
-        b.tintColor = .white
-        b.widthAnchor.constraint(equalToConstant: 46).isActive = true
-        b.heightAnchor.constraint(equalToConstant: 46).isActive = true
     }
 
     static func dot(_ size: CGFloat, _ c: UIColor) -> UIImage {
@@ -465,13 +481,14 @@ final class PlayerViewController: UIViewController {
 
     func renderSleep() {
         if let at = p.sleepAt {
-            sleepLabel.text = "\(Int((at.timeIntervalSinceNow + 59) / 60))m"
-            moon.tintColor = UIColor(red: 1, green: 0.84, blue: 0.31, alpha: 1)
-            moon.alpha = 1
-        } else {
+            let mins = Int((at.timeIntervalSinceNow + 59) / 60)
+            if sleepLabel.text?.isEmpty ?? true { moon.setImage(nil, for: .normal) } // the number takes the moon's place
+            sleepLabel.text = "\(mins)"
+            moon.accessibilityLabel = "Sleep timer: \(mins) minutes left"
+        } else if !(sleepLabel.text?.isEmpty ?? true) || moon.image(for: .normal) == nil {
             sleepLabel.text = ""
-            moon.tintColor = .white
-            moon.alpha = 0.5
+            moon.setIcon("moon.fill")
+            moon.accessibilityLabel = "Sleep timer"
         }
     }
 
@@ -479,8 +496,7 @@ final class PlayerViewController: UIViewController {
         let d = UIDevice.current
         let pct = d.batteryLevel < 0 ? -1 : Int((d.batteryLevel * 100).rounded())
         let charging = d.batteryState == .charging || d.batteryState == .full
-        battery.text = pct < 0 ? "" : "\(pct)%" + (charging ? " · charging" : "")
-        battery.textColor = charging ? UIColor(red: 0.55, green: 0.89, blue: 0.55, alpha: 0.8) : (pct >= 0 && pct <= 15 ? UIColor(red: 1, green: 0.48, blue: 0.48, alpha: 1) : UIColor(white: 1, alpha: 0.6))
+        battery.set(pct, charging: charging)
         updateKeepOn()
     }
 
@@ -637,7 +653,10 @@ final class PlayerViewController: UIViewController {
 
     func applySettings() {
         volumeRow.isHidden = !Store.bool("show_volume")
-        statusGroup.isHidden = !Store.bool("show_status")
+        clock.isHidden = !Store.bool("show_status")
+        battery.isHidden = !Store.bool("show_status")
+        phones.isHidden = !Store.bool("headphones_button")
+        phones.update()
         nightClock.isHidden = !Store.bool("night_clock")
         renderTracksBtn()
         if p.folder == nil { showIdle() } else { updateUi() }
@@ -654,7 +673,8 @@ final class PlayerViewController: UIViewController {
     func updateKeepOn() {
         let mode = Store.int("screen_on")
         let charging = [.charging, .full].contains(UIDevice.current.batteryState)
-        let on = !screenLocked && (mode == 1 || (mode == 2 && p.isPlaying) || (Store.bool("cards") && (charging || Bedtime.darkOn)))
+        let forCards = Store.bool("cards") && Store.bool("cards_awake") && (charging || Bedtime.darkOn)
+        let on = Finder.shared.ringing || (!screenLocked && (mode == 1 || (mode == 2 && p.isPlaying) || forCards))
         if UIApplication.shared.isIdleTimerDisabled != on { UIApplication.shared.isIdleTimerDisabled = on }
     }
 }

@@ -5,6 +5,7 @@ extension PlayerViewController {
 
     /// Any touch: undim and restart the dim countdown. Returns false if the touch should be swallowed.
     func userTouched() -> Bool {
+        if Finder.shared.ringing { Finder.shared.stop(); return false } // found it: a tap stops the ringing
         if screenLocked { return false }        // switched off from the remote: touches do nothing
         if dimmed { wake(); return false }      // first touch only wakes the screen
         wake()

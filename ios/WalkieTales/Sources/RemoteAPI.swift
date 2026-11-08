@@ -40,6 +40,8 @@ extension PlayerViewController {
             renderVolume()
         case "/api/sleep":
             p.setSleep(minutes: (b["minutes"] as? NSNumber)?.intValue ?? 0)
+        case "/api/find": // "Ring the player" on the remote's Playing tab
+            if (b["on"] as? Bool) ?? true { Finder.shared.start(self) } else { Finder.shared.stop() }
         case "/api/screen":
             setScreenLocked((b["off"] as? Bool) ?? !screenLocked)
         case "/api/message":
@@ -69,12 +71,17 @@ extension PlayerViewController {
             switch show {
             case "library": openLibrary()
             case "tracks": openTracks()
-            case "settings":
-                let s = SettingsViewController(style: .insetGrouped)
-                s.owner = self
-                let nav = UINavigationController(rootViewController: s)
+            case let s where s.hasPrefix("settings"): // "settings", or "settings-sound" etc. for one page
+                let menu = SettingsViewController(page: nil)
+                menu.owner = self
+                let nav = UINavigationController(rootViewController: menu)
                 nav.modalPresentationStyle = .fullScreen
                 present(nav, animated: false)
+                if s.hasPrefix("settings-") {
+                    let pg = SettingsViewController(page: String(s.dropFirst(9)))
+                    pg.owner = self
+                    nav.pushViewController(pg, animated: false)
+                }
             default: break
             }
         case "/api/cards/link", "/api/cards/cancel", "/api/cards/unlink":
@@ -88,6 +95,9 @@ extension PlayerViewController {
         var s: [String: Any] = [:]
         s["version"] = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " (iOS)"
         s["name"] = Store.string("kid_name")
+        s["bluetooth"] = HeadphonesButton.bluetooth
+        s["headphones"] = HeadphonesButton.output() ?? NSNull()
+        s["finding"] = Finder.shared.ringing
         let have = p.folder != nil && !p.tracks.isEmpty
         s["folder"] = have ? p.folder! : NSNull()
         s["title"] = have ? Store.label(p.folder!) : NSNull()

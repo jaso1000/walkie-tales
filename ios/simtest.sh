@@ -62,6 +62,8 @@ api -X POST -d '{"show":"library"}' $B/api/ui > /dev/null
 shot 6-library 3
 api -X POST -d '{"show":"settings"}' $B/api/ui > /dev/null
 shot 7-settings 2
+api -X POST -d '{"show":"settings-sound"}' $B/api/ui > /dev/null
+shot 7b-settings-sound 2
 api -X POST -d '{"show":"none"}' $B/api/ui > /dev/null
 log "--- radio: $(api -X POST -d '{"folder":"Kids Radio"}' $B/api/play | head -c 200)"
 shot 8-radio 8
@@ -77,4 +79,12 @@ say -o /tmp/u.aiff "This song was uploaded from the remote." && afconvert /tmp/u
 log "--- upload: $(curl -s -m 20 -X PUT -H "X-Pin: $PIN" --data-binary @/tmp/u.m4a "$B/api/upload?folder=Uploaded&name=Remote%20Song.m4a")"
 log "--- library after upload: $(api $B/api/library | python3 -c 'import json,sys; print([(f["name"],f["tracks"]) for f in json.load(sys.stdin)["folders"]])')"
 log "--- cover endpoint: $(curl -s -m 10 -o /tmp/cv.jpg -w '%{http_code} %{content_type}' -H "X-Pin: $PIN" "$B/api/cover?folder=Dinosaur%20Songs")"
+log "--- headphones fields: $(api $B/api/status | python3 -c 'import json,sys; s=json.load(sys.stdin); print("bluetooth",s.get("bluetooth"),"headphones",s.get("headphones"),"finding",s.get("finding"))')"
+log "--- ring: $(api -X POST -d '{"on":true}' $B/api/find | python3 -c 'import json,sys; s=json.load(sys.stdin); print("finding",s["finding"],"msg",s["message"])')"
+shot 11-ringing 2
+log "--- stop ringing: $(api -X POST -d '{"on":false}' $B/api/find | python3 -c 'import json,sys; print("finding",json.load(sys.stdin)["finding"])')"
+log "--- android update refused: $(curl -s -m 10 -X PUT -H "X-Pin: $PIN" --data-binary 'x' $B/api/update)"
+api -X POST -d '{"headphones_button":false}' $B/api/settings > /dev/null
+shot 12-no-headphones-button 2
+api -X POST -d '{"headphones_button":true}' $B/api/settings > /dev/null
 log "--- crashes: $(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -ci walkie || echo 0)"

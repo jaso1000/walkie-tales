@@ -372,7 +372,11 @@ final class Volume: NSObject {
         return cur + d <= 0 ? "Volume is off" : nil
     }
 
+    /// Set while "Ring the player" is sounding: it has to be loud, whatever the limit.
+    var overrideCap = false
+
     func enforceCap() {
+        if overrideCap { return }
         if level > capSteps { set(level: capSteps) }
     }
 }

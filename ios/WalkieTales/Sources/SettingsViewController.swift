@@ -1,76 +1,152 @@
 import UIKit
 
-/// Grown-up settings (behind the cog and the quick sum). Same settings as the Android player.
+/// Grown-up settings (behind the cog and the quick sum). Like the Android player and the remote's Settings tab:
+/// a short menu of topics, each opening its own page, with the same order and wording.
 final class SettingsViewController: UITableViewController {
     weak var owner: PlayerViewController?
+    /// nil = the menu; otherwise the page shown ("library", "cards", "sound", …).
+    var page: String?
 
     enum Row {
+        case menu(String, String, () -> String, String)       // SF Symbol, title, summary, page to open
         case toggle(String, String?, String)                 // title, subtitle, key
         case value(String, () -> String, () -> Void)        // title, current value, tap
         case slider(String, String)                          // title, key (10–100 %)
         case info(String, String?)
     }
 
-    private var sections: [(String, [Row])] = []
+    private var sections: [(String?, [Row])] = []
+
+    convenience init(page: String?) {
+        self.init(style: .insetGrouped)
+        self.page = page
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Grown-up settings"
+        title = Self.titles[page ?? ""] ?? "Grown-up settings"
         overrideUserInterfaceStyle = .dark
         navigationController?.overrideUserInterfaceStyle = .dark
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(done))
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "c")
         build()
     }
 
-    @objc private func done() {
-        dismiss(animated: true) { self.owner?.applySettings(); self.owner?.wake() }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reload() // the menu's summaries follow what was changed on a page
     }
 
+    @objc private func done() {
+        let o = owner
+        navigationController?.dismiss(animated: true) { o?.applySettings(); o?.wake() }
+    }
+
+    static let titles = ["library": "Library", "cards": "Cards", "sound": "Sound", "bedtime": "Bedtime", "screen": "Screen",
+                         "safety": "Safety", "remote": "Remote control", "about": "About"]
+
     private func build() {
+        switch page {
+        case "library": buildLibrary()
+        case "cards":
+            sections = [(nil, [.info("Cards aren't on the iPhone player yet",
+                                     "An iPhone only reads NFC cards inside a scan pop-up, so there's no tap-and-play like on Android. Use the Library instead.")])]
+        case "sound": buildSound()
+        case "bedtime":
+            sections = [
+                ("Times", [
+                    .value("Bedtime starts", { Self.time(Store.int("quiet_start")) }, { [weak self] in self?.pickTime("quiet_start") }),
+                    .value("Bedtime ends", { Self.time(Store.int("quiet_end")) }, { [weak self] in self?.pickTime("quiet_end") }),
+                ]),
+                ("During bedtime", [
+                    .toggle("Screen off at bedtime", "Goes black 30 seconds after the last touch", "bedtime_dark"),
+                    .toggle("Quieter at bedtime", nil, "quiet"),
+                    .slider("Bedtime maximum volume", "quiet_volume"),
+                ]),
+            ]
+        case "screen":
+            sections = [
+                ("Sleeping", [
+                    .value("Dim the screen after", { Self.cycleLabel("dim_after", [30, 90, 300, 0], ["30 seconds", "90 seconds", "5 minutes", "Never"]) },
+                           { [weak self] in self?.cycle("dim_after", [30, 90, 300, 0]) }),
+                    .value("Keep the screen on", { Self.cycleLabel("screen_on", [0, 2, 1], ["No", "While playing", "Always"]) },
+                           { [weak self] in self?.cycle("screen_on", [0, 2, 1]) }),
+                    .info("Screen turns off after", "Set Auto-Lock in iPhone Settings → Display & Brightness"),
+                ]),
+                ("Night light and clock", [
+                    .toggle("Night light", nil, "night_light"),
+                    .toggle("Clock on the night light", nil, "night_clock"),
+                    .toggle("Clock and battery", nil, "show_status"),
+                ]),
+            ]
+        case "safety":
+            sections = [
+                (nil, [
+                    .toggle("Grown-up sum before settings", nil, "gate"),
+                    .info("Lock to this app", UIAccessibility.isGuidedAccessEnabled ? "On (Guided Access)" : "Triple-click the Home button to start Guided Access"),
+                ]),
+                ("Phone", [.value("iPhone settings", { "Wi-Fi, Bluetooth, brightness" }, { Self.openSettings(nil) })]),
+            ]
+        case "remote":
+            sections = [
+                (nil, [.toggle("Remote control", nil, "remote")]),
+                ("Connect", [
+                    .info("Address", RemoteServer.address ?? "Not on Wi-Fi"),
+                    .info("PIN", RemoteServer.pin),
+                    .value("Change PIN", { "" }, { [weak self] in
+                        self?.confirm("Make a new PIN?", "Remote controls will need the new PIN.") { RemoteServer.newPin(); self?.reload() }
+                    }),
+                ]),
+            ]
+        case "about":
+            sections = [
+                (nil, [.info("WalkieTales " + Self.version + " for iPhone", Self.freeSpace())]),
+                ("Updates", [.info("New versions", "Install them with TrollStore. Android players update from the remote.")]),
+            ]
+        default: buildMenu()
+        }
+    }
+
+    private func buildMenu() {
+        sections = [
+            (nil, [.menu("person.fill", "Your child", { let n = Store.string("kid_name"); return n.isEmpty ? "Not set" : n }, "@name")]),
+            (nil, [
+                .menu("square.grid.3x3.fill", "Library", { let n = Store.folders().count; return "\(n) " + (n == 1 ? "folder" : "folders") }, "library"),
+                .menu("creditcard.fill", "Cards", { "Not on iPhone yet" }, "cards"),
+            ]),
+            (nil, [
+                .menu("speaker.wave.2.fill", "Sound", { "Maximum volume \(Store.int("max_volume"))%" }, "sound"),
+                .menu("moon.fill", "Bedtime", { Self.time(Store.int("quiet_start")) + " to " + Self.time(Store.int("quiet_end")) }, "bedtime"),
+                .menu("iphone", "Screen", { Self.screenSummary() }, "screen"),
+            ]),
+            (nil, [
+                .menu("shield.fill", "Safety", { "Grown-up sum " + (Store.bool("gate") ? "on" : "off") }, "safety"),
+                .menu("wifi", "Remote control", { Store.bool("remote") ? "On" : "Off" }, "remote"),
+                .menu("info.circle.fill", "About", { "WalkieTales " + Self.version }, "about"),
+            ]),
+        ]
+    }
+
+    private func buildLibrary() {
         let folders = Store.folders()
         var lib: [Row] = folders.map { f in .value(f, { Self.folderSummary(f) }, { [weak self] in self?.folderOptions(f) }) }
         if folders.isEmpty { lib.append(.info("No folders yet", "Add music from the remote, or with the Files app (On My iPhone → WalkieTales → Cards)")) }
         lib.append(.value("Shuffle everything", { "" }, { [weak self] in self?.playNow(Store.ALL) }))
-        lib.append(.toggle("Find missing covers online", nil, "find_art"))
-
         sections = [
-            ("Your child", [.value("Name", { let n = Store.string("kid_name"); return n.isEmpty ? "Not set" : n }, { [weak self] in self?.editName() })]),
-            ("Library", lib),
-            ("Sound", [
-                .slider("Maximum volume", "max_volume"),
-                .toggle("Volume buttons on screen", nil, "show_volume"),
-                .toggle("Fade in", nil, "fade_in"),
+            ("Folders", lib),
+            ("Covers", [.toggle("Find missing covers online", nil, "find_art")]),
+            ("On the player", [.toggle("Library button", nil, "browse"), .toggle("Tracks button", nil, "track_list")]),
+        ]
+    }
+
+    private func buildSound() {
+        sections = [
+            (nil, [.slider("Maximum volume", "max_volume")]),
+            (nil, [.toggle("Volume buttons on screen", nil, "show_volume"), .toggle("Fade in", nil, "fade_in")]),
+            ("Headphones", [
+                .toggle("Headphones button", "Picks headphones or the speaker from the player", "headphones_button"),
+                .value("Pair new headphones", { "iPhone Settings → Bluetooth" }, { Self.openSettings("Bluetooth") }),
+                .info("Pairing needs Guided Access off", "Triple-click the Home button to leave it, pair in Settings, then start Guided Access again."),
             ]),
-            ("Bedtime", [
-                .value("Bedtime starts", { Self.time(Store.int("quiet_start")) }, { [weak self] in self?.pickTime("quiet_start") }),
-                .value("Bedtime ends", { Self.time(Store.int("quiet_end")) }, { [weak self] in self?.pickTime("quiet_end") }),
-                .toggle("Screen off at bedtime", "Goes black 30 seconds after the last touch", "bedtime_dark"),
-                .toggle("Quieter at bedtime", nil, "quiet"),
-                .slider("Bedtime maximum volume", "quiet_volume"),
-            ]),
-            ("Browsing", [.toggle("Library button", nil, "browse"), .toggle("Tracks button", nil, "track_list")]),
-            ("Screen", [
-                .value("Dim the screen after", { Self.cycleLabel("dim_after", [30, 90, 300, 0], ["30 seconds", "90 seconds", "5 minutes", "Never"]) },
-                       { [weak self] in self?.cycle("dim_after", [30, 90, 300, 0]) }),
-                .value("Keep the screen on", { Self.cycleLabel("screen_on", [0, 2, 1], ["No", "While playing", "Always"]) },
-                       { [weak self] in self?.cycle("screen_on", [0, 2, 1]) }),
-                .info("Screen turns off after", "Set Auto-Lock in iPhone Settings → Display & Brightness"),
-                .toggle("Night light", nil, "night_light"),
-                .toggle("Clock on the night light", nil, "night_clock"),
-                .toggle("Clock and battery", nil, "show_status"),
-            ]),
-            ("Safety", [
-                .toggle("Grown-up sum before settings", nil, "gate"),
-                .info("Lock to this app", UIAccessibility.isGuidedAccessEnabled ? "On (Guided Access)" : "Triple-click the Home button to start Guided Access"),
-                .value("iPhone settings", { "Wi-Fi, Bluetooth, brightness" }, { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }),
-            ]),
-            ("Remote control", [
-                .toggle("Remote control", nil, "remote"),
-                .info(RemoteServer.address ?? "Not on Wi-Fi", "PIN: " + RemoteServer.pin),
-                .value("Change PIN", { "" }, { [weak self] in self?.confirm("Make a new PIN?", "Remote controls will need the new PIN.") { RemoteServer.newPin(); self?.reload() } }),
-            ]),
-            ("About", [.info("WalkieTales " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""), Self.freeSpace())]),
         ]
     }
 
@@ -87,6 +163,13 @@ final class SettingsViewController: UITableViewController {
         cell.detailTextLabel?.textColor = .secondaryLabel
         cell.detailTextLabel?.numberOfLines = 0
         switch sections[ip.section].1[ip.row] {
+        case let .menu(symbol, title, summary, _):
+            cell.imageView?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
+            cell.imageView?.tintColor = UIColor(red: 0.69, green: 0.6, blue: 1, alpha: 1)
+            cell.textLabel?.text = title
+            cell.detailTextLabel?.text = summary()
+            cell.selectionStyle = .default
+            cell.accessoryType = .disclosureIndicator
         case let .toggle(title, sub, key):
             cell.textLabel?.text = title
             cell.detailTextLabel?.text = sub
@@ -121,7 +204,15 @@ final class SettingsViewController: UITableViewController {
     }
 
     override func tableView(_ t: UITableView, didSelectRowAt ip: IndexPath) {
-        if case let .value(_, _, tap) = sections[ip.section].1[ip.row] { tap() }
+        switch sections[ip.section].1[ip.row] {
+        case let .menu(_, _, _, target):
+            if target == "@name" { editName(); break }
+            let next = SettingsViewController(page: target)
+            next.owner = owner
+            navigationController?.pushViewController(next, animated: true)
+        case let .value(_, _, tap): tap()
+        default: break
+        }
         t.deselectRow(at: ip, animated: true)
     }
 
@@ -181,7 +272,8 @@ final class SettingsViewController: UITableViewController {
     }
 
     private func playNow(_ f: String) {
-        dismiss(animated: true) { Player.shared.open(f, play: true); self.owner?.applySettings() }
+        let o = owner
+        navigationController?.dismiss(animated: true) { Player.shared.open(f, play: true); o?.applySettings() }
     }
 
     private func confirm(_ title: String, _ msg: String, _ yes: @escaping () -> Void) {
@@ -191,7 +283,28 @@ final class SettingsViewController: UITableViewController {
         present(a, animated: true)
     }
 
+    /// iPhone Settings, at a section if iOS allows it (TrollStore apps can use the Settings URL scheme).
+    static func openSettings(_ section: String?) {
+        if let s = section, let u = URL(string: "App-prefs:" + s) {
+            UIApplication.shared.open(u) { ok in
+                if !ok, let a = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(a) }
+            }
+            return
+        }
+        if let a = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(a) }
+    }
+
     // MARK: helpers
+
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
+
+    static func screenSummary() -> String {
+        switch Store.int("screen_on") {
+        case 1: return "Always on"
+        case 2: return "On while playing, then Auto-Lock"
+        default: return "Off with Auto-Lock"
+        }
+    }
 
     static func folderSummary(_ f: String) -> String {
         let n = Store.listTracks(f).count
