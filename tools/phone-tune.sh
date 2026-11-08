@@ -59,6 +59,13 @@ GOOGLE=(
   com.google.android.accessibility.switchaccess
   com.google.android.apps.messaging.lenovo_msm8916
   com.google.android.iwlan                    # Wi-Fi calling (no SIM)
+  com.google.android.as                       # Android System Intelligence
+  com.google.android.apps.tachyon             # Duo / Meet
+  com.google.android.apps.turbo               # Device Health Services
+  com.google.ar.core
+  com.google.android.projection.gearhead      # Android Auto
+  com.android.hotwordenrollment.okgoogle
+  com.android.hotwordenrollment.xgoogle
 )
 [ "${KEEP_TTS:-1}" = "1" ] || GOOGLE+=(com.google.android.tts)
 
@@ -90,8 +97,53 @@ APPS=(
   com.stevesoltys.seedvault     # Backups
   com.android.providers.partnerbookmarks
 )
+# Stock Samsung (One UI) extras: preloaded third-party apps, Bixby, edge panels, AR/stickers, DeX,
+# Samsung cloud/pay/pass, and the phone/camera/media apps. Tested on a Galaxy S10 (Android 10).
+SAMSUNG=(
+  com.facebook.appmanager com.facebook.katana com.facebook.services com.facebook.system
+  com.amazon.appmanager com.amazon.mShop.android.shopping
+  com.microsoft.appmanager com.microsoft.skydrive flipboard.boxer.app com.hiya.star
+  com.samsung.android.bixby.agent com.samsung.android.bixby.service com.samsung.android.bixby.wakeup
+  com.samsung.android.bixbyvision.framework com.samsung.android.visionintelligence com.samsung.systemui.bixby2
+  com.samsung.android.app.spage com.samsung.android.app.settings.bixby com.samsung.android.svoiceime
+  com.samsung.android.app.routines com.samsung.android.app.tips com.samsung.android.app.reminder
+  com.samsung.android.calendar com.samsung.android.messaging com.samsung.android.dialer
+  com.samsung.android.contacts com.samsung.android.app.contacts
+  com.sec.android.app.camera com.sec.android.gallery3d com.samsung.android.video
+  com.sec.android.app.clockpackage com.sec.android.app.myfiles
+  com.sec.android.app.samsungapps com.sec.android.widgetapp.samsungapps com.samsung.android.themestore
+  com.samsung.android.game.gamehome com.samsung.android.game.gametools
+  com.samsung.android.app.appsedge com.samsung.android.app.taskedge com.samsung.android.app.clipboardedge
+  com.samsung.android.app.sbrowseredge com.samsung.android.app.cocktailbarservice
+  com.samsung.android.ardrawing com.samsung.android.aremoji com.samsung.android.aremojieditor com.samsung.android.arzone
+  com.samsung.android.app.camera.sticker.facearavatar.preload com.samsung.android.livestickers
+  com.samsung.android.stickercenter com.sec.android.mimage.avatarstickers
+  com.samsung.android.scloud com.samsung.android.mobileservice com.samsung.android.samsungpass
+  com.samsung.android.samsungpassautofill com.samsung.android.spayfw com.samsung.android.fmm
+  com.samsung.android.kidsinstaller com.samsung.android.app.watchmanagerstub com.samsung.android.drivelink.stub
+  com.samsung.android.mateagent com.sec.android.easyMover.Agent com.samsung.android.smartswitchassistant
+  com.samsung.android.app.sharelive com.samsung.android.allshare.service.mediashare
+  com.samsung.android.allshare.service.fileshare com.samsung.android.smartmirroring
+  com.samsung.android.mdx com.samsung.android.mdx.kit com.samsung.android.mdx.quickboard
+  com.sec.android.app.dexonpc com.sec.android.app.desktoplauncher com.sec.android.desktopmode.uiservice
+  com.samsung.desktopsystemui
+  com.samsung.android.app.galaxyfinder com.samsung.android.rubin.app com.samsung.android.forest
+  com.samsung.android.dynamiclock com.samsung.android.app.aodservice com.samsung.android.service.peoplestripe
+  com.samsung.android.app.social com.samsung.android.hmt.vrsvc com.samsung.android.app.dressroom
+  com.samsung.android.beaconmanager com.samsung.android.digitalkey
+  com.samsung.android.app.ledbackcover com.sec.android.cover.ledcover
+  com.samsung.storyservice com.sec.android.app.ve.vebgm com.sec.android.app.vepreload
+  com.samsung.app.newtrim com.samsung.app.slowmotion com.samsung.app.highlightplayer
+  com.sec.android.mimage.photoretouching com.samsung.android.app.motionpanoramaviewer
+  com.samsung.android.app.interactivepanoramaviewer com.samsung.android.app.selfmotionpanoramaviewer
+  com.samsung.android.app.dofviewer com.samsung.android.motionphoto.viewer com.sec.android.app.billing
+  com.sec.android.widgetapp.webmanual com.sec.android.widgetapp.easymodecontactswidget
+  com.sec.android.app.quicktool com.samsung.android.app.simplesharing
+)
 # Deliberately kept: Launcher3 (fallback home screen), Settings, SystemUI, NFC, Bluetooth,
 # the keyboard (needed for the grown-up sum and PIN), DocumentsUI, WebView, Shell.
+# On Samsung also: Knox/MDM services (device owner needs them), the Samsung keyboard (honeyboard),
+# Device care (lool), media/storage providers, MTP, and the One UI launcher as a fallback home.
 
 adb_() { adb shell "$@" 2>/dev/null | tr -d '\r'; }
 have() { adb_ pm path "$1" | grep -q '^package:'; }
@@ -100,7 +152,7 @@ adb get-state >/dev/null 2>&1 || { echo "No phone connected over adb."; exit 1; 
 echo "Phone: $(adb_ getprop ro.product.model) / $(adb_ getprop ro.lineage.version)"
 
 n=0
-for p in "${GOOGLE[@]}" "${APPS[@]}"; do
+for p in "${GOOGLE[@]}" "${APPS[@]}" "${SAMSUNG[@]}"; do
   have "$p" || continue
   n=$((n + 1))
   case $MODE in
@@ -123,11 +175,14 @@ if [ "$MODE" = apply ]; then
   adb_ settings put global mobile_data 0                   # no SIM needed
   adb_ settings put global airplane_mode_radios cell       # airplane mode turns off only the mobile radio...
   adb_ cmd connectivity airplane-mode enable               # ...so it stops searching for a signal (Wi-Fi and Bluetooth stay on)
+  adb_ svc wifi enable                                     # Samsung ignores airplane_mode_radios and turns Wi-Fi off: back on (it's remembered)
   adb_ settings put global stay_on_while_plugged_in 0      # screen sleeps even on the charger (the app keeps it on when needed)
   adb_ settings put system screen_brightness_mode 1        # adaptive brightness
   adb_ settings put system screen_off_timeout 60000        # 1 min when on battery and idle
   adb_ settings put global auto_sync 0 2>/dev/null
   adb_ cmd deviceidle whitelist +app.cardplayer >/dev/null  # let the remote reach it while the screen is off
+  adb_ settings put global adaptive_battery_management_enabled 0 2>/dev/null  # Samsung/Pixel: don't put the player to sleep
+  adb_ settings put system aod_mode 0 2>/dev/null                              # Samsung: Always On Display off
   echo "Settings tuned. Reboot the phone to free the memory: adb reboot"
 else
   adb_ settings put global window_animation_scale 1
