@@ -267,6 +267,18 @@
   .lib-tools .chips::-webkit-scrollbar { display: none; }
   .lib-tools .chip { white-space: nowrap; }
   .type-row { margin: 4px 0 14px; }
+  .cats { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 3px; margin: -3px; }
+  .cats::-webkit-scrollbar { display: none; }
+  .catbtn { flex: none; width: 80px; height: 84px; border: 0; border-radius: 20px; cursor: pointer; color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; opacity: .55;
+    background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 60%, #000)); transition: opacity .15s, transform .1s; }
+  .catbtn .pic { font-size: 30px; line-height: 1.1; }
+  .catbtn b { font-size: 12px; }
+  .catbtn small { font-size: 10.5px; opacity: .85; margin-top: -1px; }
+  .catbtn.on { opacity: 1; box-shadow: 0 0 0 3px #fff; }
+  .catbtn:active { transform: scale(.95); }
+  .cats.small .catbtn { width: 70px; height: 74px; border-radius: 18px; }
+  .cats.small .catbtn .pic { font-size: 26px; }
   .type-row .label { margin-top: 0; }
   input[type=file].hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 </style>
@@ -328,7 +340,7 @@
   </div>
   <div class="lib-tools" id="libTools" hidden>
     <input type="text" id="libSearch" placeholder="Search folders" autocomplete="off">
-    <div class="chips" id="libCats"></div>
+    <div class="cats" id="libCats"></div>
   </div>
   <button class="up-pill" id="upPill" hidden><span id="upPillText">Uploading…</span><progress id="upPillBar" max="1000" value="0"></progress></button>
   <div class="grid" id="grid"></div>
@@ -445,7 +457,7 @@
 <div class="overlay" id="sheetFolder"><div class="sheet">
   <div class="sheet-head"><h2 id="fdTitle"></h2><button class="btn ghost" data-close>Close</button></div>
   <p class="sub" id="fdSub"></p>
-  <div class="type-row" id="fdTypeRow" hidden><span class="label">Type</span><div class="chips" id="fdType"></div></div>
+  <div class="type-row" id="fdTypeRow" hidden><span class="label">Type</span><div class="cats small" id="fdType"></div></div>
   <div class="actions" id="fdActions"></div>
 </div></div>
 
@@ -458,6 +470,8 @@
   <input type="file" class="hidden-file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
   <span class="label">Folder (one per album or card)</span>
   <input type="text" id="upFolder" list="folderNames" placeholder="e.g. Hilary Duff - Metamorphosis">
+  <span class="label">Type</span>
+  <div class="cats small" id="upType"></div>
   <label class="check"><input type="checkbox" id="upTidy"> Tidy song names (“01 - So Yesterday.mp3”)</label>
   <div class="up-preview" id="upPreview" hidden></div>
   <div class="targets" hidden><span class="label">Send to</span><div class="chips target-list"></div></div>
@@ -752,14 +766,23 @@
   let lastLibFolder, libCat = 'all';
   const CATS = [['all', 'All'], ['music', 'Music'], ['podcast', 'Podcasts'], ['audiobook', 'Audiobooks'], ['radio', 'Radio']];
   const CAT_ONE = { music: 'Music', podcast: 'Podcast', audiobook: 'Audiobook', radio: 'Radio' };
-  function renderLibCats(present) {
-    const box = $('#libCats'); box.textContent = '';
-    box.hidden = [...present].length < 2;
-    CATS.filter(([k]) => k === 'all' || present.has(k)).forEach(([k, label]) => {
-      const c = el('button', 'chip' + (k === libCat ? ' on' : ''), label);
-      c.onclick = () => { libCat = k; loadLibrary(); };
-      box.appendChild(c);
+  // A picture and colour for each type, so children can tell them apart without reading (same as the players).
+  const CAT_PIC = { all: ['🌈', '#6C4CF1'], auto: ['✨', '#7A7A92'], music: ['🎵', '#E0559A'], podcast: ['🎙️', '#F2994A'],
+    audiobook: ['📖', '#27AE60'], radio: ['📻', '#2D9CDB'] };
+  function catButtons(box, list, selected, onPick) {
+    box.textContent = '';
+    list.forEach(([k, label, sub]) => {
+      const b = el('button', 'catbtn' + (k === selected ? ' on' : '')); b.type = 'button';
+      b.style.setProperty('--c', CAT_PIC[k][1]);
+      b.appendChild(el('span', 'pic', CAT_PIC[k][0])); b.appendChild(el('b', '', label)); if (sub) b.appendChild(el('small', '', sub));
+      b.onclick = () => onPick(k, b);
+      box.appendChild(b);
     });
+  }
+  function renderLibCats(present) {
+    const box = $('#libCats');
+    box.hidden = [...present].length < 2;
+    catButtons(box, CATS.filter(([k]) => k === 'all' || present.has(k)), libCat, (k) => { libCat = k; loadLibrary(); });
   }
   let libSearchT;
   $('#libSearch').oninput = () => { clearTimeout(libSearchT); libSearchT = setTimeout(loadLibrary, 150); };
@@ -788,17 +811,13 @@
     tr.hidden = !f.category; // older players don't know about types
     if (f.category) {
       const over = f.category !== f.autoCategory ? f.category : null;
-      [['auto', 'Auto (' + (CAT_ONE[f.autoCategory] || f.autoCategory) + ')']].concat(Object.entries(CAT_ONE)).forEach(([k, label]) => {
-        if (k === 'radio' && !f.live && f.autoCategory !== 'radio' && f.category !== 'radio') return;
-        const on = k === 'auto' ? !over : over === k;
-        const c = el('button', 'chip' + (on ? ' on' : ''), label);
-        c.onclick = async () => {
-          const targets = sgTargets(); let done = 0;
-          for (const t of targets) { try { await tapi(t, '/api/folder/category', { folder: f.name, category: k }); done++; } catch (e) { /* that player doesn't have this folder */ } }
-          toast(f.name + ': ' + (k === 'auto' ? 'type chosen automatically' : CAT_ONE[k]) + (targets.length > 1 ? ' on ' + done + ' players' : ''));
-          closeSheet('sheetFolder'); loadLibrary();
-        };
-        tb.appendChild(c);
+      const opts = [['auto', 'Auto', CAT_ONE[f.autoCategory] || f.autoCategory]].concat(Object.entries(CAT_ONE)
+        .filter(([k]) => k !== 'radio' || f.live || f.autoCategory === 'radio' || f.category === 'radio'));
+      catButtons(tb, opts, over || 'auto', async (k) => {
+        const targets = sgTargets(); let done = 0;
+        for (const t of targets) { try { await tapi(t, '/api/folder/category', { folder: f.name, category: k }); done++; } catch (e) { /* that player doesn't have this folder */ } }
+        toast(f.name + ': ' + (k === 'auto' ? 'type chosen automatically' : CAT_ONE[k]) + (targets.length > 1 ? ' on ' + done + ' players' : ''));
+        closeSheet('sheetFolder'); loadLibrary();
       });
     }
     const box = $('#fdActions'); box.textContent = '';
@@ -914,6 +933,12 @@
   // Every ticked player at once, skipping songs a player already has, retrying a failed song 3 times before giving up.
   let upBusy = false, upLast = null;
   $('#upTidy').checked = store.get('cp_up_tidy') !== '0';
+  let upType = 'auto';
+  function renderUpType() {
+    catButtons($('#upType'), [['auto', 'Auto', 'guess'], ['music', 'Music'], ['podcast', 'Podcast'], ['audiobook', 'Audiobook']], upType,
+      (k) => { upType = k; renderUpType(); });
+  }
+  renderUpType();
   function upNames(files) { return files.map(f => ({ file: f, name: $('#upTidy').checked ? tidyName(f.name) : f.name })); }
   function showUpPreview() {
     const box = $('#upPreview'); box.textContent = '';
@@ -975,7 +1000,7 @@
     const targets = upTargets();
     if (!targets.length) return toast('Choose at least one player to upload to');
     const names = upNames(files);
-    upLast = { folder, runs: targets.map(t => ({ t, items: names.map(n => ({ file: n.file, name: n.name, state: 'wait' })) })) };
+    upLast = { folder, type: upType, runs: targets.map(t => ({ t, items: names.map(n => ({ file: n.file, name: n.name, state: 'wait' })) })) };
     await runUploads(upLast);
   };
   $('#upRetry').onclick = async () => {
@@ -998,7 +1023,12 @@
     toast(failed ? failed + (failed === 1 ? ' song' : ' songs') + ' didn’t make it. Tap Retry failed.'
       : sent ? 'All done' + (job.runs.length > 1 ? ' on ' + job.runs.length + ' players' : '') : 'Every player already had these songs');
     loadLibrary();
-    for (const r of job.runs) tapi(r.t, '/api/covers/find', { force: false }).catch(() => {}); // look for covers for a new folder
+    for (const r of job.runs) {
+      tapi(r.t, '/api/covers/find', { force: false }).catch(() => {}); // look for covers for a new folder
+      if (job.type && job.type !== 'auto' && r.items.some(i => i.state === 'ok' || i.state === 'skip'))
+        tapi(r.t, '/api/folder/category', { folder: job.folder, category: job.type }).catch(() => {}); // older players ignore it
+    }
+    if (!failed) { upType = 'auto'; renderUpType(); }
     setTimeout(loadLibrary, 8000);
   }
 

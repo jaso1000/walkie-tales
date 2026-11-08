@@ -14,7 +14,10 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     private let chips = UIStackView()
     private let chipScroll = UIScrollView()
     private let empty = UILabel()
-    private static let cats = [("all", "All"), ("music", "Music"), ("podcast", "Podcasts"), ("audiobook", "Audiobooks"), ("radio", "Radio")]
+    private var chipHeight: NSLayoutConstraint!
+    /// Library types, with a picture and colour each so children can tell them apart without reading (same as Android).
+    private static let cats = [("all", "All", "🌈", "#6C4CF1"), ("music", "Music", "🎵", "#E0559A"), ("podcast", "Podcasts", "🎙️", "#F2994A"),
+                               ("audiobook", "Audiobooks", "📖", "#27AE60"), ("radio", "Radio", "📻", "#2D9CDB")]
     private var collection: UICollectionView!
     private var covers: [String: UIImage] = [:]
 
@@ -54,7 +57,8 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         search.addTarget(self, action: #selector(searchChanged), for: .editingChanged)
         search.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(search)
-        chips.spacing = 8
+        chips.spacing = 10
+        chips.alignment = .center
         chips.translatesAutoresizingMaskIntoConstraints = false
         chipScroll.showsHorizontalScrollIndicator = false
         chipScroll.translatesAutoresizingMaskIntoConstraints = false
@@ -79,6 +83,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         collection.translatesAutoresizingMaskIntoConstraints = false
         collection.contentInset = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
         view.addSubview(collection)
+        chipHeight = chipScroll.heightAnchor.constraint(equalToConstant: 96)
         NSLayoutConstraint.activate([
             head.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             head.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
@@ -92,8 +97,8 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             search.heightAnchor.constraint(equalToConstant: 46),
             chipScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             chipScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            chipScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 12),
-            chipScroll.heightAnchor.constraint(equalToConstant: 40),
+            chipScroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 14),
+            chipHeight,
             chips.leadingAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.leadingAnchor),
             chips.trailingAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.trailingAnchor),
             chips.topAnchor.constraint(equalTo: chipScroll.contentLayoutGuide.topAnchor),
@@ -158,22 +163,35 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         chips.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let kinds = Self.cats.filter { $0.0 != "all" && present.contains($0.0) }.count
         chipScroll.isHidden = kinds < 2 // one kind only: nothing to choose between
-        for (key, label) in Self.cats where key == "all" || present.contains(key) {
+        chipHeight?.constant = kinds < 2 ? 0 : 96
+        for (key, label, pic, hex) in Self.cats where key == "all" || present.contains(key) {
             let on = key == cat
-            let b = UIButton(type: .system)
-            b.setTitle(label, for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 16, weight: on ? .bold : .regular)
-            b.setTitleColor(on ? .white : UIColor(white: 1, alpha: 0.8), for: .normal)
-            b.backgroundColor = on ? (Player.shared.folder.map { Art.colorFor($0) } ?? UIColor(red: 0.42, green: 0.3, blue: 0.95, alpha: 1)) : UIColor(white: 1, alpha: 0.1)
-            b.layer.cornerRadius = 20
-            b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 18, bottom: 8, right: 18)
-            b.addAction(UIAction { [weak self] _ in
+            let color = Art.color(hex)
+            let card = UIControl()
+            card.backgroundColor = color
+            card.layer.cornerRadius = 22
+            card.layer.cornerCurve = .continuous
+            card.layer.borderWidth = on ? 3 : 0
+            card.layer.borderColor = UIColor.white.cgColor
+            card.alpha = on ? 1 : 0.55
+            let p = UILabel(); p.text = pic; p.font = .systemFont(ofSize: 34); p.textAlignment = .center
+            let l = UILabel(); l.text = label; l.font = .systemFont(ofSize: 13, weight: .bold); l.textColor = .white; l.textAlignment = .center
+            let s = UIStackView(arrangedSubviews: [p, l]); s.axis = .vertical; s.alignment = .center; s.spacing = 2
+            s.isUserInteractionEnabled = false
+            s.translatesAutoresizingMaskIntoConstraints = false
+            card.addSubview(s)
+            card.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                card.widthAnchor.constraint(equalToConstant: 88), card.heightAnchor.constraint(equalToConstant: 92),
+                s.centerXAnchor.constraint(equalTo: card.centerXAnchor), s.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            ])
+            card.addAction(UIAction { [weak self] _ in
                 guard let self = self, self.cat != key else { return }
                 self.cat = key
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 self.applyFilter()
             }, for: .touchUpInside)
-            chips.addArrangedSubview(b)
+            chips.addArrangedSubview(card)
         }
     }
 

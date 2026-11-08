@@ -1806,7 +1806,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         android.widget.HorizontalScrollView chipScroll = new android.widget.HorizontalScrollView(this);
         chipScroll.setHorizontalScrollBarEnabled(false);
         libChips = new LinearLayout(this);
-        libChips.setPadding(0, dp(12), 0, dp(4));
+        libChips.setPadding(0, dp(14), 0, dp(8));
         chipScroll.addView(libChips);
         bcol.addView(chipScroll, new LinearLayout.LayoutParams(-1, -2));
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
@@ -2048,9 +2048,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         }
     }
 
-    static final String[][] LIB_CATS = {{"all", "All"}, {"music", "Music"}, {"podcast", "Podcasts"}, {"audiobook", "Audiobooks"}, {"radio", "Radio"}};
+    /** Library types, with a picture and colour each so children can tell them apart without reading. */
+    static final String[][] LIB_CATS = {
+            {"all", "All", "🌈", "#6C4CF1"}, {"music", "Music", "🎵", "#E0559A"}, {"podcast", "Podcasts", "🎙️", "#F2994A"},
+            {"audiobook", "Audiobooks", "📖", "#27AE60"}, {"radio", "Radio", "📻", "#2D9CDB"}};
 
-    /** The category buttons: All, plus one for each kind the player actually has. */
+    /** Big picture buttons: All, plus one for each kind the player actually has. */
     void renderLibChips(java.util.Set<String> present) {
         if (!libCat.equals("all") && !present.contains(libCat)) libCat = "all";
         libChips.removeAllViews();
@@ -2060,22 +2063,32 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         for (String[] c : LIB_CATS) {
             if (!c[0].equals("all") && !present.contains(c[0])) continue;
             boolean on = c[0].equals(libCat);
-            TextView chip = Ui.text(this, c[1], 16, on ? Color.WHITE : 0xCCFFFFFF, on);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setCornerRadius(dp(20));
-            bg.setColor(on ? accent : 0x1AFFFFFF);
-            chip.setBackground(bg);
-            chip.setPadding(dp(18), dp(9), dp(18), dp(9));
+            int color = Color.parseColor(c[3]);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setGravity(Gravity.CENTER);
+            GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{color, Ui.shade(color, 0.6f)});
+            bg.setCornerRadius(dp(22));
+            if (on) bg.setStroke(dp(3), Color.WHITE);
+            card.setBackground(bg);
+            card.setAlpha(on ? 1f : 0.55f);
+            TextView pic = Ui.text(this, c[2], 34, Color.WHITE, false);
+            pic.setGravity(Gravity.CENTER);
+            card.addView(pic, new LinearLayout.LayoutParams(-2, -2));
+            TextView label = Ui.text(this, c[1], 13, Color.WHITE, true);
+            label.setGravity(Gravity.CENTER);
+            label.setSingleLine(true);
+            card.addView(label, new LinearLayout.LayoutParams(-2, -2));
             final String key = c[0];
-            chip.setOnClickListener(v -> {
+            card.setOnClickListener(v -> {
                 if (key.equals(libCat)) return;
                 libCat = key;
                 pop();
                 if (libSnapshot != null) renderBrowser(libSnapshot, browseBuild);
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-            lp.rightMargin = dp(8);
-            libChips.addView(chip, lp);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(88), dp(92));
+            lp.rightMargin = dp(10);
+            libChips.addView(card, lp);
         }
     }
 

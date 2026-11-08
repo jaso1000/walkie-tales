@@ -134,6 +134,12 @@ enum Art {
         return UIColor(red: r + (1 - r) * amount, green: g + (1 - g) * amount, blue: b + (1 - b) * amount, alpha: 1)
     }
 
+    /// "#RRGGBB" -> colour.
+    static func color(_ hex: String) -> UIColor {
+        let v = UInt32(hex.dropFirst(), radix: 16) ?? 0x6C4CF1
+        return UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+    }
+
     static func hex(_ c: UIColor) -> String {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         c.getRed(&r, green: &g, blue: &b, alpha: &a)
