@@ -119,6 +119,26 @@
   .switch span::after { content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
   .switch input:checked + span { background: var(--accent); }
   .switch input:checked + span::after { transform: translateX(20px); }
+  .set.slider { display: block; }
+  .set.slider .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .set.slider .val { color: #b9a6ff; font-weight: 700; }
+  .menu-group { background: var(--panel); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+  .menu-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px 12px 16px; min-height: 66px; background: none;
+    border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; }
+  .menu-row:first-child { border-top: 0; }
+  .menu-row:active { background: var(--panel2); }
+  .menu-row .badge { width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .menu-row .badge svg { width: 24px; height: 24px; fill: #b9a6ff; }
+  .menu-row .grow { flex: 1; min-width: 0; }
+  .menu-row small { color: var(--muted); display: block; font-size: 14px; }
+  .menu-row .chev { width: 24px; height: 24px; flex: none; fill: rgba(255,255,255,.4); }
+  .page-head { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+  .page-head button { background: none; border: 0; padding: 8px 8px 8px 0; cursor: pointer; display: grid; }
+  .page-head svg { width: 24px; height: 24px; fill: #fff; }
+  .page-head h2 { font-size: 22px; margin: 0; }
+  .setpage .card h2 { text-transform: none; letter-spacing: 0; font-size: 14px; color: #b9a6ff; margin-bottom: 6px; }
+  .btn.wide { width: 100%; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
   .val { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 
@@ -208,6 +228,14 @@
   </div>
 
   <div class="card">
+    <h2>Find this player</h2>
+    <div class="row">
+      <button class="btn" id="findBtn">Ring the player</button>
+    </div>
+    <div class="hint" style="text-align:left">Rings loudly for 30 seconds, even over the volume limits. Tap its screen to stop it.</div>
+  </div>
+
+  <div class="card">
     <h2>Sleep timer</h2>
     <div class="chips" id="sleepChips"></div>
     <div class="hint" id="sleepHint" style="text-align:left"></div>
@@ -293,20 +321,48 @@
 
 <!-- ================= SETTINGS ================= -->
 <section id="tab-set"><div class="wrap">
-  <div class="card">
-    <h2>Your child</h2>
-    <div class="set"><div class="grow">Child's name</div></div>
-    <input type="text" id="s_kid_name" maxlength="40" placeholder="Name">
+  <!-- Same topics, order and wording as the player's Grown-up settings (SettingsActivity.java): keep the two in step. -->
+  <div id="setMenu"></div>
+  <div class="setpage" data-page="kid" data-title="Your child" hidden>
+    <div class="card"><h2>Child's name</h2><input type="text" id="s_kid_name" maxlength="40" placeholder="Name"></div>
   </div>
-  <div class="card" id="setSound"><h2>Sound</h2></div>
-  <div class="card" id="setQuiet"><h2>Bedtime</h2></div>
-  <div class="card" id="setPlay"><h2>Browsing & cards</h2></div>
-  <div class="card" id="setScreen"><h2>Screen</h2></div>
-  <div class="card" id="setSafety"><h2>Safety</h2></div>
-  <div class="card">
-    <h2>About</h2>
-    <div class="hint" style="text-align:left" id="about"></div>
-    <div class="row" style="margin-top:12px"><button class="btn ghost" id="forget">Forget PIN on this device</button></div>
+  <div class="setpage" data-page="library" data-title="Library" hidden>
+    <div class="card"><h2>Folders</h2><button class="btn ghost wide" id="goLib">Open the Library</button></div>
+    <div class="card" id="setCovers"><h2>Covers</h2></div>
+    <div class="card" id="setOnPlayer"><h2>On the player</h2></div>
+  </div>
+  <div class="setpage" data-page="cards" data-title="Cards" hidden>
+    <div class="card" id="setCards"></div>
+    <div class="card"><h2>Linked cards</h2><button class="btn ghost wide" id="goCards">Link and manage cards</button></div>
+  </div>
+  <div class="setpage" data-page="sound" data-title="Sound" hidden>
+    <div class="card" id="setMax"></div>
+    <div class="card" id="setSound"></div>
+  </div>
+  <div class="setpage" data-page="bedtime" data-title="Bedtime" hidden>
+    <div class="card" id="setTimes"><h2>Times</h2></div>
+    <div class="card" id="setDuring"><h2>During bedtime</h2></div>
+  </div>
+  <div class="setpage" data-page="screen" data-title="Screen" hidden>
+    <div class="card" id="setSleep"><h2>Sleeping</h2></div>
+    <div class="card" id="setNight"><h2>Night light and clock</h2></div>
+  </div>
+  <div class="setpage" data-page="safety" data-title="Safety" hidden>
+    <div class="card" id="setSafety"></div>
+  </div>
+  <div class="setpage" data-page="remote" data-title="Remote control" hidden>
+    <div class="card"><h2>Connect</h2>
+      <div class="set"><div class="grow">Address<small id="remoteAddr"></small></div></div>
+      <button class="btn ghost wide" id="forget" style="margin-top:8px">Forget PIN on this device</button>
+    </div>
+  </div>
+  <div class="setpage" data-page="about" data-title="About" hidden>
+    <div class="card"><div class="set"><div class="grow"><span id="about"></span><small id="aboutFree"></small></div></div></div>
+    <div class="card" id="updateCard" hidden><h2>Update players</h2>
+      <div class="set"><div class="grow">Newest version<small id="updLatest"></small></div></div>
+      <div class="list" id="updList"></div>
+      <button class="btn wide" id="updAll" style="margin-top:10px">Update all players</button>
+    </div>
   </div>
 </div></section>
 
@@ -402,7 +458,7 @@
     const t = b.dataset.tab;
     if (t === 'lib') loadLibrary();
     if (t === 'cards') { loadLibrary(); loadCards(); }
-    if (t === 'set') loadSettings();
+    if (t === 'set') { showSetPage('menu'); loadSettings(); }
     window.scrollTo(0, 0);
   });
 
@@ -447,6 +503,8 @@
     });
     $('#screenBtn').textContent = s.screenOff ? 'Turn the screen back on' : 'Turn the screen off';
     $('#screenBtn').classList.toggle('ghost', !!s.screenOff);
+    $('#findBtn').textContent = s.finding ? 'Stop ringing' : 'Ring the player';
+    $('#findBtn').classList.toggle('danger', !!s.finding);
     $('#sleepHint').textContent = s.sleepMinutesLeft ? 'Music stops in about ' + s.sleepMinutesLeft + ' min' : '';
     // track list
     renderTracks(s);
@@ -522,6 +580,7 @@
   $('#volUp').onclick = () => act('/api/volume', { delta: 1 });
   $('#restart').onclick = () => act('/api/restart');
   $('#stop').onclick = () => act('/api/stop');
+  $('#findBtn').onclick = () => act('/api/find', { on: !(st && st.finding) }).then(r => toast(r && r.finding ? 'Ringing…' : 'Stopped'));
   $('#screenBtn').onclick = () => act('/api/screen', { off: !(st && st.screenOff) }).then(r => toast(r && r.screenOff ? 'Screen off' : 'Screen on'));
   $('#msgSend').onclick = () => { const t = $('#msgText').value.trim(); if (!t) return; act('/api/message', { text: t }).then(() => { $('#msgText').value = ''; toast('Sent'); }); };
   $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };
@@ -686,24 +745,158 @@
 
   // ---------------------------------------------------------------- settings
   const SWITCHES = {
-    setSound: [['show_volume', 'Volume buttons on the player'], ['fade_in', 'Fade in'], ['announce', 'Say the name out loud']],
-    setQuiet: [['bedtime_dark', 'Screen off at bedtime', 'Goes black 30 s after the last touch'], ['quiet', 'Quieter at bedtime']],
-    setPlay: [['find_art', 'Find missing covers online'], ['cards', 'Use NFC cards'], ['browse', 'Library button on the player'], ['track_list', 'Track list on the player'], ['rest_mode', 'Pause when the card is lifted off']],
-    setScreen: [['night_light', 'Night light'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery on the player']],
+    setCovers: [['find_art', 'Find missing covers online']],
+    setOnPlayer: [['browse', 'Library button'], ['track_list', 'Tracks button']],
+    setCards: [['cards', 'Use NFC cards'], ['rest_mode', 'Pause when the card is lifted off'], ['cards_awake', 'Keep the screen on for cards (charging, bedtime)']],
+    setSound: [['show_volume', 'Volume buttons on screen'], ['headphones_button', 'Headphones button'], ['fade_in', 'Fade in'], ['announce', 'Say the name out loud']],
+    setDuring: [['bedtime_dark', 'Screen off at bedtime', 'Goes black 30 seconds after the last touch'], ['quiet', 'Quieter at bedtime']],
+    setNight: [['night_light', 'Night light'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery']],
     setSafety: [['gate', 'Grown-up sum before settings'], ['power_menu', 'Power button can switch it off']],
   };
+  const DIM = [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']];
+  const KEEP = [[0, 'No'], [2, 'While playing'], [1, 'Always']];
+  const TIMEOUT = [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes']];
+  const CHEVRON = '<svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>';
+  const MENU = [
+    [['kid', 'Your child', 'M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z']],
+    [['library', 'Library', 'M4,8h4V4H4v4zM10,20h4v-4h-4v4zM4,20h4v-4H4v4zM4,14h4v-4H4v4zM10,14h4v-4h-4v4zM16,4v4h4V4h-4zM10,8h4V4h-4v4zM16,14h4v-4h-4v4zM16,20h4v-4h-4v4z'],
+     ['cards', 'Cards', 'M20,4H4C2.89,4 2,4.89 2,6v12c0,1.11 0.89,2 2,2h16c1.11,0 2,-0.89 2,-2V6C22,4.89 21.11,4 20,4zM20,18H4v-6h16v6zM20,8H4V6h16v2z']],
+    [['sound', 'Sound', 'M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z'],
+     ['bedtime', 'Bedtime', 'M12.34,2.02C6.59,1.82 2,6.42 2,12c0,5.52 4.48,10 10,10c3.71,0 6.93,-2.02 8.66,-5.02C13.15,16.73 8.55,8.55 12.34,2.02z'],
+     ['screen', 'Screen', 'M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,19H7V5h10V19z']],
+    [['safety', 'Safety', 'M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5L12,1z'],
+     ['remote', 'Remote control', 'M1,9l2,2c4.97,-4.97 13.03,-4.97 18,0l2,-2C16.93,2.93 7.08,2.93 1,9zM9,17l3,3 3,-3c-1.65,-1.66 -4.34,-1.66 -6,0zM5,13l2,2c2.76,-2.76 7.24,-2.76 10,0l2,-2C15.14,9.14 8.87,9.14 5,13z'],
+     ['about', 'About', 'M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z']],
+  ];
+  // The menu and each page's back arrow never change, so they're only built once.
+  function buildMenu() {
+    const m = $('#setMenu');
+    MENU.forEach(items => {
+      const g = el('div', 'menu-group');
+      items.forEach(([id, title, path]) => {
+        const b = el('button', 'menu-row'); b.type = 'button';
+        b.innerHTML = '<span class="badge"><svg viewBox="0 0 24 24"><path d="' + path + '"/></svg></span><span class="grow"><span></span><small></small></span>' + CHEVRON;
+        b.querySelector('.grow span').textContent = title;
+        b.querySelector('small').id = 'm_' + id;
+        b.onclick = () => showSetPage(id);
+        g.appendChild(b);
+      });
+      m.appendChild(g);
+    });
+    document.querySelectorAll('.setpage').forEach(p => {
+      const h = el('div', 'page-head'); const b = el('button'); b.type = 'button'; b.title = 'Back';
+      b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z"/></svg>';
+      b.onclick = () => showSetPage('menu');
+      h.appendChild(b); h.appendChild(el('h2', '', p.dataset.title)); p.prepend(h);
+    });
+    $('#goLib').onclick = () => document.querySelector('nav button[data-tab=lib]').click();
+    $('#goCards').onclick = () => document.querySelector('nav button[data-tab=cards]').click();
+  }
+  function showSetPage(id) {
+    $('#setMenu').hidden = id !== 'menu';
+    document.querySelectorAll('.setpage').forEach(p => p.hidden = p.dataset.page !== id);
+    window.scrollTo(0, 0);
+    if (id === 'about') showUpdates();
+  }
+
+  // Update players over the network. The first version that can do this has to go on by USB.
+  const FIRST_SELF_UPDATE = '1.20';
+  const older = (a, b) => {
+    const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); }
+    return false;
+  };
+  let updLatest = null, updRows = [];
+  const pinHeaders = (p) => { const k = store.get(pinKey(p.id)) || ''; return k ? { 'X-Pin': k } : {}; };
+  async function playerStatus(p) {
+    const r = await fetch('/p/' + p.id + '/api/status', { headers: pinHeaders(p), cache: 'no-store' });
+    if (r.status === 401) return { needsPin: true };
+    if (!r.ok) throw new Error('Offline');
+    return r.json();
+  }
+  async function showUpdates() {
+    const card = $('#updateCard');
+    card.hidden = !players; if (!players) return;
+    $('#updLatest').textContent = 'Checking…'; $('#updAll').disabled = true; $('#updList').textContent = ''; updRows = [];
+    try {
+      const r = await fetch('/update/info', { cache: 'no-store' }); const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      updLatest = j.version; $('#updLatest').textContent = 'WalkieTales ' + updLatest;
+    } catch (e) { updLatest = null; $('#updLatest').textContent = 'Couldn’t check (' + e.message + ')'; }
+    for (const p of players) {
+      const row = el('div'); const g = el('span', 'grow'); g.appendChild(el('span', '', label(p))); const note = el('small', '', 'Checking…'); g.appendChild(note); row.appendChild(g);
+      const btn = el('button', 'btn ghost', 'Update'); btn.hidden = true; row.appendChild(btn); $('#updList').appendChild(row);
+      const u = { p, note, btn, ready: false }; updRows.push(u);
+      btn.onclick = () => sendUpdate(u, u.force);
+      checkRow(u);
+    }
+  }
+  async function checkRow(u) {
+    u.ready = false; u.btn.hidden = true; u.force = false;
+    try {
+      const s = await playerStatus(u.p);
+      if (s.needsPin) u.note.textContent = 'Needs its PIN: open this player once first';
+      else if (older(s.version, FIRST_SELF_UPDATE)) u.note.textContent = 'On ' + s.version + ': needs one update by USB first';
+      else if (!updLatest || !older(s.version, updLatest)) u.note.textContent = 'Up to date (' + s.version + ')';
+      else { u.note.textContent = 'On ' + s.version; u.ready = true; u.btn.hidden = false; }
+    } catch (e) { u.note.textContent = 'Offline'; }
+    $('#updAll').disabled = !updRows.some(x => x.ready);
+  }
+  async function sendUpdate(u, force) {
+    u.ready = false; u.btn.hidden = true; u.note.textContent = 'Sending…';
+    let r, j = {};
+    try {
+      r = await fetch('/p/' + u.p.id + '/update' + (force ? '?force=1' : ''), { method: 'POST', headers: pinHeaders(u.p) });
+      j = await r.json().catch(() => ({}));
+    } catch (e) { u.note.textContent = 'Offline'; return; }
+    if (r.status === 409) { u.note.textContent = 'Playing, so not updated'; u.force = true; u.btn.textContent = 'Update anyway'; u.btn.hidden = false; return; }
+    if (!r.ok) { u.note.textContent = j.error || 'Update failed'; return; }
+    u.note.textContent = 'Installing…';
+    for (let i = 0; i < 24; i++) {
+      await new Promise(ok => setTimeout(ok, 5000));
+      try { const s = await playerStatus(u.p); if (s.version && !older(s.version, j.version)) { u.note.textContent = 'Updated to ' + s.version; return; } } catch (e) { /* restarting */ }
+    }
+    u.note.textContent = 'Didn’t finish: check the player';
+  }
+  $('#updAll').onclick = async () => {
+    $('#updAll').disabled = true;
+    await Promise.all(updRows.filter(u => u.ready).map(u => sendUpdate(u, false)));
+  };
+  const clock = (mins) => new Date(2000, 0, 1, Math.floor(mins / 60), mins % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const pick = (opts, v) => (opts.find(o => o[0] === v) || opts[0])[1];
+  let folderCount = null, cardCount = null, freeBytes = 0;
+  function showSummaries() {
+    const s = settings; if (!s) return;
+    const on = s.screen_on, after = pick(TIMEOUT, s.screen_timeout);
+    const text = {
+      kid: s.kid_name || 'Not set',
+      library: folderCount == null ? '' : folderCount + (folderCount === 1 ? ' folder' : ' folders'),
+      cards: !s.cards ? 'Off' : 'On' + (cardCount == null ? '' : '  ·  ' + cardCount + ' linked'),
+      sound: 'Maximum volume ' + s.max_volume + '%',
+      bedtime: clock(s.quiet_start) + ' to ' + clock(s.quiet_end),
+      screen: on === 1 ? 'Always on' : (on === 2 ? 'On while playing, then off after ' : 'Off after ') + after,
+      safety: 'Grown-up sum ' + (s.gate ? 'on' : 'off'),
+      remote: 'On',
+      about: 'WalkieTales ' + (st ? st.version : ''),
+    };
+    for (const [k, v] of Object.entries(text)) { const e = document.getElementById('m_' + k); if (e) e.textContent = v; }
+    $('#about').textContent = text.about;
+    $('#aboutFree').textContent = freeBytes ? (freeBytes / 1e9).toFixed(1) + ' GB free' : '';
+    $('#remoteAddr').textContent = cur ? cur.url : location.host;
+  }
 
   let built = false;
-  function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; showCap(); toast('Saved'); poll(); }).catch(err); }
+  function save(k, v) { api('/api/settings', { [k]: v }).then(r => { settings = r.settings; showCap(); showSummaries(); toast('Saved'); poll(); }).catch(err); }
   function sw(k, title, sub) {
     const row = el('div', 'set'); const g = el('div', 'grow', title); if (sub) g.appendChild(el('small', '', sub));
     const lab = el('label', 'switch'); const inp = el('input'); inp.type = 'checkbox'; inp.id = 's_' + k; inp.onchange = () => save(k, inp.checked);
     lab.appendChild(inp); lab.appendChild(el('span')); row.appendChild(g); row.appendChild(lab); return row;
   }
   function range(k, title, min, max) {
-    const row = el('div', 'set'); const g = el('div', 'grow', title); const inp = el('input'); inp.type = 'range'; inp.min = min; inp.max = max; inp.step = 5; inp.id = 's_' + k;
+    const row = el('div', 'set slider'); const top = el('div', 'top'); top.appendChild(el('span', '', title));
+    const inp = el('input'); inp.type = 'range'; inp.min = min; inp.max = max; inp.step = 5; inp.id = 's_' + k;
     const v = el('span', 'val'); v.id = 'v_' + k; inp.oninput = () => v.textContent = inp.value + '%'; inp.onchange = () => save(k, +inp.value);
-    g.appendChild(inp); row.appendChild(g); row.appendChild(v); return row;
+    top.appendChild(v); row.appendChild(top); row.appendChild(inp); return row;
   }
   function time(k, title) {
     const row = el('div', 'set'); const g = el('div', 'grow', title); const inp = el('input'); inp.type = 'time'; inp.id = 's_' + k; inp.style.maxWidth = '150px';
@@ -717,22 +910,20 @@
   }
   function buildSettings() {
     if (built) return; built = true;
-    const snd = $('#setSound'); snd.appendChild(range('max_volume', 'Maximum volume', 10, 100)); SWITCHES.setSound.forEach(a => snd.appendChild(sw(...a)));
-    const q = $('#setQuiet');
-    q.appendChild(time('quiet_start', 'Bedtime starts')); q.appendChild(time('quiet_end', 'Bedtime ends'));
-    SWITCHES.setQuiet.forEach(a => q.appendChild(sw(...a)));
-    q.appendChild(range('quiet_volume', 'Bedtime maximum volume', 10, 100));
-    const p = $('#setPlay'); SWITCHES.setPlay.forEach(a => p.appendChild(sw(...a)));
-    const sc = $('#setScreen');
-    sc.appendChild(choice('dim_after', 'Dim the screen after', [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']]));
-    sc.appendChild(choice('screen_on', 'Keep the screen on', [[0, 'No'], [2, 'While playing'], [1, 'Always']]));
-    sc.appendChild(choice('screen_timeout', 'Screen turns off after', [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes']]));
-    SWITCHES.setScreen.forEach(a => sc.appendChild(sw(...a)));
-    const sf = $('#setSafety'); SWITCHES.setSafety.forEach(a => sf.appendChild(sw(...a)));
+    for (const [id, rows] of Object.entries(SWITCHES)) rows.forEach(a => $('#' + id).appendChild(sw(...a)));
+    $('#setMax').appendChild(range('max_volume', 'Maximum volume', 10, 100));
+    const t = $('#setTimes'); t.appendChild(time('quiet_start', 'Bedtime starts')); t.appendChild(time('quiet_end', 'Bedtime ends'));
+    $('#setDuring').appendChild(range('quiet_volume', 'Bedtime maximum volume', 10, 100));
+    const sl = $('#setSleep');
+    sl.appendChild(choice('dim_after', 'Dim the screen after', DIM));
+    sl.appendChild(choice('screen_on', 'Keep the screen on', KEEP));
+    sl.appendChild(choice('screen_timeout', 'Screen turns off after', TIMEOUT));
     $('#s_kid_name').onchange = (e) => save('kid_name', e.target.value.trim());
   }
   async function loadSettings() {
     buildSettings();
+    api('/api/library').then(l => { folderCount = l.folders.length; freeBytes = l.freeBytes || 0; showSummaries(); }).catch(() => {});
+    api('/api/cards').then(c => { cardCount = c.cards.length; showSummaries(); }).catch(() => {});
     let r; try { r = await api('/api/settings'); } catch (e) { return err(e); }
     settings = r.settings;
     for (const [k, v] of Object.entries(settings)) {
@@ -742,8 +933,9 @@
       else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
       else inp.value = v;
     }
-    $('#about').textContent = 'WalkieTales ' + (st ? st.version : '');
+    showSummaries();
   }
+  buildMenu();
 
   // ---------------------------------------------------------------- players
   const short = (u) => u.replace(/^https?:\/\//, '').replace(/:8080$/, '');
@@ -755,8 +947,8 @@
   function choose(p) {
     cur = p; base = '/p/' + p.id; store.set('cp_player', p.id);
     pin = store.get(pinKey(p.id)) || '';
-    st = null; lib = null; coverFor = undefined; lastPoll = 0; built = false; tlOpen = false; tlKey = ''; capFor = null; settings = null;
-    for (const id of ['#setSound', '#setQuiet', '#setPlay', '#setScreen', '#setSafety']) $(id).querySelectorAll(':scope > :not(h2)').forEach(n => n.remove());
+    st = null; lib = null; coverFor = undefined; lastPoll = 0; built = false; tlOpen = false; tlKey = ''; capFor = null; settings = null; folderCount = null; cardCount = null; freeBytes = 0;
+    for (const id of [...Object.keys(SWITCHES), 'setMax', 'setTimes', 'setSleep']) $('#' + id).querySelectorAll(':scope > :not(h2)').forEach(n => n.remove());
     $('#trackList').textContent = ''; $('#grid').textContent = ''; $('#cardList').textContent = '';
     showWho(); setConn(false, 'Connecting…');
     document.querySelector('nav button[data-tab=now]').click();

@@ -47,6 +47,12 @@ plus any `SCAN_SUBNETS`). Each device remembers each player's PIN separately. Wi
 `walkie-tales-data` volume, and `PLAYERS="Riv=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"` can pre-fill it.
 Only addresses on the home network (10.x, 172.16-31.x, 192.168.x or local host names) are accepted.
 
+## Update players over the network
+
+**Settings → About → Update players** sends the newest release from GitHub to every player that's online and whose PIN this device knows (set `UPDATE_REPO` to use another repository). A player that's playing is left alone until you press **Update anyway**. The player must be a device-owner kiosk on version 1.20 or newer, so earlier versions need one update by USB. It only installs a newer version signed with the same key as the app already on it.
+
+To try a build before releasing it, put it in the data volume as `update/local.apk`, with its version number in `update/local.txt`. Delete both afterwards.
+
 ## Install it like an app
 
 - **iPhone / iPad:** open the page in Safari → Share → **Add to Home Screen**. It opens full screen with the WalkieTales icon.

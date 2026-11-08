@@ -201,6 +201,10 @@ final class RemoteServer {
                 upload(in, out, query.get("folder"), query.get("name"), len);
                 return;
             }
+            if (method.equals("PUT") && path.equals("/api/update")) {
+                receiveUpdate(in, out, len, query.containsKey("force"));
+                return;
+            }
 
             JSONObject body = new JSONObject();
             if (len > 0) {
@@ -272,6 +276,40 @@ final class RemoteServer {
         if (dest.exists()) dest.delete();
         if (!tmp.renameTo(dest)) { sendJson(out, 500, new JSONObject().put("error", "Couldn't save file")); return; }
         sendJson(out, 200, new JSONObject().put("ok", true).put("folder", dir.getName()).put("name", file));
+    }
+
+    /** A new version of the app, sent from the remote. Waits for a listening child unless told otherwise. */
+    private void receiveUpdate(InputStream in, OutputStream out, long len, boolean force) throws Exception {
+        if (len <= 0 || len > 200_000_000L) { sendJson(out, 413, new JSONObject().put("error", "That isn't a WalkieTales update")); return; }
+        File apk = new File(ctx.getCacheDir(), "update.apk");
+        try (FileOutputStream fo = new FileOutputStream(apk)) {
+            byte[] buf = new byte[64 * 1024];
+            long left = len;
+            while (left > 0) {
+                int n = in.read(buf, 0, (int) Math.min(buf.length, left));
+                if (n < 0) throw new IOException("Upload cut short");
+                fo.write(buf, 0, n);
+                left -= n;
+            }
+        }
+        String problem = !Kiosk.isOwner(ctx) ? "Only a player set up as a kiosk can update by itself" : SelfUpdate.problem(ctx, apk);
+        if (problem != null) {
+            apk.delete();
+            sendJson(out, 400, new JSONObject().put("error", problem));
+            return;
+        }
+        if (!force) {
+            FutureTask<JSONObject> task = new FutureTask<>(() -> api.call("GET", "/api/status", new HashMap<>(), new JSONObject()));
+            main.post(task);
+            if (task.get(8, TimeUnit.SECONDS).optBoolean("playing")) {
+                apk.delete();
+                sendJson(out, 409, new JSONObject().put("error", "Playing right now").put("playing", true));
+                return;
+            }
+        }
+        sendJson(out, 200, new JSONObject().put("ok", true).put("version", SelfUpdate.versionName(ctx, apk)));
+        out.flush();
+        SelfUpdate.install(ctx, apk);
     }
 
     /** A folder directly inside Music/Cards (no paths, no dot-names). */

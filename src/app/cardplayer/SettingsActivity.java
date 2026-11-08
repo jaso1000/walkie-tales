@@ -1,11 +1,13 @@
 package app.cardplayer;
 
 import android.app.Activity;
-import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -13,6 +15,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -25,34 +28,48 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Grown-up settings: link cards, per-folder options, volume limit, screen and kiosk options. */
+/**
+ * Grown-up settings: a short menu of topics, each opening its own page.
+ * The companion remote (companion/web/index.html) has the same menu: keep the two in step.
+ */
 public class SettingsActivity extends Activity {
 
     static final int BG = 0xFF101016;
+    static final int PANEL = 0xFF1B1B26;
+    static final int LINE = 0xFF2A2A38;
     static final int ACCENT = 0xFFB9A6FF;
+    static final int STRONG = 0xFF6C4CF1;
+    static final int MUTED = 0x99FFFFFF;
+    static final int DANGER = 0xFFFF7A7A;
     static final int DIALOG = MainActivity.DIALOG_THEME;
 
+    static final String MENU = "menu";
+
     SharedPreferences prefs;
+    ScrollView scroll;
     LinearLayout list;
+    LinearLayout group; // the rounded panel new rows go into
+    String page = MENU;
+    Object backCallback;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = Store.prefs(this);
-        ScrollView sv = new ScrollView(this);
-        sv.setBackgroundColor(BG);
+        scroll = new ScrollView(this);
+        scroll.setBackgroundColor(BG);
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(0, 0, 0, dp(32));
-        sv.addView(list);
+        list.setPadding(dp(16), 0, dp(16), dp(32));
+        scroll.addView(list);
         if (Build.VERSION.SDK_INT >= 30) {
-            sv.setOnApplyWindowInsetsListener((v, ins) -> {
+            scroll.setOnApplyWindowInsetsListener((v, ins) -> {
                 Insets bars = ins.getInsets(WindowInsets.Type.systemBars());
                 v.setPadding(0, bars.top, 0, bars.bottom);
                 return ins;
             });
         }
-        setContentView(sv);
+        setContentView(scroll);
     }
 
     @Override
@@ -61,78 +78,170 @@ public class SettingsActivity extends Activity {
         build();
     }
 
+    @Override
+    public void onBackPressed() {
+        if (!MENU.equals(page)) open(MENU);
+        else super.onBackPressed();
+    }
+
+    /** Newer Android delivers Back through a callback; it only stays registered while inside a page. */
+    void syncBack() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (backCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                    (android.window.OnBackInvokedCallback) backCallback);
+            backCallback = null;
+        }
+        if (!MENU.equals(page)) {
+            android.window.OnBackInvokedCallback cb = () -> open(MENU);
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb);
+            backCallback = cb;
+        }
+    }
+
+    void open(String p) {
+        page = p;
+        build();
+        scroll.scrollTo(0, 0);
+    }
+
     void build() {
         list.removeAllViews();
-        Map<String, String> cards = Store.loadCards();
-        List<String> folders = Store.folders();
-
-        // header
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(20), dp(20), dp(8), dp(4));
-        TextView t = Ui.text(this, "Grown-up settings", 26, 0xFFFFFFFF, true);
-        head.addView(t, new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView done = Ui.text(this, "Done", 17, ACCENT, true);
-        done.setPadding(dp(16), dp(12), dp(16), dp(12));
-        done.setOnClickListener(v -> finish());
-        head.addView(done);
-        list.addView(head);
-
-        section("Your child");
-        String kid = prefs.getString("kid_name", "").trim();
-        row("Name", kid.isEmpty() ? "Not set" : kid, v -> editName());
-
-        section("Cards");
-        toggle("Use NFC cards", null, "cards", true);
-        row("Link a card", null, v -> pickLinkTarget(folders));
-        row("Linked cards", cards.isEmpty() ? "None yet" : cards.size() + (cards.size() == 1 ? " card" : " cards"),
-                v -> showCards());
-
-        section("Library");
-        if (folders.isEmpty()) {
-            row("No folders yet", "Add folders of music to Music/Cards", null);
+        group = null;
+        syncBack();
+        switch (page) {
+            case "library": buildLibrary(); break;
+            case "cards": buildCards(); break;
+            case "sound": buildSound(); break;
+            case "bedtime": buildBedtime(); break;
+            case "screen": buildScreen(); break;
+            case "safety": buildSafety(); break;
+            case "remote": buildRemote(); break;
+            case "about": buildAbout(); break;
+            default: buildMenu();
         }
-        for (String f : folders) row(f, folderSummary(f, cards), v -> folderOptions(f));
-        row("Shuffle everything", "Play every folder mixed together", v -> playNow(Store.ALL));
-        toggle("Find missing covers online", null, "find_art", true);
+    }
 
-        section("Sound");
+    // ------------------------------------------------------------------ the menu
+
+    void buildMenu() {
+        header("Grown-up settings", false);
+        String kid = prefs.getString("kid_name", "").trim();
+        int folders = Store.folders().size();
+        int linked = Store.loadCards().size();
+
+        panel(null);
+        menuItem(R.drawable.ic_person, "Your child", kid.isEmpty() ? "Not set" : kid, v -> editName());
+        panel(null);
+        menuPage(R.drawable.ic_grid, "Library", folders + (folders == 1 ? " folder" : " folders"), "library");
+        menuPage(R.drawable.ic_card, "Cards",
+                prefs.getBoolean("cards", true) ? "On  ·  " + linked + " linked" : "Off", "cards");
+        panel(null);
+        menuPage(R.drawable.ic_vol_up, "Sound", "Maximum volume " + prefs.getInt("max_volume", 70) + "%", "sound");
+        menuPage(R.drawable.ic_moon, "Bedtime",
+                formatTime(prefs.getInt("quiet_start", 19 * 60)) + " to " + formatTime(prefs.getInt("quiet_end", 7 * 60)),
+                "bedtime");
+        menuPage(R.drawable.ic_phone, "Screen", screenSummary(), "screen");
+        panel(null);
+        menuPage(R.drawable.ic_shield, "Safety",
+                "Grown-up sum " + (prefs.getBoolean("gate", true) ? "on" : "off"), "safety");
+        menuPage(R.drawable.ic_wifi, "Remote control", prefs.getBoolean("remote", true) ? "On" : "Off", "remote");
+        menuPage(R.drawable.ic_info, "About", "WalkieTales " + version(), "about");
+    }
+
+    String screenSummary() {
+        int on = prefs.getInt("screen_on", 0);
+        if (on == 1) return "Always on";
+        String after = choiceLabel("screen_timeout", TIMEOUT_VALUES, TIMEOUT_LABELS, 60);
+        return (on == 2 ? "On while playing, then off after " : "Off after ") + after;
+    }
+
+    // ------------------------------------------------------------------ the pages
+
+    void buildLibrary() {
+        header("Library", true);
+        Map<String, String> cards = Store.loadCards();
+        List<Store.FolderInfo> folders = Store.library();
+        panel("Folders");
+        if (folders.isEmpty()) row("No folders yet", "Add folders of music to Music/Cards", null);
+        for (Store.FolderInfo i : folders) link(i.name, folderSummary(i, cards), v -> folderOptions(i.name));
+        link("Shuffle everything", null, v -> playNow(Store.ALL));
+        panel("Covers");
+        toggle("Find missing covers online", null, "find_art", true);
+        panel("On the player");
+        toggle("Library button", null, "browse", true);
+        toggle("Tracks button", null, "track_list", true);
+    }
+
+    void buildCards() {
+        header("Cards", true);
+        Map<String, String> cards = Store.loadCards();
+        panel(null);
+        toggle("Use NFC cards", null, "cards", true);
+        toggle("Pause when the card is lifted off", null, "rest_mode", false);
+        toggle("Keep the screen on for cards", "While charging and at bedtime, so a card works straight away. "
+                + "Off: the screen sleeps as usual, and a card works after a tap wakes it.", "cards_awake", true);
+        panel("Linked cards");
+        link("Link a card", null, v -> pickLinkTarget(Store.folders()));
+        link("Linked cards", cards.isEmpty() ? "None yet" : cards.size() + (cards.size() == 1 ? " card" : " cards"),
+                v -> showCards());
+    }
+
+    void buildSound() {
+        header("Sound", true);
+        panel(null);
         seek("Maximum volume", "max_volume", 10, 100, 70);
+        panel(null);
         toggle("Volume buttons on screen", null, "show_volume", true);
         toggle("Fade in", null, "fade_in", true);
         toggle("Say the name out loud", null, "announce", false);
+        if (Headphones.hasBluetooth(this)) {
+            panel("Headphones");
+            toggle("Headphones button", "Switches Bluetooth on and off from the player", "headphones_button", true);
+            link("Pair new headphones", "Opens Bluetooth settings", v -> openSystem(Settings.ACTION_BLUETOOTH_SETTINGS));
+        }
+    }
 
-        section("Bedtime");
+    void buildBedtime() {
+        header("Bedtime", true);
+        panel("Times");
         timeRow("Bedtime starts", "quiet_start", 19 * 60);
         timeRow("Bedtime ends", "quiet_end", 7 * 60);
+        panel("During bedtime");
         toggle("Screen off at bedtime", "Goes black 30 seconds after the last touch", "bedtime_dark", false);
         toggle("Quieter at bedtime", null, "quiet", false);
         seek("Bedtime maximum volume", "quiet_volume", 10, 100, 40);
+    }
 
-        section("Browsing");
-        toggle("Library button", null, "browse", true);
-        toggle("Tracks button", null, "track_list", true);
+    static final int[] DIM_VALUES = {30, 90, 300, 0};
+    static final String[] DIM_LABELS = {"30 seconds", "90 seconds", "5 minutes", "Never"};
+    static final int[] KEEP_VALUES = {0, 2, 1};
+    static final String[] KEEP_LABELS = {"No", "While playing", "Always"};
+    static final int[] TIMEOUT_VALUES = {30, 60, 120, 300};
+    static final String[] TIMEOUT_LABELS = {"30 seconds", "1 minute", "2 minutes", "5 minutes"};
 
-        section("How cards work");
-        toggle("Pause when the card is lifted off", null, "rest_mode", false);
-
-        section("Screen");
-        cycle("Dim the screen after", "dim_after", new int[]{30, 90, 300, 0},
-                new String[]{"30 seconds", "90 seconds", "5 minutes", "Never"}, 90);
-        cycle("Keep the screen on", "screen_on", new int[]{0, 2, 1},
-                new String[]{"No", "While playing", "Always"}, 0);
-        cycle("Screen turns off after", "screen_timeout", new int[]{30, 60, 120, 300},
-                new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, 60);
+    void buildScreen() {
+        header("Screen", true);
+        panel("Sleeping");
+        choice("Dim the screen after", "dim_after", DIM_VALUES, DIM_LABELS, 90);
+        choice("Keep the screen on", "screen_on", KEEP_VALUES, KEEP_LABELS, 0);
+        choice("Screen turns off after", "screen_timeout", TIMEOUT_VALUES, TIMEOUT_LABELS, 60);
+        panel("Night light and clock");
         toggle("Night light", null, "night_light", false);
         toggle("Clock on the night light", null, "night_clock", true);
         toggle("Clock and battery", null, "show_status", true);
+    }
 
-        section("Safety");
+    void buildSafety() {
+        header("Safety", true);
+        panel(null);
         toggle("Grown-up sum before settings", null, "gate", true);
         lockToggle();
+        if (Kiosk.isOwner(this)) toggle("Power button can switch it off", null, "power_menu", true);
+        panel("Phone");
         if (Kiosk.isOwner(this)) {
-            toggle("Power button can switch it off", null, "power_menu", true);
-            row("Restart the phone", null,
+            link("Restart the phone", null,
                     v -> confirm("Restart the phone?", "It takes about a minute.", () -> {
                         if (!Kiosk.reboot(this)) {
                             new AlertDialog.Builder(this, DIALOG).setMessage("Android didn't allow the restart.")
@@ -140,34 +249,48 @@ public class SettingsActivity extends Activity {
                         }
                     }));
         }
-        row("Home screen app", null, v -> openSystem(Settings.ACTION_HOME_SETTINGS));
-        row("Android settings", "Wi-Fi, Bluetooth, brightness", v -> openSystem(Settings.ACTION_SETTINGS));
+        link("Home screen app", null, v -> openSystem(Settings.ACTION_HOME_SETTINGS));
+        link("Android settings", "Wi-Fi, Bluetooth, brightness", v -> openSystem(Settings.ACTION_SETTINGS));
+    }
 
-        section("Remote control");
+    void buildRemote() {
+        header("Remote control", true);
+        panel(null);
         toggle("Remote control", null, "remote", true);
+        panel("Connect");
         String addr = RemoteServer.address();
-        row(addr != null ? addr : "Not on Wi-Fi",
-                "PIN: " + RemoteServer.pin(this), null);
-        row("Change PIN", null, v -> confirm("Make a new PIN?",
+        row("Address", addr != null ? addr : "Not on Wi-Fi", null);
+        row("PIN", RemoteServer.pin(this), null);
+        link("Change PIN", null, v -> confirm("Make a new PIN?",
                 "Remote controls will need the new PIN.", () -> {
                     RemoteServer.newPin(this);
                     build();
                 }));
+    }
 
-        section("About");
-        String version = "1";
-        try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
+    void buildAbout() {
+        header("About", true);
         long free = Store.root().getParentFile() != null ? Store.root().getParentFile().getUsableSpace() : 0;
-        row("WalkieTales " + version,
-                String.format(Locale.ROOT, "%.1f GB free", free / 1e9), null);
+        panel(null);
+        row("WalkieTales " + version(), String.format(Locale.ROOT, "%.1f GB free", free / 1e9), null);
         if (Kiosk.isOwner(this)) {
-            row("Release kiosk control", "Only before uninstalling or reusing the phone",
+            panel(null);
+            LinearLayout r = link("Release kiosk control", "Only before uninstalling or reusing the phone",
                     v -> confirm("Release kiosk control?",
                             "The notification shade, Home and Recents will work again, and the lock can only be "
                                     + "restored with a computer (adb).", () -> {
                                 Kiosk.release(this);
                                 build();
                             }));
+            ((TextView) ((LinearLayout) r.getChildAt(0)).getChildAt(0)).setTextColor(DANGER);
+        }
+    }
+
+    String version() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "";
         }
     }
 
@@ -177,7 +300,7 @@ public class SettingsActivity extends Activity {
             Kiosk.steppedOut = true;
             Kiosk.unlock(this);
         }
-        open(action);
+        openAction(action);
     }
 
     // ------------------------------------------------------------------ actions
@@ -204,7 +327,7 @@ public class SettingsActivity extends Activity {
 
     void timeRow(String title, String key, int def) {
         int mins = prefs.getInt(key, def);
-        row(title, formatTime(mins), v -> new android.app.TimePickerDialog(this, DIALOG, (tp, hh, mm) -> {
+        valueRow(title, formatTime(mins), v -> new android.app.TimePickerDialog(this, DIALOG, (tp, hh, mm) -> {
             prefs.edit().putInt(key, hh * 60 + mm).apply();
             build();
         }, mins / 60, mins % 60, android.text.format.DateFormat.is24HourFormat(this)).show());
@@ -292,7 +415,7 @@ public class SettingsActivity extends Activity {
         finish();
     }
 
-    void open(String action) {
+    void openAction(String action) {
         try {
             startActivity(new Intent(action));
         } catch (Exception e) {
@@ -308,23 +431,25 @@ public class SettingsActivity extends Activity {
                 .show();
     }
 
-    String folderSummary(String f, Map<String, String> cards) {
-        int n = Store.listTracks(f).size();
+    String folderSummary(Store.FolderInfo info, Map<String, String> cards) {
+        String f = info.name;
+        int n = info.tracks;
         int c = Store.cardsFor(cards, f);
         StringBuilder sb = new StringBuilder();
-        if (Store.isLiveOnly(f)) sb.append(n == 1 ? "live radio" : n + " radio stations");
+        if (info.live) sb.append(n == 1 ? "live radio" : n + " radio stations");
         else sb.append(n).append(n == 1 ? " track" : " tracks");
         sb.append("  ·  ").append(c == 0 ? "no card" : c == 1 ? "1 card" : c + " cards");
         if (prefs.getBoolean("shuffle:" + f, false)) sb.append("  ·  shuffle");
         if (prefs.getBoolean("repeat:" + f, false)) sb.append("  ·  repeat");
         if (!prefs.getBoolean("resume:" + f, true)) sb.append("  ·  always from the start");
-        if (new File(Store.root(), f).isDirectory() && Ui.loadCover(new File(Store.root(), f)) == null) sb.append("  ·  no cover");
+        if (Ui.tile(this, info) == null) sb.append("  ·  no cover");
         return sb.toString();
     }
 
     void lockToggle() {
         boolean owner = Kiosk.isOwner(this);
         Switch sw = toggle("Lock to this app", null, "kiosk_lock", owner);
+        sw.setOnCheckedChangeListener(null);
         sw.setChecked(Kiosk.wanted(this) || Kiosk.isLocked(this));
         sw.setOnCheckedChangeListener((b, on) -> {
             prefs.edit().putBoolean("kiosk_lock", on).apply();
@@ -333,48 +458,127 @@ public class SettingsActivity extends Activity {
         });
     }
 
-    // ------------------------------------------------------------------ row builders
+    // ------------------------------------------------------------------ building blocks
 
-    void section(String name) {
-        TextView t = Ui.text(this, name.toUpperCase(Locale.ROOT), 13, ACCENT, true);
-        t.setLetterSpacing(0.12f);
-        t.setPadding(dp(20), dp(26), dp(20), dp(6));
-        list.addView(t);
+    void header(String title, boolean back) {
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(0, dp(16), 0, dp(8));
+        if (back) {
+            ImageView arrow = icon(R.drawable.ic_back, 0xFFFFFFFF, 24);
+            arrow.setPadding(dp(8), dp(10), dp(12), dp(10));
+            ripple(arrow);
+            arrow.setContentDescription("Back");
+            arrow.setOnClickListener(v -> open(MENU));
+            head.addView(arrow);
+        }
+        head.addView(Ui.text(this, title, back ? 22 : 26, 0xFFFFFFFF, true), new LinearLayout.LayoutParams(0, -2, 1f));
+        if (!back) {
+            TextView done = Ui.text(this, "Done", 17, ACCENT, true);
+            done.setPadding(dp(14), dp(12), dp(4), dp(12));
+            done.setOnClickListener(v -> finish());
+            head.addView(done);
+        }
+        list.addView(head);
+    }
+
+    /** Start a new rounded group of rows, with an optional small heading. */
+    void panel(String heading) {
+        if (heading != null) {
+            TextView t = Ui.text(this, heading, 14, ACCENT, true);
+            t.setPadding(dp(6), dp(16), dp(6), dp(8));
+            list.addView(t);
+        }
+        group = new LinearLayout(this);
+        group.setOrientation(LinearLayout.VERTICAL);
+        group.setClipToOutline(true);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(PANEL);
+        bg.setCornerRadius(dp(18));
+        group.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = heading != null ? 0 : dp(12);
+        list.addView(group, lp);
     }
 
     LinearLayout rowShell(String title, String sub) {
+        if (group.getChildCount() > 0) {
+            View line = new View(this);
+            line.setBackgroundColor(LINE);
+            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, Math.max(1, dp(1) / 2));
+            l.leftMargin = dp(16);
+            group.addView(line, l);
+        }
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(20), dp(13), dp(20), dp(13));
-        row.setMinimumHeight(dp(56));
+        row.setPadding(dp(16), dp(12), dp(14), dp(12));
+        row.setMinimumHeight(dp(60));
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);
         texts.addView(Ui.text(this, title, 17, 0xFFFFFFFF, false));
         if (sub != null) {
-            TextView s = Ui.text(this, sub, 14, 0x99FFFFFF, false);
+            TextView s = Ui.text(this, sub, 14, MUTED, false);
             s.setTag("sub");
             s.setPadding(0, dp(2), 0, 0);
             texts.addView(s);
         }
         row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1f));
-        list.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        group.addView(row, new LinearLayout.LayoutParams(-1, -2));
         return row;
     }
 
-    void row(String title, String sub, View.OnClickListener click) {
+    /** A plain row; tappable when {@code click} is set. */
+    LinearLayout row(String title, String sub, View.OnClickListener click) {
         LinearLayout r = rowShell(title, sub);
         if (click != null) {
-            TypedValue tv = new TypedValue();
-            getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
-            r.setBackgroundResource(tv.resourceId);
+            ripple(r);
             r.setOnClickListener(click);
         }
+        return r;
+    }
+
+    /** A row that opens something: it ends with a chevron. */
+    LinearLayout link(String title, String sub, View.OnClickListener click) {
+        LinearLayout r = row(title, sub, click);
+        r.addView(icon(R.drawable.ic_chevron, 0x66FFFFFF, 24));
+        return r;
+    }
+
+    /** A row with its current value on the right. */
+    void valueRow(String title, String value, View.OnClickListener click) {
+        LinearLayout r = row(title, null, click);
+        TextView v = Ui.text(this, value, 16, ACCENT, false);
+        v.setPadding(dp(12), 0, dp(2), 0);
+        r.addView(v);
+        r.addView(icon(R.drawable.ic_chevron, 0x66FFFFFF, 24));
+    }
+
+    /** One of the main menu's topics: round icon, title, current state, chevron. */
+    void menuItem(int iconRes, String title, String sub, View.OnClickListener click) {
+        LinearLayout r = link(title, sub, click);
+        ImageView badge = icon(iconRes, ACCENT, 24);
+        badge.setPadding(dp(9), dp(9), dp(9), dp(9));
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(Color.argb(0x38, 0x6C, 0x4C, 0xF1));
+        badge.setBackground(circle);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        lp.rightMargin = dp(14);
+        r.addView(badge, 0, lp);
+    }
+
+    void menuPage(int iconRes, String title, String sub, String target) {
+        menuItem(iconRes, title, sub, v -> open(target));
     }
 
     Switch toggle(String title, String sub, String key, boolean def) {
         LinearLayout r = rowShell(title, sub);
         Switch sw = new Switch(this);
         sw.setChecked(prefs.getBoolean(key, def));
+        sw.setThumbTintList(new ColorStateList(new int[][]{{android.R.attr.state_checked}, {}},
+                new int[]{ACCENT, 0xFFC8C8D0}));
+        sw.setTrackTintList(new ColorStateList(new int[][]{{android.R.attr.state_checked}, {}},
+                new int[]{STRONG, 0xFF4A4A58}));
         sw.setOnCheckedChangeListener((b, on) -> prefs.edit().putBoolean(key, on).apply());
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
         lp.leftMargin = dp(12);
@@ -385,15 +589,14 @@ public class SettingsActivity extends Activity {
 
     void seek(String title, String key, int min, int max, int def) {
         LinearLayout r = rowShell(title, null);
-        r.setOrientation(LinearLayout.VERTICAL);
-        r.setGravity(Gravity.START);
-        // rowShell sized the title column for a horizontal row (width 0 + weight); make it full width here.
-        r.getChildAt(0).setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
-        final TextView value = Ui.text(this, prefs.getInt(key, def) + "%", 14, 0x99FFFFFF, false);
+        TextView value = Ui.text(this, prefs.getInt(key, def) + "%", 16, ACCENT, true);
         r.addView(value);
         SeekBar sb = new SeekBar(this);
         sb.setMax((max - min) / 5);
         sb.setProgress((prefs.getInt(key, def) - min) / 5);
+        ColorStateList tint = ColorStateList.valueOf(ACCENT);
+        sb.setProgressTintList(tint);
+        sb.setThumbTintList(tint);
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean user) {
                 int v = min + p * 5;
@@ -403,26 +606,47 @@ public class SettingsActivity extends Activity {
             @Override public void onStartTrackingTouch(SeekBar s) { }
             @Override public void onStopTrackingTouch(SeekBar s) { }
         });
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.topMargin = dp(6);
-        r.addView(sb, lp);
+        sb.setPadding(dp(20), 0, dp(20), dp(16));
+        group.addView(sb, new LinearLayout.LayoutParams(-1, -2));
     }
 
-    void cycle(String title, String key, int[] values, String[] labels, int def) {
+    String choiceLabel(String key, int[] values, String[] labels, int def) {
         int cur = prefs.getInt(key, def);
-        int idx = 0;
-        for (int i = 0; i < values.length; i++) if (values[i] == cur) idx = i;
-        final int[] at = {idx};
-        LinearLayout r = rowShell(title, labels[idx]);
+        for (int i = 0; i < values.length; i++) if (values[i] == cur) return labels[i];
+        return labels[0];
+    }
+
+    /** A row showing the current choice; tapping lists the options. */
+    void choice(String title, String key, int[] values, String[] labels, int def) {
+        valueRow(title, choiceLabel(key, values, labels, def), v -> {
+            int cur = prefs.getInt(key, def), at = 0;
+            for (int i = 0; i < values.length; i++) if (values[i] == cur) at = i;
+            new AlertDialog.Builder(this, DIALOG)
+                    .setTitle(title)
+                    .setSingleChoiceItems(labels, at, (d, w) -> {
+                        prefs.edit().putInt(key, values[w]).apply();
+                        d.dismiss();
+                        build();
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
+    }
+
+    ImageView icon(int res, int color, int sizeDp) {
+        ImageView i = new ImageView(this);
+        i.setImageResource(res);
+        i.setColorFilter(color);
+        i.setLayoutParams(new LinearLayout.LayoutParams(-2, -2));
+        i.setMinimumWidth(dp(sizeDp));
+        i.setMinimumHeight(dp(sizeDp));
+        return i;
+    }
+
+    void ripple(View v) {
         TypedValue tv = new TypedValue();
         getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
-        r.setBackgroundResource(tv.resourceId);
-        final TextView sub = (TextView) r.findViewWithTag("sub");
-        r.setOnClickListener(v -> {
-            at[0] = (at[0] + 1) % values.length;
-            prefs.edit().putInt(key, values[at[0]]).apply();
-            sub.setText(labels[at[0]]);
-        });
+        v.setBackgroundResource(tv.resourceId);
     }
 
     int dp(float v) {

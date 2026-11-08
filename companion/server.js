@@ -152,6 +152,57 @@ function proxy(req, res, p, rest) {
 
 let scanning = null;
 
+// ------------------------------------------------------------------ app updates
+
+// The newest GitHub release, kept in the data folder. A file named local.apk with a local.txt holding its version,
+// put in <data>/update, is used instead (for trying a build before it's released).
+const REPO = process.env.UPDATE_REPO || 'jaso1000/walkie-tales';
+const UPDATES = DATA ? path.join(DATA, 'update') : null;
+let latestInfo = null, latestAt = 0;
+
+async function latest() {
+  if (!UPDATES) throw new Error('No writable data folder');
+  fs.mkdirSync(UPDATES, { recursive: true });
+  const local = path.join(UPDATES, 'local.apk');
+  if (fs.existsSync(local)) {
+    return { version: fs.readFileSync(path.join(UPDATES, 'local.txt'), 'utf8').trim(), file: local };
+  }
+  if (latestInfo && Date.now() - latestAt < 5 * 60000) return latestInfo;
+  const r = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { 'User-Agent': 'walkietales-companion', Accept: 'application/vnd.github+json' } });
+  if (!r.ok) throw new Error('GitHub answered ' + r.status);
+  const rel = await r.json();
+  const asset = (rel.assets || []).find(a => /\.apk$/i.test(a.name));
+  if (!asset) throw new Error('The latest release has no app file');
+  const version = String(rel.tag_name || '').replace(/^v/i, '');
+  if (!/^[0-9][0-9.]*$/.test(version)) throw new Error('Unexpected release name');
+  const file = path.join(UPDATES, 'v' + version + '.apk');
+  if (!fs.existsSync(file)) {
+    const d = await fetch(asset.browser_download_url, { headers: { 'User-Agent': 'walkietales-companion' } });
+    if (!d.ok) throw new Error('Download failed (' + d.status + ')');
+    fs.writeFileSync(file + '.tmp', Buffer.from(await d.arrayBuffer()));
+    fs.renameSync(file + '.tmp', file);
+    for (const f of fs.readdirSync(UPDATES)) if (/^v.*\.apk$/.test(f) && f !== path.basename(file)) fs.unlinkSync(path.join(UPDATES, f));
+  }
+  latestInfo = { version, file };
+  latestAt = Date.now();
+  return latestInfo;
+}
+
+/** Send the newest version to one player. Android on the player checks it's newer and signed with the same key. */
+async function pushUpdate(req, res, p, force) {
+  let info;
+  try { info = await latest(); } catch (e) { return json(res, 502, { error: e.message }); }
+  const body = fs.readFileSync(info.file);
+  const headers = { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': body.length, 'x-pin': p.pin || req.headers['x-pin'] || '' };
+  const up = http.request(new URL(p.url + '/api/update' + (force ? '?force=1' : '')), { method: 'PUT', headers, timeout: 120000 }, (pr) => {
+    res.writeHead(pr.statusCode || 502, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    pr.pipe(res);
+  });
+  up.on('timeout', () => up.destroy(new Error('timed out')));
+  up.on('error', (e) => { if (!res.headersSent) json(res, 502, { error: 'Player unreachable (' + e.message + ')' }); else res.end(); });
+  up.end(body);
+}
+
 const server = http.createServer(async (req, res) => {
   const url = req.url || '/';
   const pathname = url.split('?')[0];
@@ -201,6 +252,17 @@ const server = http.createServer(async (req, res) => {
       save();
       return json(res, 200, { player: pub(players[i]) });
     }
+  }
+
+  // ---- app updates
+  if (pathname === '/update/info' && req.method === 'GET') {
+    try { return json(res, 200, { version: (await latest()).version }); } catch (e) { return json(res, 502, { error: e.message }); }
+  }
+  m = pathname.match(/^\/p\/([0-9a-f]{8})\/update$/);
+  if (m && req.method === 'POST') {
+    const p = players.find(x => x.id === m[1]);
+    if (!p) return json(res, 404, { error: 'That player was removed' });
+    return pushUpdate(req, res, p, /[?&]force=1/.test(url));
   }
 
   // ---- /p/<id>/api/... goes to that player
