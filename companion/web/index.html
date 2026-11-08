@@ -870,7 +870,19 @@
     });
     openSheet('sheetFolder');
   }
-  $('#addMusicBtn').onclick = () => openSheet('sheetMusic');
+  $('#addMusicBtn').onclick = () => {
+    // Start fresh after an upload that went through; keep it if something failed, so Retry failed still works.
+    const failed = upLast && upLast.runs.some(r => r.items.some(i => i.state === 'fail'));
+    if (!upBusy && upLast && !failed) resetUpload();
+    openSheet('sheetMusic');
+  };
+  function resetUpload() {
+    $('#upFiles').value = ''; $('#upFolder').value = ''; upAuto = '';
+    $('#upList').textContent = ''; $('#upRetry').hidden = true; upLast = null;
+    upType = 'auto'; renderUpType();
+    filesChosen();
+    if (!upBusy) $('#upPill').hidden = true;
+  }
   $('#addRadioBtn').onclick = () => openSheet('sheetRadio');
 
   $('#findCovers').onclick = () => {
