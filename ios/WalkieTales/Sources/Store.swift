@@ -47,8 +47,14 @@ enum Store {
 
     static func set(_ k: String, _ v: Any?) { ud.set(v, forKey: k) }
 
+    /// The grown-up PIN asked for instead of the sum before settings: 4 to 8 digits, or none.
+    static func gatePin() -> String {
+        let s = ud.string(forKey: "gate_pin") ?? ""
+        return s.range(of: "^[0-9]{4,8}$", options: .regularExpression) != nil ? s : ""
+    }
+
     static func settingsJson() -> [String: Any] {
-        var o: [String: Any] = [:]
+        var o: [String: Any] = ["gate_pin_set": !gatePin().isEmpty] // the PIN itself never leaves the phone
         for (k, d) in defaults {
             if d is Bool { o[k] = bool(k) } else if d is Int { o[k] = int(k) } else { o[k] = string(k) }
         }
@@ -57,6 +63,11 @@ enum Store {
 
     /// Apply known keys from the remote, coercing types and clamping ranges like Android does.
     static func applySettings(_ inp: [String: Any]) {
+        if let v = inp["gate_pin"] { // set from the remote (e.g. a forgotten PIN): 4-8 digits, or "" to go back to the sum
+            let pin = "\(v)".trimmingCharacters(in: .whitespaces)
+            if pin.isEmpty { ud.removeObject(forKey: "gate_pin") }
+            else if pin.range(of: "^[0-9]{4,8}$", options: .regularExpression) != nil { ud.set(pin, forKey: "gate_pin") }
+        }
         for (k, d) in defaults {
             guard let v = inp[k] else { continue }
             if d is Bool {

@@ -1472,7 +1472,7 @@
     setSound: [['show_volume', 'Volume buttons on screen'], ['headphones_button', 'Headphones button'], ['fade_in', 'Fade in'], ['announce', 'Say the name out loud']],
     setDuring: [['bedtime_dark', 'Screen off at bedtime', 'Goes black 30 seconds after the last touch'], ['quiet', 'Quieter at bedtime']],
     setNight: [['night_light', 'Night light'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery']],
-    setSafety: [['gate', 'Grown-up sum before settings'], ['power_menu', 'Power button can switch it off']],
+    setSafety: [['gate', 'Grown-up check before settings', 'A quick sum, or the grown-up PIN if one is set'], ['power_menu', 'Power button can switch it off']],
   };
   const DIM = [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']];
   const KEEP = [[0, 'No'], [2, 'While playing'], [1, 'Always']];
@@ -1587,8 +1587,16 @@
   const clock = (mins) => new Date(2000, 0, 1, Math.floor(mins / 60), mins % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const pick = (opts, v) => (opts.find(o => o[0] === v) || opts[0])[1];
   let folderCount = null, cardCount = null, freeBytes = 0;
+  function showGatePin() {
+    const s = settings, st2 = $('#gatePinState'); if (!s || !st2) return;
+    const known = 'gate_pin_set' in s; // older players can't have one
+    st2.textContent = !known ? 'Needs the latest WalkieTales' : s.gate_pin_set ? 'Set: the player asks for it' : 'Not set: the player asks a sum';
+    $('#gatePinSet').textContent = s.gate_pin_set ? 'Change' : 'Set';
+    $('#gatePinSet').hidden = !known; $('#gatePinDel').hidden = !s.gate_pin_set;
+  }
   function showSummaries() {
     const s = settings; if (!s) return;
+    showGatePin();
     const on = s.screen_on, after = pick(TIMEOUT, s.screen_timeout);
     const text = {
       kid: s.kid_name || 'Not set',
@@ -1597,7 +1605,7 @@
       sound: 'Maximum volume ' + s.max_volume + '%',
       bedtime: clock(s.quiet_start) + ' to ' + clock(s.quiet_end),
       screen: on === 1 ? 'Always on' : (on === 2 ? 'On while playing, then off after ' : 'Off after ') + after,
-      safety: 'Grown-up sum ' + (s.gate ? 'on' : 'off'),
+      safety: !s.gate ? 'Grown-up check off' : s.gate_pin_set ? 'Grown-up PIN on' : 'Grown-up sum on',
       remote: 'On',
       about: 'WalkieTales ' + (st ? st.version : ''),
     };
@@ -1640,6 +1648,23 @@
     sl.appendChild(choice('dim_after', 'Dim the screen after', DIM));
     sl.appendChild(choice('screen_on', 'Keep the screen on', KEEP));
     sl.appendChild(choice('screen_timeout', 'Screen turns off after', TIMEOUT));
+    // Grown-up PIN: asked for instead of the sum on the player. The remote only knows whether one is set.
+    const gp = el('div', 'set'); const gg = el('div', 'grow', 'Grown-up PIN'); const gs = el('small'); gs.id = 'gatePinState'; gg.appendChild(gs);
+    const gset = el('button', 'btn ghost', 'Set'); gset.id = 'gatePinSet'; gset.style.cssText = 'flex:none;padding:8px 14px';
+    const gdel = el('button', 'btn danger', 'Remove'); gdel.id = 'gatePinDel'; gdel.style.cssText = 'flex:none;padding:8px 14px';
+    gset.onclick = () => {
+      const a = (prompt('New grown-up PIN for this player (4 to 8 numbers). It’s asked for instead of the sum before settings.') || '').trim();
+      if (!a) return;
+      if (!/^\d{4,8}$/.test(a)) return toast('Use 4 to 8 numbers');
+      if ((prompt('Type the same PIN again') || '').trim() !== a) return toast('The two PINs don’t match');
+      api('/api/settings', { gate_pin: a, gate: true }).then(r => { settings = r.settings; showGatePin(); showSummaries(); toast('Grown-up PIN set'); }).catch(err);
+    };
+    gdel.onclick = () => {
+      if (!confirm('Remove the grown-up PIN? The player goes back to asking a sum.')) return;
+      api('/api/settings', { gate_pin: '' }).then(r => { settings = r.settings; showGatePin(); showSummaries(); toast('Back to the sum'); }).catch(err);
+    };
+    gp.appendChild(gg); gp.appendChild(gset); gp.appendChild(gdel);
+    $('#setSafety').insertBefore(gp, $('#setSafety').children[1] || null);
     $('#s_kid_name').onchange = (e) => save('kid_name', e.target.value.trim());
   }
   async function loadSettings() {

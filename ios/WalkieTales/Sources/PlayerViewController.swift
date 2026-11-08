@@ -629,6 +629,23 @@ final class PlayerViewController: UIViewController {
             self.present(nav, animated: true)
         }
         if !Store.bool("gate") { show(); return }
+        let gatePin = Store.gatePin()
+        if !gatePin.isEmpty { // the grown-up PIN (Settings → Safety) instead of the sum
+            let alert = UIAlertController(title: "Grown-ups only", message: "Enter the grown-up PIN", preferredStyle: .alert)
+            alert.addTextField { f in
+                f.keyboardType = .numberPad; f.isSecureTextEntry = true; f.textAlignment = .center; f.font = .systemFont(ofSize: 24)
+                f.addAction(UIAction { _ in // the right PIN opens straight away
+                    if f.text == gatePin { alert.dismiss(animated: true) { show() } }
+                }, for: .editingChanged)
+            }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+                if alert.textFields?.first?.text?.trimmingCharacters(in: .whitespaces) == gatePin { show() }
+                else { self?.flash("Not quite!", 2); self?.shake() }
+            })
+            present(alert, animated: true)
+            return
+        }
         let a = Int.random(in: 11...49), b = Int.random(in: 11...49)
         let alert = UIAlertController(title: "Grown-ups only", message: "What is \(a) + \(b)?", preferredStyle: .alert)
         alert.addTextField { $0.keyboardType = .numberPad; $0.textAlignment = .center; $0.font = .systemFont(ofSize: 24) }

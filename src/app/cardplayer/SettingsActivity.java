@@ -144,8 +144,8 @@ public class SettingsActivity extends Activity {
                 "bedtime");
         menuPage(R.drawable.ic_phone, "Screen", screenSummary(), "screen");
         panel(null);
-        menuPage(R.drawable.ic_shield, "Safety",
-                "Grown-up sum " + (prefs.getBoolean("gate", true) ? "on" : "off"), "safety");
+        menuPage(R.drawable.ic_shield, "Safety", !prefs.getBoolean("gate", true) ? "Grown-up check off"
+                : Store.gatePin(prefs).isEmpty() ? "Grown-up sum on" : "Grown-up PIN on", "safety");
         menuPage(R.drawable.ic_wifi, "Remote control", prefs.getBoolean("remote", true) ? "On" : "Off", "remote");
         menuPage(R.drawable.ic_info, "About", "WalkieTales " + version(), "about");
     }
@@ -236,7 +236,8 @@ public class SettingsActivity extends Activity {
     void buildSafety() {
         header("Safety", true);
         panel(null);
-        toggle("Grown-up sum before settings", null, "gate", true);
+        toggle("Grown-up check before settings", Store.gatePin(prefs).isEmpty() ? "A quick sum" : "The grown-up PIN", "gate", true);
+        valueRow("Grown-up PIN", Store.gatePin(prefs).isEmpty() ? "Not set" : "Set", v -> editGatePin());
         lockToggle();
         if (Kiosk.isOwner(this)) toggle("Power button can switch it off", null, "power_menu", true);
         panel("Phone");
@@ -324,6 +325,47 @@ public class SettingsActivity extends Activity {
                 .setNegativeButton("Cancel", null)
                 .show();
     }
+
+    /** Set, change or remove the grown-up PIN: asked for instead of the sum before settings. */
+    void editGatePin() {
+        final android.widget.EditText a = new android.widget.EditText(this), b = new android.widget.EditText(this);
+        for (android.widget.EditText e : new android.widget.EditText[]{a, b}) {
+            e.setSingleLine(true);
+            e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+            e.setGravity(android.view.Gravity.CENTER);
+            e.setTextSize(22);
+        }
+        a.setHint("New PIN (4 to 8 numbers)");
+        b.setHint("Same PIN again");
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        box.setPadding(dp(24), dp(8), dp(24), 0);
+        box.addView(a);
+        box.addView(b);
+        boolean has = !Store.gatePin(prefs).isEmpty();
+        AlertDialog.Builder d = new AlertDialog.Builder(this, DIALOG)
+                .setTitle("Grown-up PIN")
+                .setMessage("Asked for instead of the sum before settings. If it's forgotten, it can be removed from the remote.")
+                .setView(box)
+                .setPositiveButton("Save", (x, w) -> {
+                    String p = a.getText().toString().trim();
+                    if (!p.matches("\\d{4,8}")) { toast("Use 4 to 8 numbers"); return; }
+                    if (!p.equals(b.getText().toString().trim())) { toast("The two PINs don't match"); return; }
+                    prefs.edit().putString("gate_pin", p).putBoolean("gate", true).apply();
+                    toast("Grown-up PIN set");
+                    build();
+                })
+                .setNegativeButton("Cancel", null);
+        if (has) d.setNeutralButton("Remove", (x, w) -> {
+            prefs.edit().remove("gate_pin").apply();
+            toast("Back to the sum");
+            build();
+        });
+        d.show();
+        a.requestFocus();
+    }
+
+    void toast(String s) { android.widget.Toast.makeText(this, s, android.widget.Toast.LENGTH_SHORT).show(); }
 
     void timeRow(String title, String key, int def) {
         int mins = prefs.getInt(key, def);

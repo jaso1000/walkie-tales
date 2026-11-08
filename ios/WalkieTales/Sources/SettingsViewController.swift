@@ -81,7 +81,8 @@ final class SettingsViewController: UITableViewController {
         case "safety":
             sections = [
                 (nil, [
-                    .toggle("Grown-up sum before settings", nil, "gate"),
+                    .toggle("Grown-up check before settings", Store.gatePin().isEmpty ? "A quick sum" : "The grown-up PIN", "gate"),
+                    .value("Grown-up PIN", { Store.gatePin().isEmpty ? "Not set" : "Set" }, { [weak self] in self?.editGatePin() }),
                     .info("Lock to this app", UIAccessibility.isGuidedAccessEnabled ? "On (Guided Access)" : "Triple-click the Home button to start Guided Access"),
                 ]),
                 ("Phone", [.value("iPhone settings", { "Wi-Fi, Bluetooth, brightness" }, { Self.openSettings(nil) })]),
@@ -119,7 +120,7 @@ final class SettingsViewController: UITableViewController {
                 .menu("iphone", "Screen", { Self.screenSummary() }, "screen"),
             ]),
             (nil, [
-                .menu("shield.fill", "Safety", { "Grown-up sum " + (Store.bool("gate") ? "on" : "off") }, "safety"),
+                .menu("shield.fill", "Safety", { !Store.bool("gate") ? "Grown-up check off" : Store.gatePin().isEmpty ? "Grown-up sum on" : "Grown-up PIN on" }, "safety"),
                 .menu("wifi", "Remote control", { Store.bool("remote") ? "On" : "Off" }, "remote"),
                 .menu("info.circle.fill", "About", { "WalkieTales " + Self.version }, "about"),
             ]),
@@ -151,6 +152,37 @@ final class SettingsViewController: UITableViewController {
     }
 
     private func reload() { build(); tableView.reloadData() }
+
+    /// Set, change or remove the grown-up PIN: asked for instead of the sum before settings.
+    private func editGatePin() {
+        let a = UIAlertController(title: "Grown-up PIN",
+                                  message: "Asked for instead of the sum before settings. If it's forgotten, it can be removed from the remote.",
+                                  preferredStyle: .alert)
+        for hint in ["New PIN (4 to 8 numbers)", "Same PIN again"] {
+            a.addTextField { $0.placeholder = hint; $0.keyboardType = .numberPad; $0.isSecureTextEntry = true; $0.textAlignment = .center }
+        }
+        a.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            let p = a.textFields?[0].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            let q = a.textFields?[1].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            guard p.range(of: "^[0-9]{4,8}$", options: .regularExpression) != nil else { self?.say("Use 4 to 8 numbers"); return }
+            guard p == q else { self?.say("The two PINs don't match"); return }
+            Store.set("gate_pin", p); Store.set("gate", true)
+            self?.reload()
+        })
+        if !Store.gatePin().isEmpty {
+            a.addAction(UIAlertAction(title: "Remove (back to the sum)", style: .destructive) { [weak self] _ in
+                Store.ud.removeObject(forKey: "gate_pin"); self?.reload()
+            })
+        }
+        a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(a, animated: true)
+    }
+
+    private func say(_ s: String) {
+        let a = UIAlertController(title: nil, message: s, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
 
     override func numberOfSections(in t: UITableView) -> Int { sections.count }
     override func tableView(_ t: UITableView, titleForHeaderInSection s: Int) -> String? { sections[s].0 }

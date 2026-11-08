@@ -76,8 +76,15 @@ final class Store {
         SETTINGS.put("remote", true);
     }
 
+    /** The grown-up PIN asked for instead of the sum before settings: 4 to 8 digits, or none. */
+    static String gatePin(SharedPreferences p) {
+        String s = p.getString("gate_pin", "");
+        return s.matches("\\d{4,8}") ? s : "";
+    }
+
     static org.json.JSONObject settingsJson(SharedPreferences p) throws org.json.JSONException {
         org.json.JSONObject o = new org.json.JSONObject();
+        o.put("gate_pin_set", !gatePin(p).isEmpty()); // the PIN itself never leaves the phone
         for (Map.Entry<String, Object> e : SETTINGS.entrySet()) {
             Object d = e.getValue();
             if (d instanceof Boolean) o.put(e.getKey(), p.getBoolean(e.getKey(), (Boolean) d));
@@ -90,6 +97,11 @@ final class Store {
     /** Apply the known keys of {@code in}, coercing types and clamping ranges. Unknown keys are ignored. */
     static void applySettings(SharedPreferences p, org.json.JSONObject in) {
         SharedPreferences.Editor ed = p.edit();
+        if (in.has("gate_pin")) { // set from the remote (e.g. a forgotten PIN): 4-8 digits, or "" to go back to the sum
+            String pin = in.optString("gate_pin", "").trim();
+            if (pin.isEmpty()) ed.remove("gate_pin");
+            else if (pin.matches("\\d{4,8}")) ed.putString("gate_pin", pin);
+        }
         for (Map.Entry<String, Object> e : SETTINGS.entrySet()) {
             String k = e.getKey();
             if (!in.has(k)) continue;

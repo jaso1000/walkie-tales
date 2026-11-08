@@ -1523,6 +1523,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             startActivity(new Intent(this, SettingsActivity.class));
             return;
         }
+        final String gatePin = Store.gatePin(prefs);
+        if (!gatePin.isEmpty()) { askGatePin(gatePin); return; }
         Random r = new Random();
         // Two-digit addition: quick for grown-ups, still beyond small children.
         final int a = 11 + r.nextInt(39), b = 11 + r.nextInt(39);
@@ -1547,6 +1549,43 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 })
                 .setNegativeButton("Cancel", null)
                 .create();
+        d.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        d.show();
+        in.requestFocus();
+    }
+
+    /** The grown-up PIN (set in Settings → Safety) instead of the sum. */
+    void askGatePin(String gatePin) {
+        final EditText in = new EditText(this);
+        in.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        in.setTextSize(28);
+        in.setGravity(Gravity.CENTER);
+        in.setLetterSpacing(0.3f);
+        FrameLayout box = new FrameLayout(this);
+        box.setPadding(dp(24), dp(8), dp(24), 0);
+        box.addView(in);
+        AlertDialog d = new AlertDialog.Builder(this, DIALOG_THEME)
+                .setTitle("Grown-ups only")
+                .setMessage("Enter the grown-up PIN")
+                .setView(box)
+                .setPositiveButton("OK", (x, w) -> {
+                    if (in.getText().toString().trim().equals(gatePin)) {
+                        startActivity(new Intent(this, SettingsActivity.class));
+                    } else {
+                        flash("Not quite!", 2000);
+                        shake();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+        // the right length opens straight away, no need to press OK
+        in.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence c, int a, int b, int e) { }
+            @Override public void onTextChanged(CharSequence c, int a, int b, int e) { }
+            @Override public void afterTextChanged(android.text.Editable e) {
+                if (e.toString().equals(gatePin)) { d.dismiss(); startActivity(new Intent(MainActivity.this, SettingsActivity.class)); }
+            }
+        });
         d.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         d.show();
         in.requestFocus();
