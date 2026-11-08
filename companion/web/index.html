@@ -1108,12 +1108,12 @@
 
   async function uploadToPlayer(folder, r, ui) {
     const have = {};
-    try { (await tapi(r.t, '/api/folder?name=' + encodeURIComponent(folder))).files.forEach(f => have[f.name] = f.size); }
+    try { (await tapi(r.t, '/api/folder?name=' + encodeURIComponent(folder))).files.forEach(f => have[f.name.normalize('NFC')] = f.size); }
     catch (e) { /* a new folder, or an older player that can't list folders */ }
     ui.update();
     for (const it of r.items) {
       if (it.state === 'ok' || it.state === 'skip') continue;
-      if (have[it.name] === it.file.size) { it.state = 'skip'; ui.update(); continue; }
+      if (have[it.name.normalize('NFC')] === it.file.size) { it.state = 'skip'; ui.update(); continue; }
       for (let attempt = 1; ; attempt++) {
         ui.say((attempt > 1 ? 'Retry ' + (attempt - 1) + ' of 3: ' : 'Sending ') + it.name);
         try { await upload(folder, it.file, (p) => ui.update(it, p / 100), r.t, it.name); it.state = 'ok'; break; }
@@ -1211,7 +1211,7 @@
     const me = thisPlayer(); let mine;
     try { mine = (await tapi(me, '/api/folder?name=' + encodeURIComponent(sgFolder))).files.filter(f => AUDIO_RE.test(f.name)); }
     catch (e) { out.textContent = e.message; return; }
-    const key = (n) => tidyName(n).toLowerCase();
+    const key = (n) => tidyName(n.normalize('NFC')).toLowerCase();
     const others = sgTargets().filter(t => t.id !== me.id);
     if (!others.length) { out.textContent = 'Tick other players under “Upload to” (Library → Add music) to compare with them.'; return; }
     out.textContent = '';
@@ -1412,11 +1412,13 @@
     const out = [];
     for (const t of sgTargets()) {
       try {
-        const have = new Set((await tapi(t, '/api/folder?name=' + encodeURIComponent(fd.folder))).files.map(f => f.name));
+        // the same name can be spelt differently underneath (iPhones store é as e + accent), so match them NFC
+        const have = new Map((await tapi(t, '/api/folder?name=' + encodeURIComponent(fd.folder))).files.map(f => [f.name.normalize('NFC'), f.name]));
         let n = 0;
         for (const x of fd.map) {
-          if (!x.to || x.to === x.from || !have.has(x.from)) continue;
-          await tapi(t, '/api/file/rename', { folder: fd.folder, from: x.from, to: x.to }); n++;
+          const real = have.get(x.from.normalize('NFC'));
+          if (!x.to || !real || real.normalize('NFC') === x.to.normalize('NFC')) continue;
+          await tapi(t, '/api/file/rename', { folder: fd.folder, from: real, to: x.to }); n++;
         }
         if (cover) await upload(fd.folder, cover, () => {}, t, 'cover.jpg');
         if (newFolder) await tapi(t, '/api/folder/rename', { folder: fd.folder, to: newFolder });
