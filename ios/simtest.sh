@@ -47,6 +47,7 @@ log "--- no PIN gives: $(curl -s -m 5 -o /dev/null -w '%{http_code}' $B/api/stat
 log "--- status: $(api $B/api/status | head -c 400)"
 log "--- library: $(api $B/api/library | head -c 600)"
 api -X POST -d '{"kid_name":"Riv"}' $B/api/settings > /dev/null
+api -X POST -d '{"battery":"64"}' $B/api/ui > /dev/null # the simulator has no battery: pretend, to see the icon
 shot 1-idle 2
 log "--- play: $(api -X POST -d '{"folder":"Bedtime Stories"}' $B/api/play | head -c 300)"
 shot 2-playing-letter-cover 3
@@ -55,7 +56,11 @@ shot 3-playing-cover 3
 api -X POST -d '{"folder":"Bedtime Stories"}' $B/api/play > /dev/null
 api -X POST -d '{"minutes":30}' $B/api/sleep > /dev/null
 api -X POST -d '{"text":"Dinner is ready!"}' $B/api/message > /dev/null
+api -X POST -d '{"battery":"80c"}' $B/api/ui > /dev/null
 shot 4-message-and-sleep 2
+api -X POST -d '{"battery":"12"}' $B/api/ui > /dev/null
+shot 4b-battery-low 1
+api -X POST -d '{"battery":"64"}' $B/api/ui > /dev/null
 api -X POST -d '{"show":"tracks"}' $B/api/ui > /dev/null
 shot 5-tracks 2
 api -X POST -d '{"show":"library"}' $B/api/ui > /dev/null

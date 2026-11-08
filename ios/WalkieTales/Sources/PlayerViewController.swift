@@ -496,7 +496,11 @@ final class PlayerViewController: UIViewController {
         let d = UIDevice.current
         let pct = d.batteryLevel < 0 ? -1 : Int((d.batteryLevel * 100).rounded())
         let charging = d.batteryState == .charging || d.batteryState == .full
-        battery.set(pct, charging: charging)
+        if let t = BatteryView.testOverride { // simulator test only: a simulator has no battery level to show
+            battery.set(Int(t.filter(\.isNumber)) ?? 50, charging: t.hasSuffix("c"))
+        } else {
+            battery.set(pct, charging: charging)
+        }
         updateKeepOn()
     }
 

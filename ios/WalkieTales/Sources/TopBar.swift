@@ -6,6 +6,8 @@ import UIKit
 /// A battery shape that fills up with the charge, with the percentage inside and a bolt while charging
 /// (same drawing as the Android player's BatteryView). Red at 15% or less, green while charging.
 final class BatteryView: UIView {
+    /// Set only by the automated simulator test ("64", or "80c" for charging), which has no real battery.
+    static var testOverride: String?
     private var pct = -1
     private var charging = false
 

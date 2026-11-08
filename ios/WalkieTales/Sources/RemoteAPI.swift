@@ -66,6 +66,7 @@ extension PlayerViewController {
             flash("New radio station: \(name)", 4)
             (presentedViewController as? LibraryViewController)?.reload()
         case "/api/ui": // used by the automated simulator test to open screens for screenshots
+            if let bat = b["battery"] as? String { BatteryView.testOverride = bat; batteryChanged(); return statusJson() }
             let show = b["show"] as? String ?? ""
             presentedViewController?.dismiss(animated: false)
             switch show {
