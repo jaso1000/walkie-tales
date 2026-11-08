@@ -145,6 +145,8 @@
 
   .up-list { margin-top: 10px; font-size: 14px; }
   .chip.off { opacity: .45; }
+  .chip.all { font-weight: 700; border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
+  .chip.all:not(.on) { color: color-mix(in srgb, var(--accent) 55%, #fff); }
   .up-list div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; color: var(--muted); }
   .up-list div.ok { color: var(--good); }
   .up-list div.err { color: var(--bad); }
@@ -883,6 +885,18 @@
     document.querySelectorAll('.target-list').forEach(l => { l.textContent = ''; renderTargetChips(l); });
   }
   function renderTargetChips(l) {
+    // "All players" first: one tap ticks every player this device knows; tap again for just the one on screen.
+    const known = players.filter(p => p.id === cur.id || p.pinSaved || !!store.get(pinKey(p.id)));
+    if (known.length > 1) {
+      const allOn = known.every(p => upSel.includes(p.id));
+      const a = el('button', 'chip all' + (allOn ? ' on' : ''), (allOn ? '✓ ' : '') + 'All players');
+      a.type = 'button';
+      a.onclick = () => {
+        upSel = allOn ? [cur.id] : known.map(p => p.id);
+        store.set('cp_up_targets', JSON.stringify(upSel)); renderUpTargets();
+      };
+      l.appendChild(a);
+    }
     players.forEach(p => {
       const known = p.id === cur.id || p.pinSaved || !!store.get(pinKey(p.id));
       const on = known && upSel.includes(p.id);

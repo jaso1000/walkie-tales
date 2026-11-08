@@ -1622,11 +1622,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         stl.leftMargin = stl.rightMargin = dp(18);
         artBox.addView(status, stl);
 
-        // ---- folder name (shrinks to fit one line) and the track playing
+        // ---- the song or story playing (shrinks to fit one line), and its folder underneath
         title = Ui.text(this, "", 26, Color.WHITE, true);
         title.setGravity(Gravity.CENTER);
         title.setMaxLines(1);
-        title.setAutoSizeTextTypeUniformWithConfiguration(17, 26, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        title.setAutoSizeTextTypeUniformWithConfiguration(15, 26, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, dp(38));
         tl.topMargin = dp(12);
         col.addView(title, tl);
@@ -2386,14 +2387,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             return;
         }
         boolean all = Store.ALL.equals(folder);
-        title.setText(all ? "Everything" : folder);
+        String fname = all ? "Everything" : folder;
         String extra = "";
         if (!all && prefs.getBoolean("shuffle:" + folder, false)) extra += "  ·  shuffle";
         if (!all && prefs.getBoolean("repeat:" + folder, false)) extra += "  ·  repeat";
         String tn = tracks.get(index).name;
         boolean playingNow = ready() && mp.isPlaying();
-        if (tn.equalsIgnoreCase(title.getText().toString())) tn = playingNow ? "Now playing" : "Tap ▶ to listen";
-        subtitle.setText(tn + extra);
+        // The song or story is the big heading; the folder (album or book) goes underneath.
+        title.setText(tn);
+        String under = fname;
+        if (tn.equalsIgnoreCase(fname)) under = playingNow ? "Now playing" : "Tap ▶ to listen";
+        subtitle.setText(under + extra);
         renderTracksBtn();
         boolean playing = ready() && mp.isPlaying();
         setControlsEnabled(mp != null || isLive());

@@ -352,12 +352,14 @@ final class PlayerViewController: UIViewController {
         let newFolder = f != lastFolder
         if newFolder { lastFolder = f; applyTheme() }
         if newFolder || p.index != lastIndex { lastIndex = p.index; showTrackArt() }
-        titleLabel.text = Store.label(f)
+        // The song or story is the big heading; the folder (album or book) goes underneath.
+        let fname = Store.label(f)
+        titleLabel.text = t.name
         var extra = ""
         if f != Store.ALL && Store.flag("shuffle", f, false) { extra += "  ·  shuffle" }
         if f != Store.ALL && Store.flag("repeat", f, false) { extra += "  ·  repeat" }
-        let tn = t.name.caseInsensitiveCompare(titleLabel.text ?? "") == .orderedSame ? (p.isPlaying ? "Now playing" : "Tap ▶ to listen") : t.name
-        subtitle.text = tn + extra
+        let under = t.name.caseInsensitiveCompare(fname) == .orderedSame ? (p.isPlaying ? "Now playing" : "Tap ▶ to listen") : fname
+        subtitle.text = under + extra
         eq.isHidden = false
         eq.tintColor = Art.tint(accent, 0.3)
         eq.alpha = p.isPlaying ? 1 : 0.4
