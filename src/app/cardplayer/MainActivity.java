@@ -1803,12 +1803,6 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
         slp.topMargin = dp(4);
         bcol.addView(libSearch, slp);
-        android.widget.HorizontalScrollView chipScroll = new android.widget.HorizontalScrollView(this);
-        chipScroll.setHorizontalScrollBarEnabled(false);
-        libChips = new LinearLayout(this);
-        libChips.setPadding(0, dp(14), 0, dp(8));
-        chipScroll.addView(libChips);
-        bcol.addView(chipScroll, new LinearLayout.LayoutParams(-1, -2));
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         grid = new LinearLayout(this);
@@ -1816,6 +1810,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         grid.setPadding(0, dp(8), 0, dp(24));
         scroll.addView(grid);
         bcol.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        // Types as a tab bar along the bottom: always visible, under the thumbs, never needs scrolling.
+        libChips = new LinearLayout(this);
+        libChips.setPadding(dp(6), dp(8), dp(6), dp(10));
+        libChips.setBackgroundColor(0xFF15151D);
+        LinearLayout.LayoutParams tabs = new LinearLayout.LayoutParams(-1, -2);
+        tabs.leftMargin = tabs.rightMargin = -dp(20); // full width: the column has 20dp sides
+        bcol.addView(libChips, tabs);
         browser.addView(bcol, new FrameLayout.LayoutParams(-1, -1));
         rootView.addView(browser, new FrameLayout.LayoutParams(-1, -1));
 
@@ -2051,7 +2052,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     /** Library types, with a picture and colour each so children can tell them apart without reading. */
     static final String[][] LIB_CATS = {
             {"all", "All", "🌈", "#6C4CF1"}, {"music", "Music", "🎵", "#E0559A"}, {"podcast", "Podcasts", "🎙️", "#F2994A"},
-            {"audiobook", "Audiobooks", "📖", "#27AE60"}, {"radio", "Radio", "📻", "#2D9CDB"}};
+            {"audiobook", "Books", "📖", "#27AE60"}, {"radio", "Radio", "📻", "#2D9CDB"}};
 
     /** Big picture buttons: All, plus one for each kind the player actually has. */
     void renderLibChips(java.util.Set<String> present) {
@@ -2067,15 +2068,16 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setGravity(Gravity.CENTER);
-            GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{color, Ui.shade(color, 0.6f)});
-            bg.setCornerRadius(dp(22));
-            if (on) bg.setStroke(dp(3), Color.WHITE);
-            card.setBackground(bg);
-            card.setAlpha(on ? 1f : 0.55f);
-            TextView pic = Ui.text(this, c[2], 34, Color.WHITE, false);
+            if (on) {
+                GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{color, Ui.shade(color, 0.6f)});
+                bg.setCornerRadius(dp(18));
+                card.setBackground(bg);
+            }
+            TextView pic = Ui.text(this, c[2], 28, Color.WHITE, false);
             pic.setGravity(Gravity.CENTER);
+            pic.setAlpha(on ? 1f : 0.6f);
             card.addView(pic, new LinearLayout.LayoutParams(-2, -2));
-            TextView label = Ui.text(this, c[1], 13, Color.WHITE, true);
+            TextView label = Ui.text(this, c[1], 12, on ? Color.WHITE : 0x99FFFFFF, on);
             label.setGravity(Gravity.CENTER);
             label.setSingleLine(true);
             card.addView(label, new LinearLayout.LayoutParams(-2, -2));
@@ -2086,8 +2088,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 pop();
                 if (libSnapshot != null) renderBrowser(libSnapshot, browseBuild);
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(88), dp(92));
-            lp.rightMargin = dp(10);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(70), 1f);
+            lp.leftMargin = lp.rightMargin = dp(3);
             libChips.addView(card, lp);
         }
     }

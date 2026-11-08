@@ -277,6 +277,8 @@
   .catbtn small { font-size: 10.5px; opacity: .85; margin-top: -1px; }
   .catbtn.on { opacity: 1; box-shadow: 0 0 0 3px #fff; }
   .catbtn:active { transform: scale(.95); }
+  #libCats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; overflow: visible; }
+  #libCats .catbtn { width: auto; height: 76px; }
   .cats.small .catbtn { width: 70px; height: 74px; border-radius: 18px; }
   .cats.small .catbtn .pic { font-size: 26px; }
   .type-row .label { margin-top: 0; }
@@ -764,7 +766,7 @@
   }
 
   let lastLibFolder, libCat = 'all';
-  const CATS = [['all', 'All'], ['music', 'Music'], ['podcast', 'Podcasts'], ['audiobook', 'Audiobooks'], ['radio', 'Radio']];
+  const CATS = [['all', 'All'], ['music', 'Music'], ['podcast', 'Podcasts'], ['audiobook', 'Books'], ['radio', 'Radio']];
   const CAT_ONE = { music: 'Music', podcast: 'Podcast', audiobook: 'Audiobook', radio: 'Radio' };
   // A picture and colour for each type, so children can tell them apart without reading (same as the players).
   const CAT_PIC = { all: ['🌈', '#6C4CF1'], auto: ['✨', '#7A7A92'], music: ['🎵', '#E0559A'], podcast: ['🎙️', '#F2994A'],
