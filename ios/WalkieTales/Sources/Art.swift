@@ -7,20 +7,39 @@ enum Art {
     static let autoCover = "cover.auto.jpg"
 
     /// Named cover > any image > picture inside the first track > cover found online.
-    static func folderCover(_ folder: String) -> UIImage? {
+    static func folderCover(_ folder: String, max: CGFloat = 900) -> UIImage? {
         let d = Store.dir(folder)
         let items = (try? FileManager.default.contentsOfDirectory(at: d, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         var any: URL?, auto: URL?
         for u in items where Store.imageExt.contains(u.pathExtension.lowercased()) {
             let n = u.lastPathComponent.lowercased()
             if n == autoCover { auto = u; continue }
-            if coverNames.contains(u.deletingPathExtension().lastPathComponent.lowercased()) { return load(u) }
+            if coverNames.contains(u.deletingPathExtension().lastPathComponent.lowercased()) { return load(u, max: max) }
             if any == nil { any = u }
         }
-        if let a = any { return load(a) }
-        if let first = Store.listAudio(d).first, let e = embedded(first) { return e }
-        if let a = auto { return load(a) }
+        if let a = any { return load(a, max: max) }
+        if let first = Store.listAudio(d).first, let e = embedded(first) { return scaled(e, max: max) }
+        if let a = auto { return load(a, max: max) }
         return nil
+    }
+
+    private static let tiles: NSCache<NSString, UIImage> = { let c = NSCache<NSString, UIImage>(); c.totalCostLimit = 40 * 1024 * 1024; return c }()
+    private static let noCover = UIImage()
+
+    /// A Library tile's cover, small and remembered until the folder changes (like Android's Ui.tile).
+    static func tile(_ folder: String) -> UIImage? {
+        let key = "\(folder)|\(Store.stamp(folder))" as NSString
+        if let t = tiles.object(forKey: key) { return t === noCover ? nil : t }
+        let img = folderCover(folder, max: 400)
+        let cost = img.map { Int($0.size.width * $0.size.height * $0.scale * $0.scale * 4) } ?? 1
+        tiles.setObject(img ?? noCover, forKey: key, cost: cost)
+        return img
+    }
+
+    /// Only what's already remembered, so the Library can show it straight away.
+    static func cachedTile(_ folder: String) -> UIImage? {
+        let t = tiles.object(forKey: "\(folder)|\(Store.stamp(folder))" as NSString)
+        return t === noCover ? nil : t
     }
 
     static func hasPicture(_ folder: String) -> Bool {

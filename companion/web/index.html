@@ -147,6 +147,31 @@
   .up-list div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; color: var(--muted); }
   .up-list div.ok { color: var(--good); }
   .up-list div.err { color: var(--bad); }
+  .up-list .up-player { display: block; padding: 10px 0; border-top: 1px solid var(--line); color: var(--text); }
+  .up-list .up-player:first-child { border-top: 0; }
+  .up-player .top { display: flex; justify-content: space-between; gap: 10px; padding: 0; color: var(--text); }
+  .up-player progress { width: 100%; height: 8px; margin: 6px 0 2px; accent-color: var(--accent); }
+  .up-player small { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up-player.done .st { color: var(--good); }
+  .up-player.bad .st { color: var(--bad); }
+  .up-player .fails { display: block; padding: 4px 0 0; color: var(--bad); font-size: 13px; white-space: pre-line; }
+  .up-preview { margin-top: 10px; font-size: 13px; color: var(--muted); max-height: 180px; overflow: auto; }
+  .up-preview div { padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up-preview b { color: var(--text); font-weight: 600; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 14px; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .tile .links { display: flex; gap: 12px; margin-top: 2px; }
+  .tile .links small { color: var(--accent); text-decoration: underline; cursor: pointer; }
+  .tile .links small.del { color: #d9534f; }
+  .song { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .song:first-child { border-top: 0; }
+  .song .grow { flex: 1; min-width: 0; }
+  .song .grow b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song .grow small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song button { flex: none; padding: 6px 10px; font-size: 13px; }
+  .cmp div { padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; white-space: normal; }
+  .cmp div:first-child { border-top: 0; }
+  .cmp .ok { color: var(--good); } .cmp .bad { color: var(--bad); } .cmp small { color: var(--muted); display: block; }
   progress { width: 100%; height: 8px; accent-color: var(--accent); }
 
   /* player switcher */
@@ -156,9 +181,9 @@
   #who .caret { display: none; width: 22px; height: 22px; fill: var(--muted); flex: none; }
   #who.multi { cursor: pointer; }
   #who.multi .caret { display: block; }
-  #players { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 11; align-items: flex-end; justify-content: center; }
-  #players.on { display: flex; }
-  #players .sheet { width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; background: var(--panel); border-radius: 24px 24px 0 0;
+  #players, #songs { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 11; align-items: flex-end; justify-content: center; }
+  #players.on, #songs.on { display: flex; }
+  #players .sheet, #songs .sheet { width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; background: var(--panel); border-radius: 24px 24px 0 0;
     padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); animation: up .22s ease; }
   @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
   .pl { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; cursor: pointer; }
@@ -292,10 +317,14 @@
     <div class="row">
       <input type="file" id="upFiles" multiple accept="audio/*,image/*,.mp3,.m4a,.m4b,.ogg,.opus,.flac,.wav,.aac,.m3u,.m3u8,.pls,.url">
     </div>
+    <label class="check"><input type="checkbox" id="upTidy"> Tidy song names (e.g. “01 - So Yesterday.mp3”)</label>
+    <div class="up-preview" id="upPreview" hidden></div>
     <div class="targets" hidden style="margin-top:12px"><small style="color:var(--muted)">Upload to</small><div class="chips target-list" style="margin-top:6px"></div></div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="upGo">Upload</button>
+      <button class="btn ghost" id="upRetry" hidden style="flex:none">Retry failed</button>
     </div>
+    <div class="hint" style="text-align:left;margin-top:6px">Songs a player already has are skipped, so you can upload a whole album again to fill in gaps.</div>
     <div class="hint" style="text-align:left"><span id="free"></span></div>
     <div class="up-list" id="upList"></div>
   </div>
@@ -389,6 +418,18 @@
     <div class="hint" style="text-align:left">The address is on the player in <b>Grown-up settings → Remote control</b>.</div>
     <div class="row" style="margin-top:12px"><button class="btn ghost" id="plScan">Find players on the Wi-Fi</button></div>
   </div>
+</div></div>
+
+<div id="songs"><div class="sheet">
+  <div style="display:flex;align-items:center;margin-bottom:4px"><h2 style="margin:0;flex:1;font-size:20px" id="sgTitle">Songs</h2>
+    <button class="btn ghost" id="sgClose" style="flex:none;padding:8px 14px">Done</button></div>
+  <small style="color:var(--muted);display:block;margin-bottom:10px" id="sgSub"></small>
+  <div class="row" style="flex-wrap:wrap;gap:8px">
+    <button class="btn ghost" id="sgTidy" style="flex:none">Tidy names</button>
+    <button class="btn ghost" id="sgCompare" style="flex:none">Check other players</button>
+  </div>
+  <div class="up-preview cmp" id="sgCmp" hidden style="max-height:none"></div>
+  <div id="sgList" style="margin-top:10px"></div>
 </div></div>
 
 <div id="pin"><div class="box">
@@ -586,7 +627,7 @@
   $('#msgText').onkeydown = (e) => { if (e.key === 'Enter') $('#msgSend').click(); };
 
   async function poll() {
-    if (polling || document.hidden || $('#pin').classList.contains('on') || $('#players').classList.contains('on') || (players && !cur)) return;
+    if (polling || document.hidden || $('#pin').classList.contains('on') || $('#players').classList.contains('on') || $('#songs').classList.contains('on') || (players && !cur)) return;
     polling = true;
     try { render(await api('/api/status')); } catch (e) { /* shown in pill */ }
     polling = false;
@@ -615,12 +656,14 @@
         t.appendChild(w);
       }
       if (f.name !== '@all') {
-        const d = el('small', '', 'Delete'); d.style.cssText = 'display:block;color:#d9534f;text-decoration:underline;margin-top:2px';
+        const links = el('div', 'links');
+        if (!f.live) { const sg = el('small', '', 'Songs'); sg.onclick = (e) => { e.stopPropagation(); openSongs(f.name); }; links.appendChild(sg); }
+        const d = el('small', 'del', 'Delete');
         d.onclick = (e) => { e.stopPropagation();
           const what = f.live ? 'the radio station' : f.tracks + (f.tracks === 1 ? ' track' : ' tracks');
           if (confirm('Delete “' + f.name + '” (' + what + ') from ' + (cur ? cur.name : 'this player') + '? This can’t be undone.'))
             api('/api/folder/delete', { folder: f.name }).then(() => { toast('Deleted ' + f.name); loadLibrary(); }).catch(err); };
-        t.appendChild(d);
+        links.appendChild(d); t.appendChild(links);
       }
       t.onclick = () => act('/api/play', { folder: f.name }).then(() => { toast('Playing ' + (f.name === '@all' ? 'everything' : f.name)); document.querySelector('nav button[data-tab=now]').click(); });
       g.appendChild(t);
@@ -693,6 +736,56 @@
     });
   }
 
+  // ---------------------------------------------------------------- song names
+  // "Hilary Duff - Metamorphosis - 01 - So Yesterday.mp3" -> "01 - So Yesterday.mp3". The players hide the number,
+  // so kids see "So Yesterday" and the album stays in order. Names without a track number are left alone.
+  const AUDIO_RE = /\.(mp3|m4a|m4b|aac|ogg|opus|flac|wav)$/i;
+  function tidyName(n) {
+    const m = n.match(/^(.*)(\.[^.]+)$/);
+    if (!m || !AUDIO_RE.test(n)) return n;
+    const b = m[1].replace(/_/g, ' ')
+      .replace(/\s*[\[(](official[^\])]*|lyrics?|audio|hq|hd|[^\])]*\.(com|org|net))[\])]/gi, '')
+      .replace(/[\s-]*\b[\w-]+\.(com|org|net)$/i, '').replace(/\s+/g, ' ').trim();
+    const parts = b.split(/\s+-\s+/);
+    let num = '', title = '';
+    const ni = parts.findIndex((p, i) => i < parts.length - 1 && /^\d{1,3}$/.test(p));
+    if (ni >= 0) { num = parts[ni]; title = parts.slice(ni + 1).join(' - '); }
+    else { const lead = b.match(/^(\d{1,3})(?:\s*[.\-_]\s*|\s+)(.+)$/); if (lead) { num = lead[1]; title = lead[2]; } }
+    if (!num || !title.trim()) return b ? b + m[2] : n;
+    return num.padStart(2, '0') + ' - ' + title.trim() + m[2];
+  }
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const fmtSize = (b) => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
+  // Talk to any player (not just the one on screen).
+  async function tapi(t, path, body) {
+    const opt = { method: body === undefined ? 'GET' : 'POST', headers: {} };
+    if (t.pin) opt.headers['X-Pin'] = t.pin;
+    if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    const r = await fetch(t.base + path, opt);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(r.status === 401 ? 'PIN needed' : r.status === 502 ? 'Player unreachable' : (j.error || r.statusText)); e.status = r.status; throw e; }
+    return j;
+  }
+  const oldPlayer = (e) => e && e.status === 404;
+  const thisPlayer = () => ({ id: cur ? cur.id : null, name: cur ? label(cur) : 'This player', base, pin });
+
+  // ---------------------------------------------------------------- uploads
+  // Every ticked player at once, skipping songs a player already has, retrying each song up to 3 times.
+  let upBusy = false, upLast = null;
+  $('#upTidy').checked = store.get('cp_up_tidy') !== '0';
+  function upNames(files) { return files.map(f => ({ file: f, name: $('#upTidy').checked ? tidyName(f.name) : f.name })); }
+  function showUpPreview() {
+    const box = $('#upPreview'); box.textContent = '';
+    const items = upNames([...$('#upFiles').files]).filter(i => i.name !== i.file.name);
+    box.hidden = !items.length;
+    if (!items.length) return;
+    box.appendChild(el('div', '', items.length + (items.length === 1 ? ' name' : ' names') + ' will be tidied:'));
+    items.forEach(i => { const d = el('div'); d.appendChild(el('span', '', i.file.name + ' → ')); d.appendChild(el('b', '', i.name)); box.appendChild(d); });
+  }
+  $('#upFiles').onchange = showUpPreview;
+  $('#upTidy').onchange = () => { store.set('cp_up_tidy', $('#upTidy').checked ? '1' : '0'); showUpPreview(); };
+  window.addEventListener('beforeunload', (e) => { if (upBusy) { e.preventDefault(); e.returnValue = ''; } });
+
   $('#upGo').onclick = async () => {
     const folder = $('#upFolder').value.trim(); const files = [...$('#upFiles').files];
     if (!folder) return toast('Type a folder name first');
@@ -700,37 +793,187 @@
     if (!files.length) return toast('Choose some files');
     const targets = upTargets();
     if (!targets.length) return toast('Choose at least one player to upload to');
-    $('#upGo').disabled = true;
-    const list = $('#upList'); list.textContent = '';
-    let failed = 0;
-    for (const f of files) {
-      for (const t of targets) {
-        const row = el('div'); const name = el('span', '', f.name + (targets.length > 1 ? ' \u2192 ' + t.name : ''));
-        const prog = el('progress'); prog.max = 100; prog.value = 0; prog.style.width = '40%';
-        row.appendChild(name); row.appendChild(prog); list.appendChild(row);
-        try { await upload(folder, f, (p) => prog.value = p, t); row.className = 'ok'; prog.replaceWith(el('span', '', 'done')); }
-        catch (e) { failed++; row.className = 'err'; prog.replaceWith(el('span', '', e.message)); }
-      }
-    }
-    $('#upGo').disabled = false; $('#upFiles').value = '';
-    toast(failed ? 'Finished, ' + failed + ' failed' : 'Upload finished' + (targets.length > 1 ? ' on ' + targets.length + ' players' : '')); loadLibrary();
-    for (const t of targets) { // look for covers for the new folder on each player
-      fetch(t.base + '/api/covers/find', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, t.pin ? { 'X-Pin': t.pin } : {}), body: '{"force":false}' }).catch(() => {});
-    }
-    setTimeout(loadLibrary, 8000);
+    const names = upNames(files);
+    upLast = { folder, runs: targets.map(t => ({ t, items: names.map(n => ({ file: n.file, name: n.name, state: 'wait' })) })) };
+    await runUploads(upLast);
   };
-  function upload(folder, file, onProgress, t) {
+  $('#upRetry').onclick = async () => {
+    if (!upLast || upBusy) return;
+    upLast.runs.forEach(r => r.items.forEach(i => { if (i.state === 'fail') { i.state = 'wait'; i.err = ''; } }));
+    await runUploads(upLast);
+  };
+
+  async function runUploads(job) {
+    upBusy = true; $('#upGo').disabled = true; $('#upRetry').hidden = true;
+    const list = $('#upList'); list.textContent = '';
+    await Promise.all(job.runs.map(r => uploadToPlayer(job.folder, r, playerRow(list, r))));
+    upBusy = false; $('#upGo').disabled = false;
+    const failed = job.runs.reduce((n, r) => n + r.items.filter(i => i.state === 'fail').length, 0);
+    const sent = job.runs.reduce((n, r) => n + r.items.filter(i => i.state === 'ok').length, 0);
+    $('#upRetry').hidden = !failed;
+    if (!failed) { $('#upFiles').value = ''; showUpPreview(); }
+    toast(failed ? failed + (failed === 1 ? ' song' : ' songs') + ' didn’t make it. Tap Retry failed.'
+      : sent ? 'All done' + (job.runs.length > 1 ? ' on ' + job.runs.length + ' players' : '') : 'Every player already had these songs');
+    loadLibrary();
+    for (const r of job.runs) tapi(r.t, '/api/covers/find', { force: false }).catch(() => {}); // look for covers for a new folder
+    setTimeout(loadLibrary, 8000);
+  }
+
+  function playerRow(list, r) {
+    const row = el('div', 'up-player');
+    const top = el('div', 'top'); top.appendChild(el('b', '', r.t.name || 'This player')); const st = el('span', 'st'); top.appendChild(st);
+    const bar = el('progress'); bar.max = 1000; bar.value = 0;
+    const now = el('small'); const fails = el('div', 'fails');
+    row.appendChild(top); row.appendChild(bar); row.appendChild(now); row.appendChild(fails); list.appendChild(row);
+    const total = r.items.reduce((n, i) => n + i.file.size, 0) || 1;
+    return {
+      update(cur, frac) {
+        const done = r.items.filter(i => i.state === 'ok' || i.state === 'skip');
+        const bad = r.items.filter(i => i.state === 'fail');
+        const bytes = done.reduce((n, i) => n + i.file.size, 0) + (cur ? cur.file.size * (frac || 0) : 0);
+        bar.value = Math.round(bytes * 1000 / total);
+        st.textContent = done.length + ' of ' + r.items.length + (bad.length ? ' · ' + bad.length + ' failed' : '');
+        fails.textContent = bad.map(i => '✗ ' + i.name + (i.err ? ' (' + i.err + ')' : '')).join('\n');
+      },
+      say(t) { now.textContent = t; },
+      finish() {
+        const bad = r.items.filter(i => i.state === 'fail').length, skipped = r.items.filter(i => i.state === 'skip').length;
+        row.classList.add(bad ? 'bad' : 'done'); if (!bad) bar.value = 1000;
+        st.textContent = bad ? bad + ' of ' + r.items.length + ' failed' : '✓ ' + r.items.length + (r.items.length === 1 ? ' song' : ' songs');
+        now.textContent = bad ? '' : skipped ? (skipped === r.items.length ? 'Already had them all' : skipped + ' already there, skipped') : '';
+      },
+    };
+  }
+
+  async function uploadToPlayer(folder, r, ui) {
+    const have = {};
+    try { (await tapi(r.t, '/api/folder?name=' + encodeURIComponent(folder))).files.forEach(f => have[f.name] = f.size); }
+    catch (e) { /* a new folder, or an older player that can't list folders */ }
+    ui.update();
+    for (const it of r.items) {
+      if (it.state === 'ok' || it.state === 'skip') continue;
+      if (have[it.name] === it.file.size) { it.state = 'skip'; ui.update(); continue; }
+      for (let attempt = 1; ; attempt++) {
+        ui.say((attempt > 1 ? 'Trying again (' + attempt + ' of 3): ' : 'Sending ') + it.name);
+        try { await upload(folder, it.file, (p) => ui.update(it, p / 100), r.t, it.name); it.state = 'ok'; break; }
+        catch (e) {
+          it.err = e.message;
+          if (attempt >= 3 || e.message === 'PIN needed') { it.state = 'fail'; break; }
+          await sleep(attempt * 3000);
+        }
+      }
+      ui.update();
+    }
+    ui.say(''); ui.finish();
+  }
+
+  function upload(folder, file, onProgress, t, name) {
     t = t || { base, pin };
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
-      x.open('PUT', t.base + '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name));
+      x.open('PUT', t.base + '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name || file.name));
       if (t.pin) x.setRequestHeader('X-Pin', t.pin);
       x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round(e.loaded * 100 / e.total)); };
-      x.onload = () => { if (x.status === 200) resolve(); else { let m = 'failed'; try { m = JSON.parse(x.responseText).error; } catch (e) {} reject(new Error(m)); } };
+      x.onload = () => { if (x.status === 200) resolve(); else { let m = 'failed'; try { m = JSON.parse(x.responseText).error; } catch (e) {} reject(new Error(x.status === 401 ? 'PIN needed' : m)); } };
       x.onerror = () => reject(new Error('network error'));
+      x.ontimeout = () => reject(new Error('timed out'));
       x.send(file);
     });
   }
+
+  // ---------------------------------------------------------------- songs in a folder
+  let sgFolder = null;
+  async function openSongs(folder) {
+    sgFolder = folder;
+    $('#sgTitle').textContent = folder; $('#sgCmp').hidden = true; $('#sgCmp').textContent = '';
+    $('#songs').classList.add('on');
+    await loadSongs();
+  }
+  async function loadSongs() {
+    const l = $('#sgList'); l.textContent = ''; $('#sgSub').textContent = 'Loading…';
+    let j;
+    try { j = await tapi(thisPlayer(), '/api/folder?name=' + encodeURIComponent(sgFolder)); }
+    catch (e) { $('#sgSub').textContent = oldPlayer(e) ? 'Update this player to see its songs here.' : e.message; return; }
+    const songs = j.files.filter(f => AUDIO_RE.test(f.name));
+    $('#sgSub').textContent = songs.length + (songs.length === 1 ? ' song' : ' songs') + ' on ' + thisPlayer().name
+      + (j.files.length > songs.length ? ' · ' + (j.files.length - songs.length) + ' other files' : '');
+    j.files.forEach(f => {
+      const row = el('div', 'song'); const g = el('div', 'grow');
+      const audio = AUDIO_RE.test(f.name);
+      const nice = f.name.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]*/, '') || f.name;
+      g.appendChild(el('b', '', audio ? nice : f.name));
+      g.appendChild(el('small', '', (audio ? f.name + ' · ' : '') + fmtSize(f.size)));
+      const rn = el('button', 'btn ghost', 'Rename'); const del = el('button', 'btn danger', 'Delete');
+      rn.onclick = async () => {
+        const to = (prompt('New file name (a number at the front keeps the order and isn’t shown):', f.name) || '').trim();
+        if (!to || to === f.name) return;
+        try { await tapi(thisPlayer(), '/api/file/rename', { folder: sgFolder, from: f.name, to }); toast('Renamed'); loadSongs(); } catch (e) { err(e); }
+      };
+      del.onclick = async () => {
+        if (!confirm('Delete “' + f.name + '” from ' + thisPlayer().name + '?')) return;
+        try { await tapi(thisPlayer(), '/api/file/delete', { folder: sgFolder, name: f.name }); toast('Deleted'); loadSongs(); } catch (e) { err(e); }
+      };
+      row.appendChild(g); row.appendChild(rn); row.appendChild(del); l.appendChild(row);
+    });
+  }
+  // The players to work on: the ones ticked under "Upload to", always including the one on screen.
+  function sgTargets() {
+    const t = upTargets(); const me = thisPlayer();
+    return t.some(x => x.id === me.id) ? t : [me].concat(t);
+  }
+  $('#sgTidy').onclick = async () => {
+    const targets = sgTargets(), out = $('#sgCmp');
+    if (!confirm('Tidy the song names in “' + sgFolder + '” on ' + (targets.length === 1 ? targets[0].name : targets.length + ' players') + '?')) return;
+    out.hidden = false; out.textContent = 'Working…';
+    const lines = [];
+    for (const t of targets) {
+      try {
+        const j = await tapi(t, '/api/folder?name=' + encodeURIComponent(sgFolder));
+        const names = new Set(j.files.map(f => f.name));
+        let n = 0;
+        for (const f of j.files) {
+          const to = tidyName(f.name);
+          if (to === f.name || names.has(to)) continue;
+          await tapi(t, '/api/file/rename', { folder: sgFolder, from: f.name, to });
+          names.delete(f.name); names.add(to); n++;
+        }
+        lines.push(['ok', t.name + ': ' + (n ? n + ' renamed' : 'already tidy')]);
+      } catch (e) {
+        lines.push(['bad', t.name + ': ' + (oldPlayer(e) ? 'needs the latest WalkieTales' : e.status === 400 ? 'doesn’t have this folder' : e.message)]);
+      }
+    }
+    out.textContent = ''; lines.forEach(([c, txt]) => out.appendChild(el('div', c, txt)));
+    loadSongs();
+  };
+  $('#sgCompare').onclick = async () => {
+    const out = $('#sgCmp'); out.hidden = false; out.textContent = 'Checking…';
+    const me = thisPlayer(); let mine;
+    try { mine = (await tapi(me, '/api/folder?name=' + encodeURIComponent(sgFolder))).files.filter(f => AUDIO_RE.test(f.name)); }
+    catch (e) { out.textContent = e.message; return; }
+    const key = (n) => tidyName(n).toLowerCase();
+    const others = sgTargets().filter(t => t.id !== me.id);
+    if (!others.length) { out.textContent = 'Tick other players under “Upload to” (Library → Add music) to compare with them.'; return; }
+    out.textContent = '';
+    for (const t of others) {
+      const d = el('div');
+      try {
+        const theirs = (await tapi(t, '/api/folder?name=' + encodeURIComponent(sgFolder))).files.filter(f => AUDIO_RE.test(f.name));
+        const tk = new Set(theirs.map(f => key(f.name)));
+        const missing = mine.filter(f => !tk.has(key(f.name)));
+        const extra = theirs.length - (mine.length - missing.length);
+        if (!missing.length) { d.className = 'ok'; d.textContent = '✓ ' + t.name + ': has all ' + mine.length; }
+        else { d.className = 'bad'; d.textContent = t.name + ': missing ' + missing.length; d.appendChild(el('small', '', missing.map(f => tidyName(f.name).replace(/\.[^.]+$/, '').replace(/^\d+ - /, '')).join(', '))); }
+        if (extra > 0) d.appendChild(el('small', '', extra + ' song' + (extra === 1 ? '' : 's') + ' not on ' + me.name));
+      } catch (e) {
+        d.className = 'bad'; d.textContent = t.name + ': ' + (oldPlayer(e) ? 'needs the latest WalkieTales' : e.status === 400 ? 'doesn’t have this folder' : e.message);
+      }
+      out.appendChild(d);
+    }
+    const hint = el('small', '', 'To fill gaps, use Add music with the whole album: songs a player already has are skipped.'); hint.style.marginTop = '6px';
+    out.appendChild(hint);
+  };
+  $('#sgClose').onclick = () => { $('#songs').classList.remove('on'); loadLibrary(); };
+  $('#songs').onclick = (e) => { if (e.target.id === 'songs') $('#sgClose').click(); };
 
   // ---------------------------------------------------------------- cards
   async function loadCards() {

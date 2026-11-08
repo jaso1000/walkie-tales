@@ -60,11 +60,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             return !t.isEmpty && (online || !t.allSatisfy { $0.live })
         }
         if items.count > 1 { items.append(Store.ALL) }
+        for f in items where f != Store.ALL { if let c = Art.cachedTile(f) { covers[f] = c } } // remembered: show at once
         collection?.reloadData()
-        let list = items
+        let list = items.filter { $0 != Store.ALL && covers[$0] == nil }
         DispatchQueue.global(qos: .userInitiated).async {
-            for f in list where f != Store.ALL {
-                if let c = Art.folderCover(f) {
+            for f in list {
+                if let c = Art.tile(f) {
                     DispatchQueue.main.async {
                         self.covers[f] = c
                         if let i = self.items.firstIndex(of: f) { self.collection.reloadItems(at: [IndexPath(item: i, section: 0)]) }

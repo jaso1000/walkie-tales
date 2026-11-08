@@ -114,7 +114,38 @@ enum Store {
         return out.sorted { natLess(String($0.path.dropFirst(base.count)), String($1.path.dropFirst(base.count))) }
     }
 
+    // MARK: remembered folders (like Android's Store.FolderInfo)
+
+    private static var trackCache: [String: (stamp: Double, tracks: [Track])] = [:]
+    private static let trackLock = NSLock()
+
+    /// Changes whenever a file is added, removed or renamed in the folder (or its sub-folders), or a playlist is edited.
+    static func stamp(_ folder: String) -> Double {
+        let d = dir(folder)
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .isDirectoryKey]
+        var s = (try? d.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate?.timeIntervalSince1970) ?? 0
+        let items = (try? FileManager.default.contentsOfDirectory(at: d, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
+        for u in items {
+            guard let v = try? u.resourceValues(forKeys: Set(keys)) else { continue }
+            if v.isDirectory == true || playlistExt.contains(u.pathExtension.lowercased()) {
+                s = max(s, v.contentModificationDate?.timeIntervalSince1970 ?? 0)
+            }
+        }
+        return s
+    }
+
+    /// Everything playable in a folder, re-read only when the folder changed.
     static func listTracks(_ folder: String) -> [Track] {
+        let st = stamp(folder)
+        trackLock.lock()
+        if let c = trackCache[folder], c.stamp == st { trackLock.unlock(); return c.tracks }
+        trackLock.unlock()
+        let t = readTracks(folder)
+        trackLock.lock(); trackCache[folder] = (st, t); trackLock.unlock()
+        return t
+    }
+
+    private static func readTracks(_ folder: String) -> [Track] {
         let d = dir(folder)
         var out = listAudio(d).map { Track(source: $0, name: cleanName($0), live: false) }
         out += listStreams(d)

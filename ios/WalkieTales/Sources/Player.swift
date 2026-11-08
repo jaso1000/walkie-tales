@@ -17,6 +17,13 @@ final class Player: NSObject {
     private var timeObs: Any?
     private var fadeTimer: Timer?
 
+    /// A song was renamed (to != nil) or deleted from the remote: keep the play queue pointing at real files.
+    func fileChanged(from: URL, to: URL?) {
+        guard let i = tracks.firstIndex(where: { $0.source.standardizedFileURL == from.standardizedFileURL }) else { return }
+        if let to = to { tracks[i] = Track(source: to, name: Store.cleanName(to), live: false) }
+        else if i != index { tracks.remove(at: i); if i < index { index -= 1 } } // a playing track finishes first
+    }
+
     var sleepAt: Date?
     /// Called on the main thread whenever anything the screen shows changes.
     var onChange: (() -> Void)?

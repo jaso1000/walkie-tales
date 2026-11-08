@@ -9,6 +9,15 @@ extension PlayerViewController {
         case "/api/status": return statusJson()
         case "/api/library": return library()
         case "/api/cards": return ["cards": [], "linking": NSNull()]
+        case "/api/folder": // the files in one folder, for the remote's song list and "skip what's already there"
+            let f = r.query["name"] ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
+            let items = (try? FileManager.default.contentsOfDirectory(at: Store.dir(f), includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey], options: [.skipsHiddenFiles])) ?? []
+            let files: [[String: Any]] = items
+                .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+                .sorted { Store.natLess($0.lastPathComponent, $1.lastPathComponent) }
+                .map { ["name": $0.lastPathComponent, "size": (try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0] }
+            return ["name": f, "files": files]
         case "/api/settings":
             if post { Store.applySettings(b); applySettings() }
             return ["settings": Store.settingsJson()]
@@ -60,6 +69,26 @@ extension PlayerViewController {
             if p.folder == f { p.stop() }
             do { try FileManager.default.removeItem(at: Store.dir(f)) } catch { throw RemoteError("Couldn't delete \(f)") }
             flash("Deleted “\(f)”", 3)
+            libraryChanged()
+        case "/api/file/rename": // remote → song list → rename, or "Tidy names"
+            let f = b["folder"] as? String ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f),
+                  let from = Store.safeName(b["from"] as? String), let to = Store.safeName(b["to"] as? String) else { throw RemoteError("Bad folder or file name") }
+            let src = Store.dir(f).appendingPathComponent(from), dst = Store.dir(f).appendingPathComponent(to)
+            guard FileManager.default.fileExists(atPath: src.path) else { throw RemoteError("No file called \(from)") }
+            if from != to {
+                if FileManager.default.fileExists(atPath: dst.path) && from.lowercased() != to.lowercased() { throw RemoteError("There's already a file called \(to)") }
+                do { try FileManager.default.moveItem(at: src, to: dst) } catch { throw RemoteError("Couldn't rename \(from)") }
+                p.fileChanged(from: src, to: dst)
+                lastIndex = -1; updateUi(); libraryChanged()
+            }
+        case "/api/file/delete":
+            let f = b["folder"] as? String ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f), let name = Store.safeName(b["name"] as? String) else { throw RemoteError("Bad folder or file name") }
+            let u = Store.dir(f).appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: u.path) else { throw RemoteError("No file called \(name)") }
+            do { try FileManager.default.removeItem(at: u) } catch { throw RemoteError("Couldn't delete \(name)") }
+            p.fileChanged(from: u, to: nil)
             libraryChanged()
         case "/api/station":
             let name = String((b["name"] as? String ?? "").trimmingCharacters(in: .whitespaces).prefix(60))

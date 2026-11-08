@@ -365,6 +365,18 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         switch (path) {
             case "/api/status": return status();
             case "/api/library": return library();
+            case "/api/folder": { // the files in one folder, for the remote's song list and "skip what's already there"
+                File dir = RemoteServer.safeFolder(q.get("name"));
+                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + q.get("name"));
+                org.json.JSONArray files = new org.json.JSONArray();
+                File[] all = dir.listFiles();
+                if (all != null) {
+                    java.util.Arrays.sort(all, (x, y) -> Store.natCmp(x.getName(), y.getName()));
+                    for (File f : all) if (f.isFile() && !f.getName().startsWith("."))
+                        files.put(new JSONObject().put("name", f.getName()).put("size", f.length()));
+                }
+                return new JSONObject().put("name", dir.getName()).put("files", files);
+            }
             case "/api/cards": return cardsJson();
             case "/api/settings":
                 if (post) {
@@ -461,6 +473,28 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 if (browsing) openBrowser();
                 break;
             }
+            case "/api/file/rename": { // remote → song list → rename, or "Tidy names"
+                File dir = RemoteServer.safeFolder(b.getString("folder"));
+                String from = RemoteServer.safeName(b.optString("from")), to = RemoteServer.safeName(b.optString("to"));
+                if (dir == null || from == null || to == null) throw new IllegalArgumentException("Bad folder or file name");
+                File src = new File(dir, from), dst = new File(dir, to);
+                if (!src.isFile()) throw new IllegalArgumentException("No file called " + from);
+                if (from.equals(to)) break;
+                if (dst.exists() && !from.equalsIgnoreCase(to)) throw new IllegalArgumentException("There's already a file called " + to);
+                if (!src.renameTo(dst)) throw new IllegalStateException("Couldn't rename " + from);
+                fileChanged(src, dst);
+                break;
+            }
+            case "/api/file/delete": {
+                File dir = RemoteServer.safeFolder(b.getString("folder"));
+                String name = RemoteServer.safeName(b.optString("name"));
+                if (dir == null || name == null) throw new IllegalArgumentException("Bad folder or file name");
+                File f = new File(dir, name);
+                if (!f.isFile()) throw new IllegalArgumentException("No file called " + name);
+                if (!f.delete()) throw new IllegalStateException("Couldn't delete " + name);
+                fileChanged(f, null);
+                break;
+            }
             case "/api/station": {
                 String name = b.optString("name").trim(), url = b.optString("url").trim();
                 String fold = b.optString("folder").trim();
@@ -485,6 +519,19 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             default: return null;
         }
         return status();
+    }
+
+    /** A song was renamed (to != null) or deleted from the remote: keep the play queue pointing at real files. */
+    void fileChanged(File from, File to) {
+        String path = from.getAbsolutePath();
+        for (int i = 0; i < tracks.size(); i++) {
+            if (!tracks.get(i).source.equals(path)) continue;
+            if (to != null) tracks.set(i, Track.file(to));
+            else if (i != index) { tracks.remove(i); if (i < index) index--; }
+            break; // a deleted track that's playing now finishes, then the queue moves on
+        }
+        if (folder != null && !tracks.isEmpty()) updateUi();
+        if (browsing) openBrowser();
     }
 
     JSONObject status() throws Exception {
