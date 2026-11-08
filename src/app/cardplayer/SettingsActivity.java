@@ -180,6 +180,8 @@ public class SettingsActivity extends Activity {
         panel(null);
         toggle("Use NFC cards", null, "cards", true);
         toggle("Pause when the card is lifted off", null, "rest_mode", false);
+        toggle("Keep the screen on for cards", "While charging and at bedtime, so a card works straight away. "
+                + "Off: the screen sleeps as usual, and a card works after a tap wakes it.", "cards_awake", true);
         panel("Linked cards");
         link("Link a card", null, v -> pickLinkTarget(Store.folders()));
         link("Linked cards", cards.isEmpty() ? "None yet" : cards.size() + (cards.size() == 1 ? " card" : " cards"),

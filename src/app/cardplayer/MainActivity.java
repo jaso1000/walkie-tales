@@ -715,9 +715,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
      */
     void updateKeepOn() {
         int mode = prefs.getInt("screen_on", 0); // 0 never (sleeps after the timeout), 1 always, 2 while playing
-        // Cards need the screen on for the reader: then it stays on while charging, and through the bedtime black screen.
-        boolean on = !screenLocked && (mode == 1 || (mode == 2 && ready() && mp.isPlaying())
-                || (cardsOn() && (charging || bedtimeDarkOn())));
+        // Cards need the screen on for the reader: then it stays on while charging, and through the bedtime black screen,
+        // unless a grown-up chose to let it sleep anyway ("Keep the screen on for cards").
+        boolean forCards = cardsOn() && prefs.getBoolean("cards_awake", true) && (charging || bedtimeDarkOn());
+        boolean on = !screenLocked && (mode == 1 || (mode == 2 && ready() && mp.isPlaying()) || forCards);
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }

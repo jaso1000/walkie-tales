@@ -58,6 +58,7 @@ final class Store {
         SETTINGS.put("browse", true);
         SETTINGS.put("track_list", true);
         SETTINGS.put("rest_mode", false);
+        SETTINGS.put("cards_awake", true);
         SETTINGS.put("dim_after", 90);
         SETTINGS.put("screen_on", 0);
         SETTINGS.put("screen_timeout", 60);
