@@ -18,3 +18,14 @@ demo/
 node_modules/
 .DS_Store
 Thumbs.db
+!ios/**/*.png
+
+# iOS: generated in the cloud build
+ios/build/
+ios/*.xcodeproj/
+ios/Payload/
+ios/*.ipa
+ios/WalkieTales/Resources/web/
+ios/WalkieTales/Info.plist
+ios/simbuild/
+ios/shots/

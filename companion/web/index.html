@@ -844,6 +844,7 @@
     try {
       const s = await playerStatus(u.p);
       if (s.needsPin) u.note.textContent = 'Needs its PIN: open this player once first';
+      else if (/ios/i.test(s.version)) u.note.textContent = 'iPhone (' + s.version + '): update it with TrollStore';
       else if (older(s.version, FIRST_SELF_UPDATE)) u.note.textContent = 'On ' + s.version + ': needs one update by USB first';
       else if (!updLatest || !older(s.version, updLatest)) u.note.textContent = 'Up to date (' + s.version + ')';
       else { u.note.textContent = 'On ' + s.version; u.ready = true; u.btn.hidden = false; }
