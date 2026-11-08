@@ -375,8 +375,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 File[] all = dir.listFiles();
                 if (all != null) {
                     java.util.Arrays.sort(all, (x, y) -> Store.natCmp(x.getName(), y.getName()));
-                    for (File f : all) if (f.isFile() && !f.getName().startsWith("."))
-                        files.put(new JSONObject().put("name", f.getName()).put("size", f.length()));
+                    boolean tags = "1".equals(q.get("tags"));
+                    int read = 0;
+                    for (File f : all) if (f.isFile() && !f.getName().startsWith(".")) {
+                        JSONObject o = new JSONObject().put("name", f.getName()).put("size", f.length());
+                        if (tags && read < 200 && Store.isAudio(f)) { read++; putTags(o, f); }
+                        files.put(o);
+                    }
                 }
                 return new JSONObject().put("name", dir.getName()).put("files", files);
             }
@@ -477,6 +482,26 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 if (browsing) openBrowser();
                 break;
             }
+            case "/api/folder/rename": { // remote → "Find names": give the folder the real album or book name
+                String f = b.getString("folder");
+                File dir = RemoteServer.safeFolder(f), dst = RemoteServer.safeFolder(b.optString("to"));
+                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
+                if (dst == null) throw new IllegalArgumentException("Bad folder name");
+                String to = dst.getName();
+                if (to.equals(f)) break;
+                if (dst.exists() && !to.equalsIgnoreCase(f)) throw new IllegalArgumentException("There's already a folder called " + to);
+                if (f.equals(folder)) stopAll();
+                boolean ok;
+                if (to.equalsIgnoreCase(f)) { // only the capitals change: go via a temporary name
+                    File tmp = new File(dir.getParentFile(), ".rename-" + System.currentTimeMillis());
+                    ok = dir.renameTo(tmp) && tmp.renameTo(dst);
+                } else ok = dir.renameTo(dst);
+                if (!ok) throw new IllegalStateException("Couldn't rename " + f);
+                folderRenamed(f, to);
+                flash("Renamed to “" + to + "”", 3000);
+                if (browsing) openBrowser();
+                break;
+            }
             case "/api/folder/category": { // remote → folder menu → Type: auto, music, podcast, audiobook or radio
                 String f = b.getString("folder");
                 File dir = RemoteServer.safeFolder(f);
@@ -534,6 +559,49 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             default: return null;
         }
         return status();
+    }
+
+    /** The song's own tags, for the remote's "Find names": title, album, artist and track number. */
+    static void putTags(JSONObject o, File f) {
+        android.media.MediaMetadataRetriever r = new android.media.MediaMetadataRetriever();
+        try {
+            r.setDataSource(f.getAbsolutePath());
+            String t = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE);
+            String al = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM);
+            String ar = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST);
+            String tr = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
+            if (t != null && !t.trim().isEmpty()) o.put("title", t.trim());
+            if (al != null && !al.trim().isEmpty()) o.put("album", al.trim());
+            if (ar != null && !ar.trim().isEmpty()) o.put("artist", ar.trim());
+            if (tr != null) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("^\\s*(\\d+)").matcher(tr);
+                if (m.find()) o.put("track", Integer.parseInt(m.group(1)));
+            }
+        } catch (Exception ignored) {
+        } finally {
+            try { r.release(); } catch (Exception ignored) { }
+        }
+    }
+
+    /** A folder was renamed from the remote: carry its settings, cards and "last played" across. */
+    void folderRenamed(String from, String to) {
+        SharedPreferences.Editor e = prefs.edit();
+        Map<String, ?> all = prefs.getAll();
+        for (String k : new String[]{"art:", "cat:", "pos:", "repeat:", "resume:", "shuffle:"}) {
+            Object v = all.get(k + from);
+            if (v == null) continue;
+            if (v instanceof Boolean) e.putBoolean(k + to, (Boolean) v);
+            else if (v instanceof Integer) e.putInt(k + to, (Integer) v);
+            else if (v instanceof Long) e.putLong(k + to, (Long) v);
+            else if (v instanceof Float) e.putFloat(k + to, (Float) v);
+            else e.putString(k + to, String.valueOf(v));
+            e.remove(k + from);
+        }
+        if (from.equals(prefs.getString("last", null))) e.putString("last", to);
+        e.apply();
+        boolean changed = false;
+        for (Map.Entry<String, String> c : cards.entrySet()) if (from.equals(c.getValue())) { c.setValue(to); changed = true; }
+        if (changed) { Store.saveCards(cards); cardsStamp = Store.cardsFile().lastModified(); }
     }
 
     /** A song was renamed (to != null) or deleted from the remote: keep the play queue pointing at real files. */

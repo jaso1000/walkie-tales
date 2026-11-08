@@ -284,6 +284,21 @@
   .cats.small .catbtn { width: 70px; height: 74px; border-radius: 18px; }
   .cats.small .catbtn .pic { font-size: 26px; }
   .type-row .label { margin-top: 0; }
+  .pick { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px; border: 0; border-radius: 14px;
+    background: var(--panel2); margin-bottom: 8px; text-align: left; cursor: pointer; }
+  .pick img, .pick .noart { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex: none; background: var(--line);
+    display: grid; place-items: center; font-size: 22px; }
+  .pick .grow { flex: 1; min-width: 0; }
+  .pick .grow b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick .grow small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .pick .count { flex: none; font-size: 12px; color: var(--muted); } .pick .count.ok { color: var(--good); font-weight: 700; }
+  .fn-preview { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .maprow { display: flex; gap: 10px; padding: 5px 0; font-size: 14px; border-top: 1px solid var(--line); }
+  .maprow:first-child { border-top: 0; }
+  .maprow .num { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 22px; }
+  .maprow b { font-weight: 600; }
+  .warn { color: var(--warn); font-size: 13px; padding: 4px 0 8px; }
+  .res { padding: 6px 0; font-size: 14px; } .res.ok { color: var(--good); } .res.bad { color: var(--bad); }
   input[type=file].hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 </style>
 </head>
@@ -465,6 +480,19 @@
   <div class="actions" id="fdActions"></div>
 </div></div>
 
+<div class="overlay" id="sheetFind"><div class="sheet">
+  <div class="sheet-head"><h2 id="fnTitle">Find names</h2><button class="btn ghost" data-close>Close</button></div>
+  <p class="sub" id="fnSub"></p>
+  <div id="fnList"></div>
+  <div class="fn-preview" id="fnPreview" hidden>
+    <span class="label" style="margin-top:0">New names</span>
+    <div id="fnMap"></div>
+    <label class="check" id="fnCoverRow"><input type="checkbox" id="fnCover"> Use this cover picture</label>
+    <label class="check" id="fnFolderRow"><input type="checkbox" id="fnFolder"> Rename the folder to “<span id="fnFolderName"></span>”</label>
+    <div class="row" style="margin-top:14px"><button class="btn" id="fnApply">Use these names</button></div>
+  </div>
+</div></div>
+
 <div class="overlay" id="sheetMusic"><div class="sheet">
   <div class="sheet-head"><h2>Add music</h2><button class="btn ghost" data-close>Close</button></div>
   <label class="drop" id="upDrop" for="upFiles">
@@ -504,6 +532,7 @@
     <button class="btn ghost" id="sgClose" style="flex:none;padding:8px 14px">Done</button></div>
   <small style="color:var(--muted);display:block;margin-bottom:10px" id="sgSub"></small>
   <div class="row" style="flex-wrap:wrap;gap:8px">
+    <button class="btn ghost" id="sgFind" style="flex:none">Find names</button>
     <button class="btn ghost" id="sgTidy" style="flex:none">Tidy names</button>
     <button class="btn ghost" id="sgCompare" style="flex:none">Check other players</button>
   </div>
@@ -806,6 +835,7 @@
     play: '<svg viewBox="0 0 24 24"><path d="M8,5v14l11,-7z"/></svg>',
     songs: '<svg viewBox="0 0 24 24"><path d="M3,13h2v-2H3v2zM3,17h2v-2H3v2zM3,9h2V7H3v2zM7,13h14v-2H7v2zM7,17h14v-2H7v2zM7,7v2h14V7H7z"/></svg>',
     pic: '<svg viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>',
+    find: '<svg viewBox="0 0 24 24"><path d="M15.5,14h-0.79l-0.28,-0.27A6.47,6.47 0 0,0 16,9.5 6.5,6.5 0 1,0 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z"/></svg>',
     del: '<svg viewBox="0 0 24 24"><path d="M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"/></svg>',
   };
   function folderMenu(f) {
@@ -827,6 +857,7 @@
     const box = $('#fdActions'); box.textContent = '';
     const add = (cls, icon, text, fn) => { const b = el('button', 'btn ' + cls); b.innerHTML = ICON[icon]; b.appendChild(el('span', '', text)); b.onclick = () => { closeSheet('sheetFolder'); fn(); }; box.appendChild(b); };
     add('', 'play', 'Play', () => playFolder(f.name));
+    if (!f.live) add('ghost', 'find', 'Find the right names & cover', () => openFind(f.name));
     if (!f.live) add('ghost', 'songs', 'Songs: rename, tidy, check players', () => openSongs(f.name));
     if (f.autoCover) add('ghost', 'pic', 'Wrong picture? Remove it', () => {
       if (confirm('Remove the picture found online for “' + f.name + '”? It won’t look again for this folder.'))
@@ -917,6 +948,7 @@
   // so kids see "So Yesterday" and the album stays in order. Names without a track number are left alone.
   const AUDIO_RE = /\.(mp3|m4a|m4b|aac|ogg|opus|flac|wav)$/i;
   function tidyName(n) {
+    n = typeof fixText === 'function' ? fixText(n) : n;
     const m = n.match(/^(.*)(\.[^.]+)$/);
     if (!m || !AUDIO_RE.test(n)) return n;
     const b = m[1].replace(/_/g, ' ')
@@ -1201,8 +1233,203 @@
     const hint = el('small', '', 'To fill gaps, use Add music with the whole album: songs a player already has are skipped.'); hint.style.marginTop = '6px';
     out.appendChild(hint);
   };
+  $('#sgFind').onclick = () => { $('#songs').classList.remove('on'); openFind(sgFolder); };
   $('#sgClose').onclick = () => { $('#songs').classList.remove('on'); loadLibrary(); };
   $('#songs').onclick = (e) => { if (e.target.id === 'songs') $('#sgClose').click(); };
+
+  // ---------------------------------------------------------------- find the right names (and cover)
+  // Downloads often carry garbled letters ("BoddÃ©", "weâ€™ll"): text that was UTF-8 but read as Windows-1252,
+  // sometimes twice. Turn it back, but only when every character fits that mistake.
+  const CP1252 = { 0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88,
+    0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94,
+    0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F };
+  function fixText(s) {
+    for (let i = 0; i < 3 && /[ÃÂâ][\u0080-™]/.test(s); i++) {
+      const bytes = [];
+      for (const ch of s) {
+        const c = ch.codePointAt(0);
+        if (c < 256) bytes.push(c); else if (CP1252[c] != null) bytes.push(CP1252[c]); else return s;
+      }
+      try { s = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)); } catch (e) { return s; }
+    }
+    return s;
+  }
+  // A title fit for a file name: no "- From: …" tails, download-site tags or characters phones won't allow.
+  function cleanTitle(t) {
+    return fixText(t || '')
+      .replace(/\s*[\[(]\s*(from|taken from)\b[^\])]*[\])]/gi, '')
+      .replace(/\s+-\s+from:?\s.*$/i, '')
+      .replace(/\s*[\[(](spotisaver|spotdown|official[^\])]*|lyrics?|audio|hq|hd|[^\])]*\.(com|org|net))[\])]/gi, '')
+      .replace(/:/g, ' -').replace(/[\\/*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function cleanAlbum(a) { return cleanTitle(a).replace(/\s*\[[^\]]*\]/g, '').trim(); }
+  // A folder name from an album name: without tails like "(Music and Songs from the Film)" or "(Deluxe Edition)".
+  function folderFromAlbum(a) {
+    const s = cleanAlbum(a), short = s.replace(/\s*\((?:[^)]*\b(?:songs?|music|soundtrack|edition|version|remaster(?:ed)?|unabridged|abridged)\b[^)]*)\)\s*$/i, '').trim();
+    return short.split(' ').length >= 2 ? short : s;
+  }
+  const norm = (s) => fixText(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  // "001 - Julia Donaldson Reads …", "Track 3", the album name again… tags like that don't help.
+  function uselessTitle(t, album, folder) {
+    const n = norm(t).replace(/^\d+\s*/, '');
+    return !n || /^(track|chapter|part|kapitel|disc)\s*\d+$/.test(n) || n === norm(album) || n === norm(folder) || /^unknown/.test(n);
+  }
+  function likeness(a, b) { // shared words, 0..1
+    const A = new Set(norm(a).split(' ').filter(w => w.length > 1)), B = new Set(norm(b).split(' ').filter(w => w.length > 1));
+    if (!A.size || !B.size) return 0;
+    let n = 0; A.forEach(w => { if (B.has(w)) n++; });
+    return n / Math.max(A.size, B.size);
+  }
+  const ext = (n) => (n.match(/\.[^.]+$/) || [''])[0];
+  const pad = (n) => String(n).padStart(2, '0');
+  const store2 = (navigator.language || 'en-AU').split('-')[1] || 'AU'; // Apple store country
+
+  let fd = null; // { folder, files, tags, picks, chosen }
+  async function openFind(folder) {
+    fd = { folder, files: [], picks: [], chosen: null };
+    $('#fnTitle').textContent = folder; $('#fnPreview').hidden = true; $('#fnList').textContent = '';
+    $('#fnSub').textContent = 'Reading the songs…';
+    openSheet('sheetFind');
+    let j;
+    try { j = await tapi(thisPlayer(), '/api/folder?name=' + encodeURIComponent(folder) + '&tags=1'); }
+    catch (e) { $('#fnSub').textContent = oldPlayer(e) ? 'Update this player to use Find names.' : e.message; return; }
+    fd.files = j.files.filter(f => AUDIO_RE.test(f.name));
+    if (!fd.files.length) { $('#fnSub').textContent = 'No songs in this folder.'; return; }
+    // 1. The songs' own tags
+    const albums = {};
+    fd.files.forEach(f => { const a = cleanAlbum(f.album); if (a) albums[a] = (albums[a] || 0) + 1; });
+    const album = Object.keys(albums).sort((a, b) => albums[b] - albums[a])[0] || '';
+    const good = fd.files.filter(f => f.title && !uselessTitle(cleanTitle(f.title), album, folder));
+    const nums = fd.files.map(f => f.track).filter(n => n > 0);
+    const numbered = nums.length === fd.files.length && new Set(nums).size === nums.length;
+    if (good.length >= Math.ceil(fd.files.length * 0.6)) {
+      fd.picks.push({ source: 'The songs’ own tags', title: album || folder, artist: cleanTitle((fd.files.find(f => f.artist) || {}).artist || ''),
+        count: fd.files.length, art: coverUrl(folder), fromTags: true,
+        tracks: async () => fd.files.map((f, i) => ({ n: numbered ? f.track : i + 1, title: f.title && !uselessTitle(cleanTitle(f.title), album, folder) ? cleanTitle(f.title) : null, file: f.name })) });
+    }
+    renderPicks();
+    // 2. Online: Apple (music and audiobooks) and MusicBrainz, searched by the folder name and the tags' album name
+    $('#fnSub').textContent = 'Looking online…';
+    const terms = [...new Set([folder, album].filter(Boolean).map(t => cleanAlbum(t)))];
+    await Promise.all(terms.map(t => searchApple(t).catch(() => {})).concat(terms.map(t => searchMB(t).catch(() => {}))));
+    const n = fd.files.length;
+    fd.picks.sort((a, b) => (b.fromTags - a.fromTags) || ((b.count === n) - (a.count === n)) ||
+      (likeness(b.title, folder) + likeness(b.title, album)) - (likeness(a.title, folder) + likeness(a.title, album)));
+    fd.picks = fd.picks.filter((p, i, all) => all.findIndex(q => norm(q.title) === norm(p.title) && q.count === p.count && q.source === p.source) === i).slice(0, 12);
+    renderPicks();
+    $('#fnSub').textContent = fd.picks.length ? fd.files.length + ' songs. Pick the right one:' : 'Nothing found. You can still rename songs one by one in Songs.';
+  }
+  async function searchApple(term) {
+    for (const entity of ['album', 'audiobook']) {
+      const r = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(term) + '&entity=' + entity + '&limit=8&country=' + store2).then(r => r.json());
+      (r.results || []).filter(x => likeness(x.collectionName, term) >= 0.34).forEach(x => fd.picks.push({
+        source: entity === 'album' ? 'Apple Music' : 'Apple Books', title: x.collectionName, artist: x.artistName,
+        count: entity === 'album' ? x.trackCount : null, art: (x.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+        tracks: entity === 'album' ? async () => {
+          const t = await fetch('https://itunes.apple.com/lookup?id=' + x.collectionId + '&entity=song&country=' + store2).then(r => r.json());
+          return t.results.filter(s => s.wrapperType === 'track').sort((a, b) => (a.discNumber - b.discNumber) || (a.trackNumber - b.trackNumber))
+            .map((s, i) => ({ n: i + 1, title: cleanTitle(s.trackName) }));
+        } : null }));
+    }
+  }
+  async function searchMB(term) {
+    const r = await fetch('https://musicbrainz.org/ws/2/release/?fmt=json&limit=8&query=' + encodeURIComponent('release:"' + term.replace(/"/g, '') + '"')).then(r => r.json());
+    (r.releases || []).filter(x => likeness(x.title, term) >= 0.34).forEach(x => fd.picks.push({
+      source: 'MusicBrainz', title: x.title, artist: (x['artist-credit'] || []).map(a => a.name).join(', '), count: x['track-count'],
+      art: 'https://coverartarchive.org/release/' + x.id + '/front-500',
+      tracks: async () => {
+        const d = await fetch('https://musicbrainz.org/ws/2/release/' + x.id + '?inc=recordings&fmt=json').then(r => r.json());
+        const out = []; (d.media || []).forEach(m => (m.tracks || []).forEach(t => out.push({ n: out.length + 1, title: cleanTitle(t.title) })));
+        return out;
+      } }));
+  }
+  function renderPicks() {
+    const l = $('#fnList'); l.textContent = '';
+    const n = fd.files.length;
+    fd.picks.forEach(p => {
+      const row = el('button', 'pick'); row.type = 'button';
+      const img = new Image(); img.alt = ''; img.src = p.art; img.onerror = () => img.replaceWith(el('span', 'noart', '♪'));
+      const g = el('span', 'grow'); g.appendChild(el('b', '', p.title)); g.appendChild(el('small', '', [p.artist, p.source].filter(Boolean).join(' · ')));
+      row.appendChild(img); row.appendChild(g);
+      row.appendChild(el('span', 'count' + (p.count === n ? ' ok' : ''), p.tracks ? (p.count === n ? '✓ ' : '') + (p.count || '?') + ' tracks' : 'cover only'));
+      row.onclick = () => preview(p);
+      l.appendChild(row);
+    });
+  }
+  // Which song gets which name: by the tags' track numbers, else by the titles they share, else in order.
+  async function preview(p) {
+    const box = $('#fnPreview'); box.hidden = false; $('#fnMap').textContent = 'Getting the track list…';
+    fd.chosen = p; fd.map = [];
+    let tracks = [];
+    try { tracks = p.tracks ? await p.tracks() : []; } catch (e) { $('#fnMap').textContent = 'Couldn’t get the track list (' + e.message + ').'; }
+    const files = fd.files;
+    if (p.fromTags) {
+      fd.map = tracks.map(t => ({ from: t.file, to: t.title ? pad(t.n) + ' - ' + t.title + ext(t.file) : null }));
+    } else if (tracks.length) {
+      const used = new Set(), cur = files.map(f => cleanTitle(f.title && !uselessTitle(f.title, p.title, fd.folder) ? f.title : tidyName(f.name).replace(/\.[^.]+$/, '').replace(/^\d+ - /, '')));
+      const byName = files.map((f, i) => {
+        let best = null, score = 0.5;
+        tracks.forEach((t, k) => { const s = likeness(cur[i], t.title); if (!used.has(k) && s > score) { score = s; best = k; } });
+        if (best != null) used.add(best);
+        return best;
+      });
+      const named = byName.filter(x => x != null).length;
+      fd.map = files.map((f, i) => {
+        const k = named >= Math.ceil(files.length * 0.6) ? byName[i] : (i < tracks.length ? i : null);
+        return { from: f.name, to: k != null ? pad(tracks[k].n) + ' - ' + tracks[k].title + ext(f.name) : null };
+      });
+      fd.how = named >= Math.ceil(files.length * 0.6) ? 'matched by name' : 'matched in order';
+    }
+    const m = $('#fnMap'); m.textContent = '';
+    if (!p.tracks) m.appendChild(el('div', 'warn', p.source + ' only has the cover picture for this, not the track names.'));
+    if (!p.fromTags && tracks.length && tracks.length !== files.length)
+      m.appendChild(el('div', 'warn', 'This has ' + tracks.length + ' tracks and the folder has ' + files.length + ' songs, ' + fd.how + '. Check the names below.'));
+    else if (!p.fromTags && tracks.length && fd.how === 'matched in order')
+      m.appendChild(el('div', 'warn', 'Matched in order: check the first and last names look right.'));
+    fd.map.forEach(x => {
+      const d = el('div', 'maprow');
+      const nm = x.to ? x.to.replace(/\.[^.]+$/, '') : '(left as it is)';
+      const mm = nm.match(/^(\d+) - (.+)$/);
+      if (mm) { d.appendChild(el('span', 'num', mm[1])); d.appendChild(el('b', '', mm[2])); } else d.appendChild(el('b', '', nm));
+      d.title = x.from;
+      m.appendChild(d);
+    });
+    const album = folderFromAlbum(p.title);
+    $('#fnFolderRow').hidden = !album || norm(fd.folder).includes(norm(album)); // e.g. "Hilary Duff - Metamorphosis" already says it
+    $('#fnFolderName').textContent = album; $('#fnFolder').checked = false;
+    $('#fnCoverRow').hidden = p.fromTags || !p.art;
+    $('#fnCover').checked = !p.fromTags && !!p.art;
+    $('#fnApply').textContent = (p.tracks ? 'Use these names' : 'Use this cover') + (sgTargets().length > 1 ? ' on ' + sgTargets().length + ' players' : '');
+    $('#fnApply').disabled = !fd.map.some(x => x.to && x.to !== x.from) && p.fromTags;
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('#fnApply').onclick = async () => {
+    const p = fd.chosen; if (!p) return;
+    const btn = $('#fnApply'); btn.disabled = true; btn.textContent = 'Working…';
+    let cover = null;
+    if ($('#fnCover').checked && p.art) { try { cover = await fetch(p.art).then(r => r.ok ? r.blob() : null); } catch (e) { cover = null; } }
+    const newFolder = $('#fnFolder').checked ? folderFromAlbum(p.title) : null;
+    const out = [];
+    for (const t of sgTargets()) {
+      try {
+        const have = new Set((await tapi(t, '/api/folder?name=' + encodeURIComponent(fd.folder))).files.map(f => f.name));
+        let n = 0;
+        for (const x of fd.map) {
+          if (!x.to || x.to === x.from || !have.has(x.from)) continue;
+          await tapi(t, '/api/file/rename', { folder: fd.folder, from: x.from, to: x.to }); n++;
+        }
+        if (cover) await upload(fd.folder, cover, () => {}, t, 'cover.jpg');
+        if (newFolder) await tapi(t, '/api/folder/rename', { folder: fd.folder, to: newFolder });
+        out.push(['ok', t.name + ': ' + n + ' renamed' + (cover ? ', cover set' : '') + (newFolder ? ', folder renamed' : '')]);
+      } catch (e) {
+        out.push(['bad', t.name + ': ' + (oldPlayer(e) ? 'needs the latest WalkieTales' : e.status === 400 ? 'doesn’t have this folder' : e.message)]);
+      }
+    }
+    const m = $('#fnMap'); m.textContent = ''; out.forEach(([c, s]) => m.appendChild(el('div', 'res ' + c, s)));
+    btn.textContent = 'Done'; toast('Names updated');
+    if (newFolder) { fd.folder = newFolder; $('#fnTitle').textContent = newFolder; }
+    loadLibrary();
+  };
 
   // ---------------------------------------------------------------- cards
   async function loadCards() {

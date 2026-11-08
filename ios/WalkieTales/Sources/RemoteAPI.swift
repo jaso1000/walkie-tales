@@ -1,7 +1,26 @@
+import AVFoundation
 import UIKit
 
 /// The remote-control API (same endpoints and JSON as the Android player, so the companion page works as is).
 extension PlayerViewController {
+
+    /// The song's own tags, for the remote's "Find names": title, album, artist and track number.
+    static func addTags(_ o: inout [String: Any], _ u: URL) {
+        let asset = AVURLAsset(url: u)
+        func text(_ key: AVMetadataKey) -> String? {
+            AVMetadataItem.metadataItems(from: asset.commonMetadata, withKey: key, keySpace: .common).first?.stringValue?
+                .trimmingCharacters(in: .whitespaces)
+        }
+        if let t = text(.commonKeyTitle), !t.isEmpty { o["title"] = t }
+        if let a = text(.commonKeyAlbumName), !a.isEmpty { o["album"] = a }
+        if let a = text(.commonKeyArtist), !a.isEmpty { o["artist"] = a }
+        let ids: [AVMetadataIdentifier] = [.id3MetadataTrackNumber, .iTunesMetadataTrackNumber]
+        for id in ids {
+            guard let item = AVMetadataItem.metadataItems(from: asset.metadata, filteredByIdentifier: id).first else { continue }
+            if let s = item.stringValue, let n = Int(s.split(separator: "/").first?.trimmingCharacters(in: .whitespaces) ?? "") { o["track"] = n; break }
+            if let d = item.dataValue, d.count >= 4 { o["track"] = Int(d[2]) << 8 | Int(d[3]); break } // iTunes "trkn": 0,0,n,n,total…
+        }
+    }
 
     func remote(_ r: RemoteServer.Request, _ b: [String: Any]) throws -> [String: Any]? {
         let post = r.method == "POST"
@@ -13,10 +32,16 @@ extension PlayerViewController {
             let f = r.query["name"] ?? ""
             guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
             let items = (try? FileManager.default.contentsOfDirectory(at: Store.dir(f), includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey], options: [.skipsHiddenFiles])) ?? []
+            let tags = r.query["tags"] == "1"
+            var read = 0
             let files: [[String: Any]] = items
                 .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
                 .sorted { Store.natLess($0.lastPathComponent, $1.lastPathComponent) }
-                .map { ["name": $0.lastPathComponent, "size": (try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0] }
+                .map { u in
+                    var o: [String: Any] = ["name": u.lastPathComponent, "size": (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0]
+                    if tags && read < 200 && Store.audioExt.contains(u.pathExtension.lowercased()) { read += 1; Self.addTags(&o, u) }
+                    return o
+                }
             return ["name": f, "files": files]
         case "/api/settings":
             if post { Store.applySettings(b); applySettings() }
@@ -71,6 +96,27 @@ extension PlayerViewController {
             Store.setCategory(f, nil)
             flash("Deleted “\(f)”", 3)
             libraryChanged()
+        case "/api/folder/rename": // remote → "Find names": give the folder the real album or book name
+            let f = b["folder"] as? String ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
+            guard let to = Store.safeName((b["to"] as? String)?.trimmingCharacters(in: .whitespaces)) else { throw RemoteError("Bad folder name") }
+            if to != f {
+                let fm = FileManager.default
+                if fm.fileExists(atPath: Store.dir(to).path) && to.lowercased() != f.lowercased() { throw RemoteError("There's already a folder called \(to)") }
+                if p.folder == f { p.stop() }
+                do {
+                    if to.lowercased() == f.lowercased() { // only the capitals change: go via a temporary name
+                        let tmp = Store.dir(".rename-\(Int(Date().timeIntervalSince1970))")
+                        try fm.moveItem(at: Store.dir(f), to: tmp); try fm.moveItem(at: tmp, to: Store.dir(to))
+                    } else { try fm.moveItem(at: Store.dir(f), to: Store.dir(to)) }
+                } catch { throw RemoteError("Couldn't rename \(f)") }
+                for k in ["art:", "autocat:", "cat:", "pos:", "shuffle:", "repeat:", "resume:"] {
+                    if let v = Store.ud.object(forKey: k + f) { Store.ud.set(v, forKey: k + to); Store.ud.removeObject(forKey: k + f) }
+                }
+                if Store.ud.string(forKey: "last") == f { Store.set("last", to) }
+                flash("Renamed to “\(to)”", 3)
+                libraryChanged()
+            }
         case "/api/folder/category": // remote → folder menu → Type: auto, music, podcast, audiobook or radio
             let f = b["folder"] as? String ?? ""
             guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }

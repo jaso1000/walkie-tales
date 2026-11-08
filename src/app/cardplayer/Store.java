@@ -27,6 +27,12 @@ final class Store {
 
     static final String[] AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav"};
 
+    static boolean isAudio(File f) {
+        String n = f.getName().toLowerCase(Locale.ROOT);
+        for (String e : AUDIO_EXT) if (n.endsWith(e)) return true;
+        return false;
+    }
+
     // Special card targets (anything not starting with '@' is a folder name)
     static final String ALL = "@all";
     static final String PAUSE = "@pause";
