@@ -194,6 +194,11 @@ public class SettingsActivity extends Activity {
         toggle("Volume buttons on screen", null, "show_volume", true);
         toggle("Fade in", null, "fade_in", true);
         toggle("Say the name out loud", null, "announce", false);
+        if (Headphones.hasBluetooth(this)) {
+            panel("Headphones");
+            toggle("Headphones button", "Switches Bluetooth on and off from the player", "headphones_button", true);
+            link("Pair new headphones", "Opens Bluetooth settings", v -> openSystem(Settings.ACTION_BLUETOOTH_SETTINGS));
+        }
     }
 
     void buildBedtime() {

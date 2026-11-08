@@ -142,6 +142,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     View nightView, statusGroup, volumeRow, browseBtn, blackout, chipsRow;
     GradientDrawable backdrop;
     ImageView art, moon;
+    ImageButton phones;           // headphones button: Bluetooth on/off
+    long quietNoisyUntil;         // the headphones button turned Bluetooth off on purpose: keep playing out loud
+    String lastPhones;            // name of the headphones last seen, to say when they connect
     TextView title, subtitle, status, timePos, timeDur, sleepText, tracksText;
     BatteryView battery;
     LinearLayout tracksBtn;
@@ -345,6 +348,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             register(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             register(noisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
             register(screenReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+            register(bluetoothReceiver, new IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED));
+            ((AudioManager) getSystemService(AUDIO_SERVICE)).registerAudioDeviceCallback(audioDevices, h);
             receiversOn = true;
         }
         maybeLockTask();
@@ -477,6 +482,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         s.put("version", version);
         s.put("name", prefs.getString("kid_name", ""));
+        s.put("bluetooth", Headphones.bluetoothOn(this));
+        android.media.AudioDeviceInfo out = Headphones.output(this);
+        s.put("headphones", out != null ? Headphones.name(out) : JSONObject.NULL);
         boolean have = folder != null && !tracks.isEmpty();
         s.put("folder", have ? folder : JSONObject.NULL);
         s.put("title", have ? (Store.ALL.equals(folder) ? "Everything" : folder) : JSONObject.NULL);
@@ -595,6 +603,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) { }
             try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) { }
             try { unregisterReceiver(screenReceiver); } catch (Exception ignored) { }
+            try { unregisterReceiver(bluetoothReceiver); } catch (Exception ignored) { }
+            try { ((AudioManager) getSystemService(AUDIO_SERVICE)).unregisterAudioDeviceCallback(audioDevices); } catch (Exception ignored) { }
         }
         releaseLockHolds();
         savePosition();
@@ -673,6 +683,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void applySettings() {
         volumeRow.setVisibility(prefs.getBoolean("show_volume", true) ? View.VISIBLE : View.GONE);
         statusGroup.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
+        if (phones != null) {
+            phones.setVisibility(prefs.getBoolean("headphones_button", true) && Headphones.hasBluetooth(this) ? View.VISIBLE : View.GONE);
+            updateHeadphones();
+        }
         boolean canBrowse = canBrowse();
         browseBtn.setVisibility(canBrowse ? View.VISIBLE : View.GONE);
         renderTracksBtn();
@@ -1422,11 +1436,18 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true);
         sleepText.setPadding(0, 0, dp(6), 0);
         topRight.addView(sleepText);
+        phones = Ui.roundButton(this, R.drawable.ic_headphones, 0x26FFFFFF, 9);
+        phones.setElevation(0);
+        phones.setContentDescription("Headphones");
+        phones.setOnClickListener(v -> toggleHeadphones());
+        topRight.addView(phones, new LinearLayout.LayoutParams(dp(38), dp(38)));
         moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 9);
         moon.setElevation(0);
         moon.setContentDescription("Sleep timer");
         moon.setOnClickListener(v -> cycleSleep());
-        topRight.addView(moon, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        LinearLayout.LayoutParams moonLp = new LinearLayout.LayoutParams(dp(38), dp(38));
+        moonLp.leftMargin = dp(10);
+        topRight.addView(moon, moonLp);
         ImageButton cog = Ui.roundButton(this, R.drawable.ic_settings, 0x26FFFFFF, 9);
         cog.setElevation(0);
         cog.setContentDescription("Grown-up settings (press and hold)");
@@ -2577,8 +2598,55 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     };
 
     /** Headphones unplugged / Bluetooth speaker disconnected: pause instead of blasting the phone speaker. */
+    // ================================================================ headphones button
+
+    /** Dim: Bluetooth off. White: on, waiting for headphones. Green: headphones connected. */
+    void updateHeadphones() {
+        if (phones == null) return;
+        android.media.AudioDeviceInfo out = Headphones.output(this);
+        boolean on = Headphones.bluetoothOn(this);
+        int bg = out != null ? 0xCC3FAE5E : 0x26FFFFFF;
+        try {
+            ((GradientDrawable) ((android.graphics.drawable.RippleDrawable) phones.getBackground()).getDrawable(0)).setColor(bg);
+        } catch (Exception ignored) { }
+        phones.setAlpha(out != null || on ? 1f : 0.45f);
+        phones.setContentDescription(out != null ? "Headphones: " + Headphones.name(out)
+                : on ? "Headphones: Bluetooth on, waiting for headphones" : "Headphones: Bluetooth off");
+        String name = out != null ? Headphones.name(out) : null;
+        if (name != null && !name.equals(lastPhones)) flash("Headphones connected: " + name, 3000);
+        lastPhones = name;
+    }
+
+    void toggleHeadphones() {
+        android.media.AudioDeviceInfo out = Headphones.output(this);
+        if (out != null && !Headphones.isBluetooth(out)) {
+            flash("Headphones plugged in", 2500);
+            return;
+        }
+        if (!Headphones.bluetoothOn(this)) {
+            if (Headphones.setBluetooth(this, true)) flash("Bluetooth on — switch your headphones on", 4000);
+            else flash("Ask a grown-up to switch Bluetooth on", 4000);
+        } else {
+            quietNoisyUntil = SystemClock.elapsedRealtime() + 6000; // carry on playing through the speaker
+            if (Headphones.setBluetooth(this, false)) flash(out != null ? "Headphones off — playing out loud" : "Bluetooth off", 3000);
+            else flash("Bluetooth didn't switch off", 3000);
+        }
+        // Bluetooth takes a few seconds to change; show it as it happens.
+        for (int ms : new int[]{500, 1500, 3000, 6000}) h.postDelayed(this::updateHeadphones, ms);
+    }
+
+    final android.media.AudioDeviceCallback audioDevices = new android.media.AudioDeviceCallback() {
+        @Override public void onAudioDevicesAdded(android.media.AudioDeviceInfo[] added) { updateHeadphones(); }
+        @Override public void onAudioDevicesRemoved(android.media.AudioDeviceInfo[] removed) { updateHeadphones(); }
+    };
+
+    final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { updateHeadphones(); }
+    };
+
     final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
+            if (SystemClock.elapsedRealtime() < quietNoisyUntil) return; // switched off on purpose with the button
             if (ready() && mp.isPlaying()) {
                 pause();
                 flash("Paused — speaker disconnected", 4000);

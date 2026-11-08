@@ -12,7 +12,12 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- Android 8-10: writing to Music/Cards (uploads, card links, covers). Android 11+ uses MANAGE_EXTERNAL_STORAGE. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <!-- The headphones button switches Bluetooth on and off (allowed for the device owner) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-feature android:name="android.hardware.nfc" android:required="true" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <!-- Android hides other apps from us unless we ask: needed to find a text-to-speech voice -->
     <queries>

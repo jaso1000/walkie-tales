@@ -45,6 +45,7 @@ final class Store {
         SETTINGS.put("kid_name", "");
         SETTINGS.put("max_volume", 70);
         SETTINGS.put("show_volume", true);
+        SETTINGS.put("headphones_button", true);
         SETTINGS.put("fade_in", true);
         SETTINGS.put("announce", false);
         SETTINGS.put("quiet", false);
