@@ -54,6 +54,9 @@ final class Kiosk {
                 d.setLockTaskPackages(adm, new String[]{a.getPackageName()});
                 applyFeatures(a);
                 d.setStatusBarDisabled(adm, true);
+                // No swipe lock screen after the screen sleeps: the player comes straight back on a tap.
+                // (Android only allows this when there's no PIN, pattern or password on the phone.)
+                d.setKeyguardDisabled(adm, true);
             } catch (Exception ignored) { }
         }
         if (!isLocked(a)) {
@@ -161,6 +164,7 @@ final class Kiosk {
     static void release(Activity a) {
         unlock(a);
         if (isOwner(a)) {
+            try { dpm(a).setKeyguardDisabled(admin(a), false); } catch (Exception ignored) { } // a normal phone again
             try { dpm(a).setLockTaskPackages(admin(a), new String[0]); } catch (Exception ignored) { }
             try { dpm(a).clearDeviceOwnerApp(a.getPackageName()); } catch (Exception ignored) { }
         }

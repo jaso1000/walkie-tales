@@ -179,6 +179,7 @@ if [ "$MODE" = apply ]; then
   adb_ settings put global stay_on_while_plugged_in 0      # screen sleeps even on the charger (the app keeps it on when needed)
   adb_ settings put system screen_brightness_mode 1        # adaptive brightness
   adb_ settings put system screen_off_timeout 60000        # 1 min when on battery and idle
+  adb_ locksettings set-disabled true >/dev/null           # no swipe lock screen (the app also disables it as device owner)
   adb_ settings put global auto_sync 0 2>/dev/null
   adb_ cmd deviceidle whitelist +app.cardplayer >/dev/null  # let the remote reach it while the screen is off
   adb_ settings put global adaptive_battery_management_enabled 0 2>/dev/null  # Samsung/Pixel: don't put the player to sleep
