@@ -6,7 +6,8 @@ extension PlayerViewController {
 
     /// The song's own tags, for the remote's "Find names": title, album, artist and track number.
     static func addTags(_ o: inout [String: Any], _ u: URL) {
-        let asset = AVURLAsset(url: u)
+        if let k = Store.audioKind(u) { o["kind"] = k } // what the file really is
+        let asset = AVURLAsset(url: Store.playableURL(u))
         func text(_ key: AVMetadataKey) -> String? {
             AVMetadataItem.metadataItems(from: asset.commonMetadata, withKey: key, keySpace: .common).first?.stringValue?
                 .trimmingCharacters(in: .whitespaces)

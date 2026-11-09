@@ -147,6 +147,43 @@ enum Store {
     }
 
     /// Everything playable in a folder, re-read only when the folder changed.
+    /// What an audio file really holds, from its first bytes (audiobook tools often save AAC/M4A under an .mp3 name).
+    /// "m4a", "aac", "mp3", "flac", "wav", "ogg", or nil when it can't tell.
+    static func audioKind(_ u: URL) -> String? {
+        guard let h = try? FileHandle(forReadingFrom: u) else { return nil }
+        defer { try? h.close() }
+        var d = h.readData(ofLength: 16)
+        var skip = 0
+        if d.count >= 10, d[0] == 0x49, d[1] == 0x44, d[2] == 0x33 { // "ID3" tag first: look past it
+            skip = 10 + (Int(d[6] & 0x7f) << 21 | Int(d[7] & 0x7f) << 14 | Int(d[8] & 0x7f) << 7 | Int(d[9] & 0x7f))
+            try? h.seek(toOffset: UInt64(skip))
+            d = h.readData(ofLength: 16)
+        }
+        guard d.count >= 12 else { return nil }
+        if d[4] == 0x66, d[5] == 0x74, d[6] == 0x79, d[7] == 0x70 { return "m4a" }          // ....ftyp
+        if d[0] == 0x66, d[1] == 0x4C, d[2] == 0x61, d[3] == 0x43 { return "flac" }        // fLaC
+        if d[0] == 0x52, d[1] == 0x49, d[2] == 0x46, d[3] == 0x46 { return "wav" }         // RIFF
+        if d[0] == 0x4F, d[1] == 0x67, d[2] == 0x67, d[3] == 0x53 { return "ogg" }         // OggS
+        if d[0] == 0xFF, (d[1] & 0xF6) == 0xF0 { return "aac" }                            // ADTS AAC (layer bits 00)
+        if d[0] == 0xFF, (d[1] & 0xE0) == 0xE0 { return "mp3" }                            // MPEG audio frame
+        return nil
+    }
+
+    /// A URL AVFoundation will decode properly: if the name says one thing and the bytes another, play it
+    /// through a link with the right extension (the file itself isn't touched).
+    static func playableURL(_ u: URL) -> URL {
+        guard let kind = audioKind(u) else { return u }
+        let ext = u.pathExtension.lowercased()
+        let same = kind == ext || (kind == "m4a" && ["m4a", "m4b", "mp4", "aac", "alac"].contains(ext)) || (kind == "aac" && ext == "aac")
+        if same { return u }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("relabelled", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let link = dir.appendingPathComponent("\(abs(u.path.hashValue)).\(kind)")
+        try? FileManager.default.removeItem(at: link)
+        do { try FileManager.default.createSymbolicLink(at: link, withDestinationURL: u) } catch { return u }
+        return link
+    }
+
     static func listTracks(_ folder: String) -> [Track] {
         let st = stamp(folder)
         trackLock.lock()

@@ -90,7 +90,7 @@ final class Player: NSObject {
             onMessage?("Connecting to “\(t.name)”…", 20)
             item = AVPlayerItem(url: resolve(t.source))
         } else {
-            item = AVPlayerItem(url: t.source)
+            item = AVPlayerItem(url: Store.playableURL(t.source)) // e.g. AAC saved with an .mp3 name
         }
         let p = AVPlayer(playerItem: item)
         p.automaticallyWaitsToMinimizeStalling = t.live

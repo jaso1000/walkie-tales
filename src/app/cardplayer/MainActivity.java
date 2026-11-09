@@ -562,7 +562,28 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     /** The song's own tags, for the remote's "Find names": title, album, artist and track number. */
+    /** What an audio file really holds, from its first bytes: m4a, aac, mp3, flac, wav, ogg, or null. */
+    static String audioKind(File f) {
+        try (java.io.RandomAccessFile in = new java.io.RandomAccessFile(f, "r")) {
+            byte[] d = new byte[16];
+            if (in.read(d) < 12) return null;
+            if (d[0] == 'I' && d[1] == 'D' && d[2] == '3') { // "ID3" tag first: look past it
+                long skip = 10 + ((d[6] & 0x7f) << 21 | (d[7] & 0x7f) << 14 | (d[8] & 0x7f) << 7 | (d[9] & 0x7f));
+                in.seek(skip);
+                if (in.read(d) < 12) return null;
+            }
+            if (d[4] == 'f' && d[5] == 't' && d[6] == 'y' && d[7] == 'p') return "m4a";
+            if (d[0] == 'f' && d[1] == 'L' && d[2] == 'a' && d[3] == 'C') return "flac";
+            if (d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F') return "wav";
+            if (d[0] == 'O' && d[1] == 'g' && d[2] == 'g' && d[3] == 'S') return "ogg";
+            if ((d[0] & 0xFF) == 0xFF && (d[1] & 0xF6) == 0xF0) return "aac";
+            if ((d[0] & 0xFF) == 0xFF && (d[1] & 0xE0) == 0xE0) return "mp3";
+        } catch (Exception ignored) { }
+        return null;
+    }
+
     static void putTags(JSONObject o, File f) {
+        try { String k = audioKind(f); if (k != null) o.put("kind", k); } catch (Exception ignored) { }
         android.media.MediaMetadataRetriever r = new android.media.MediaMetadataRetriever();
         try {
             r.setDataSource(f.getAbsolutePath());
