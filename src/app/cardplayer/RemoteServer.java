@@ -197,6 +197,21 @@ final class RemoteServer {
                 serveCover(out, query.get("folder"), query.containsKey("now"));
                 return;
             }
+            if (method.equals("GET") && path.equals("/api/file")) { // download one file (copy between players, fix formats)
+                File dir = safeFolder(query.get("folder"));
+                String name = safeName(query.get("name"));
+                File f = dir == null || name == null ? null : new File(dir, name);
+                if (f == null || !f.isFile()) { sendJson(out, 404, new JSONObject().put("error", "No such file")); return; }
+                out.write(bytes("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + f.length()
+                        + "\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n"));
+                try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while ((n = fin.read(buf)) > 0) out.write(buf, 0, n);
+                }
+                out.flush();
+                return;
+            }
             if (method.equals("PUT") && path.equals("/api/upload")) {
                 upload(in, out, query.get("folder"), query.get("name"), len);
                 return;
