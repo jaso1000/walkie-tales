@@ -40,7 +40,7 @@ extension PlayerViewController {
                 .sorted { Store.natLess($0.lastPathComponent, $1.lastPathComponent) }
                 .map { u in
                     var o: [String: Any] = ["name": u.lastPathComponent, "size": (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0]
-                    if tags && read < 200 && Store.audioExt.contains(u.pathExtension.lowercased()) { read += 1; Self.addTags(&o, u) }
+                    if tags && read < 200 && (Store.audioExt.contains(u.pathExtension.lowercased()) || ["ogg", "oga", "opus"].contains(u.pathExtension.lowercased())) { read += 1; Self.addTags(&o, u) }
                     return o
                 }
             return ["name": f, "files": files]

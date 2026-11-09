@@ -835,6 +835,7 @@
     play: '<svg viewBox="0 0 24 24"><path d="M8,5v14l11,-7z"/></svg>',
     songs: '<svg viewBox="0 0 24 24"><path d="M3,13h2v-2H3v2zM3,17h2v-2H3v2zM3,9h2V7H3v2zM7,13h14v-2H7v2zM7,17h14v-2H7v2zM7,7v2h14V7H7z"/></svg>',
     pic: '<svg viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>',
+    phone: '<svg viewBox="0 0 24 24"><path d="M15.5,1h-8C6.12,1 5,2.12 5,3.5v17C5,21.88 6.12,23 7.5,23h8c1.38,0 2.5,-1.12 2.5,-2.5v-17C18,2.12 16.88,1 15.5,1zM11.5,22c-0.83,0 -1.5,-0.67 -1.5,-1.5s0.67,-1.5 1.5,-1.5 1.5,0.67 1.5,1.5 -0.67,1.5 -1.5,1.5zM16,18H7V4h9v14z"/></svg>',
     find: '<svg viewBox="0 0 24 24"><path d="M15.5,14h-0.79l-0.28,-0.27A6.47,6.47 0 0,0 16,9.5 6.5,6.5 0 1,0 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z"/></svg>',
     del: '<svg viewBox="0 0 24 24"><path d="M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"/></svg>',
   };
@@ -859,6 +860,11 @@
     add('', 'play', 'Play', () => playFolder(f.name));
     if (!f.live) add('ghost', 'find', 'Find the right names & cover', () => openFind(f.name));
     if (!f.live) add('ghost', 'songs', 'Songs: rename, tidy, check players', () => openSongs(f.name));
+    if (!f.live && players) add('ghost', 'phone', 'Make it play on iPhone', async () => {
+      toast('Checking the iPhones… this can take a few minutes');
+      for (const t of sgTargets()) await fixAudio(t, f.name, true);
+      loadLibrary();
+    });
     if (f.autoCover) add('ghost', 'pic', 'Wrong picture? Remove it', () => {
       if (confirm('Remove the picture found online for “' + f.name + '”? It won’t look again for this folder.'))
         api('/api/covers/remove', { folder: f.name }).then(() => { toast('Picture removed'); loadLibrary(); }).catch(err);
@@ -869,6 +875,20 @@
         api('/api/folder/delete', { folder: f.name }).then(() => { toast('Deleted ' + f.name); loadLibrary(); }).catch(err);
     });
     openSheet('sheetFolder');
+  }
+  // iPhones can't play Ogg audio (often saved with an .mp3 name). The remote's server converts an iPhone's copy to MP3.
+  async function fixAudio(t, folder, loud) {
+    if (!players || !t.id) return null;
+    try {
+      const r = await fetch('/p/' + t.id + '/fix-audio', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, t.pin ? { 'X-Pin': t.pin } : {}),
+        body: JSON.stringify({ folder }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      if (j.iphone && j.converted.length) toast(t.name + ': ' + j.converted.length + (j.converted.length === 1 ? ' song' : ' songs') + ' converted so the iPhone can play them');
+      if (j.iphone && j.failed.length) toast(t.name + ': ' + j.failed.length + ' couldn’t be converted (' + j.failed[0] + ')');
+      if (loud && j.iphone && !j.converted.length && !j.failed.length) toast(t.name + ': everything already plays');
+      return j;
+    } catch (e) { if (loud) toast(t.name + ': ' + e.message); return null; }
   }
   $('#addMusicBtn').onclick = () => {
     // Start fresh after an upload that went through; keep it if something failed, so Retry failed still works.
@@ -1089,6 +1109,7 @@
         tapi(r.t, '/api/folder/category', { folder: job.folder, category: job.type }).catch(() => {}); // older players ignore it
     }
     if (!failed) { upType = 'auto'; renderUpType(); }
+    if (players) for (const r of job.runs) fixAudio(r.t, job.folder); // iPhones: convert anything they can't play
     setTimeout(loadLibrary, 8000);
   }
 

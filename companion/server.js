@@ -152,6 +152,69 @@ function proxy(req, res, p, rest) {
 
 let scanning = null;
 
+// ------------------------------------------------------------------ iPhone-proof audio
+// iPhones can't play Ogg (Vorbis/Opus) at all, and audiobook tools often save it under an .mp3 name. Android
+// plays it fine, so only an iPhone's copy is converted: fetched from the player, turned into a real MP3 with
+// ffmpeg, and put back under an .mp3 name.
+const { spawn } = require('child_process');
+const IPHONE_CANT = new Set(['ogg']);
+
+function playerCall(p, pin, method, apiPath, body, type) {
+  return new Promise((resolve, reject) => {
+    const headers = { 'x-pin': p.pin || pin || '' };
+    if (body != null) { headers['Content-Type'] = type || 'application/json'; headers['Content-Length'] = body.length; }
+    const r = http.request(new URL(p.url + apiPath), { method, headers, timeout: 300000 }, (pr) => {
+      const chunks = [];
+      pr.on('data', (c) => chunks.push(c));
+      pr.on('end', () => resolve({ status: pr.statusCode, body: Buffer.concat(chunks) }));
+    });
+    r.on('timeout', () => r.destroy(new Error('timed out')));
+    r.on('error', reject);
+    r.end(body == null ? undefined : body);
+  });
+}
+const pjson = async (p, pin, method, apiPath, obj) => {
+  const r = await playerCall(p, pin, method, apiPath, obj == null ? null : Buffer.from(JSON.stringify(obj)));
+  let j = {}; try { j = JSON.parse(r.body.toString('utf8') || '{}'); } catch (e) { /* not JSON */ }
+  if (r.status !== 200) { const e = new Error(j.error || 'Player answered ' + r.status); e.status = r.status; throw e; }
+  return j;
+};
+function toMp3(input) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-map_metadata', '0',
+      '-c:a', 'libmp3lame', '-b:a', '128k', '-id3v2_version', '3', '-f', 'mp3', 'pipe:1']);
+    const out = [], err = [];
+    ff.stdout.on('data', (c) => out.push(c));
+    ff.stderr.on('data', (c) => err.push(c));
+    ff.on('error', (e) => reject(new Error(e.code === 'ENOENT' ? 'ffmpeg is missing on the server' : e.message)));
+    ff.on('close', (code) => code === 0 && out.length ? resolve(Buffer.concat(out)) : reject(new Error('Couldn’t convert (' + Buffer.concat(err).toString().trim().slice(0, 120) + ')')));
+    ff.stdin.on('error', () => {});
+    ff.stdin.end(input);
+  });
+}
+/** Make one folder play on an iPhone. Android players are left alone (they play Ogg). */
+async function fixForIphone(p, pin, folder) {
+  const st = await pjson(p, pin, 'GET', '/api/status');
+  if (!/ios/i.test(String(st.version || ''))) return { iphone: false, converted: [], failed: [] };
+  const q = '/api/folder?name=' + encodeURIComponent(folder);
+  const files = (await pjson(p, pin, 'GET', q + '&tags=1')).files || [];
+  const bad = files.filter(f => IPHONE_CANT.has(f.kind));
+  const converted = [], failed = [];
+  for (const f of bad) {
+    try {
+      const got = await playerCall(p, pin, 'GET', '/api/file?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(f.name));
+      if (got.status !== 200) throw new Error(got.status === 404 ? 'this iPhone can’t send files yet (update it)' : 'download failed');
+      const mp3 = await toMp3(got.body);
+      const name = f.name.replace(/\.[^.]+$/, '') + '.mp3';
+      const up = await playerCall(p, pin, 'PUT', '/api/upload?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name), mp3, 'application/octet-stream');
+      if (up.status !== 200) throw new Error('upload failed');
+      if (name !== f.name) await pjson(p, pin, 'POST', '/api/file/delete', { folder, name: f.name }).catch(() => {});
+      converted.push(name);
+    } catch (e) { failed.push(f.name + ': ' + e.message); }
+  }
+  return { iphone: true, checked: files.length, converted, failed };
+}
+
 // ------------------------------------------------------------------ app updates
 
 // The newest GitHub release, kept in the data folder. A file named local.apk with a local.txt holding its version,
@@ -263,6 +326,17 @@ const server = http.createServer(async (req, res) => {
     const p = players.find(x => x.id === m[1]);
     if (!p) return json(res, 404, { error: 'That player was removed' });
     return pushUpdate(req, res, p, /[?&]force=1/.test(url));
+  }
+
+  // ---- make a folder play on an iPhone (converts Ogg to MP3 on that player only)
+  m = pathname.match(/^\/p\/([0-9a-f]{8})\/fix-audio$/);
+  if (m && req.method === 'POST') {
+    const p = players.find(x => x.id === m[1]);
+    if (!p) return json(res, 404, { error: 'That player was removed' });
+    const b = await readJson(req);
+    if (!b.folder) return json(res, 400, { error: 'Which folder?' });
+    try { return json(res, 200, await fixForIphone(p, req.headers['x-pin'], String(b.folder))); }
+    catch (e) { return json(res, e.status === 401 ? 401 : 502, { error: e.message }); }
   }
 
   // ---- /p/<id>/api/... goes to that player

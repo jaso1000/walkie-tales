@@ -144,6 +144,14 @@ final class RemoteServer {
             sendJson(c, 400, ["error": "iPhone players are updated with TrollStore, not over Wi-Fi"])
             return
         }
+        if method == "GET" && path == "/api/file" { // download one file (the remote's server converts what an iPhone can't play)
+            guard let f = Store.safeName(query["folder"]), let n = Store.safeName(query["name"]),
+                  let data = try? Data(contentsOf: Store.dir(f).appendingPathComponent(n), options: .mappedIfSafe) else {
+                sendJson(c, 404, ["error": "No such file"]); return
+            }
+            send(c, 200, "application/octet-stream", data)
+            return
+        }
         if method == "GET" && path == "/api/cover" {
             DispatchQueue.main.async {
                 let data = RemoteServer.cover(folder: query["folder"], now: query["now"] != nil)

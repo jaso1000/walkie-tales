@@ -3,7 +3,8 @@ WORKDIR /app
 COPY server.js ./
 COPY web ./web
 # the list of players added in the app is kept here (mount a volume to keep it across rebuilds)
-RUN mkdir -p /data && chown node:node /data
+# ffmpeg turns Ogg audio (which iPhones can't play) into MP3 for iPhone players
+RUN apk add --no-cache ffmpeg && mkdir -p /data && chown node:node /data
 VOLUME /data
 ENV PORT=8090 NODE_ENV=production DATA_DIR=/data
 EXPOSE 8090
