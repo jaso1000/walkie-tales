@@ -133,9 +133,16 @@ final class RemoteServer {
         }
         guard path.hasPrefix("/api/") else { send(c, 404, "text/plain", Data("Not found".utf8)); return }
         let given = headers["x-pin"] ?? query["pin"] ?? ""
-        guard given.trimmingCharacters(in: .whitespaces) == RemoteServer.pin else {
+        let who: String = { if case let .hostPort(h, _) = c.endpoint { return "\(h)" }; return "?" }()
+        let wait = Guard.blockedFor(who)
+        if wait > 0 { // too many wrong PINs from here: make guessing all million PINs take months, not hours
+            sendJson(c, 429, ["error": "Too many wrong PINs. Try again in \(max(1, Int(wait))) seconds"]); return
+        }
+        guard Data(given.trimmingCharacters(in: .whitespaces).utf8).elementsEqual(Data(RemoteServer.pin.utf8)) else {
+            if !given.trimmingCharacters(in: .whitespaces).isEmpty { Guard.failed(who) } // no PIN at all isn't a guess
             sendJson(c, 401, ["error": "PIN required"]); return
         }
+        Guard.ok(who)
         if method == "PUT" && path == "/api/upload" {
             upload(c, req: req, len: len, first: rest)
             return
@@ -259,13 +266,40 @@ final class RemoteServer {
 
     private func send(_ c: NWConnection, _ code: Int, _ type: String, _ body: Data) {
         let reason = [200: "OK", 204: "No Content", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found",
-                      411: "Length Required", 413: "Payload Too Large", 500: "Server Error"][code] ?? "OK"
+                      411: "Length Required", 413: "Payload Too Large", 429: "Too Many Requests", 500: "Server Error"][code] ?? "OK"
         var head = "HTTP/1.1 \(code) \(reason)\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\n"
-        head += "Cache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: X-Pin, Content-Type\r\n"
-        head += "Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\nConnection: close\r\n\r\n"
+        // No cross-site access (the remote goes through its own server or this page), no framing, no sniffing.
+        head += "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\n"
+        head += "Connection: close\r\n\r\n"
         var out = Data(head.utf8)
         out.append(body)
         c.send(content: out, completion: .contentProcessed { _ in c.cancel() })
+    }
+}
+
+/// Wrong-PIN limit per address: 5 free tries, then a wait that doubles each time (30 s up to 1 hour). A right PIN clears it.
+enum Guard {
+    private static var fails: [String: (count: Int, until: Date)] = [:]
+    private static let lock = NSLock()
+
+    static func blockedFor(_ who: String) -> TimeInterval {
+        lock.lock(); defer { lock.unlock() }
+        guard let f = fails[who] else { return 0 }
+        return max(0, f.until.timeIntervalSinceNow)
+    }
+
+    static func failed(_ who: String) {
+        lock.lock(); defer { lock.unlock() }
+        var f = fails[who] ?? (0, Date.distantPast)
+        f.count += 1
+        if f.count >= 5 { f.until = Date().addingTimeInterval(min(3600, 30 * pow(2, Double(min(7, f.count - 5))))) }
+        fails[who] = f
+        if fails.count > 500 { fails.removeAll() } // never grows without bound
+    }
+
+    static func ok(_ who: String) {
+        lock.lock(); defer { lock.unlock() }
+        fails[who] = nil
     }
 }
 

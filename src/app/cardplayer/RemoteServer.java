@@ -145,6 +145,7 @@ final class RemoteServer {
     private void handle(Socket s) {
         try (Socket sock = s) {
             sock.setSoTimeout(20_000);
+            final String who = sock.getInetAddress() != null ? sock.getInetAddress().getHostAddress() : "?";
             InputStream in = new BufferedInputStream(sock.getInputStream());
             OutputStream out = sock.getOutputStream();
 
@@ -188,10 +189,17 @@ final class RemoteServer {
             if (!path.startsWith("/api/")) { send(out, 404, "text/plain", bytes("Not found")); return; }
 
             String given = headers.containsKey("x-pin") ? headers.get("x-pin") : query.get("pin");
+            long wait = Guard.blockedFor(who);
+            if (wait > 0) { // too many wrong PINs from here: make guessing all million PINs take months, not hours
+                sendJson(out, 429, new JSONObject().put("error", "Too many wrong PINs. Try again in " + Math.max(1, wait / 1000) + " seconds"));
+                return;
+            }
             if (!Store.prefs(ctx).getBoolean("remote", true) || !pinMatches(given)) {
+                if (given != null && !given.trim().isEmpty()) Guard.failed(who); // no PIN at all isn't a guess
                 sendJson(out, 401, new JSONObject().put("error", "PIN required"));
                 return;
             }
+            Guard.ok(who);
 
             if (method.equals("GET") && path.equals("/api/cover")) {
                 serveCover(out, query.get("folder"), query.containsKey("now"));
@@ -203,7 +211,7 @@ final class RemoteServer {
                 File f = dir == null || name == null ? null : new File(dir, name);
                 if (f == null || !f.isFile()) { sendJson(out, 404, new JSONObject().put("error", "No such file")); return; }
                 out.write(bytes("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + f.length()
-                        + "\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n"));
+                        + "\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n"));
                 try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
                     byte[] buf = new byte[64 * 1024];
                     int n;
@@ -243,6 +251,31 @@ final class RemoteServer {
             else sendJson(out, 200, result);
         } catch (Exception ignored) {
             // client went away
+        }
+    }
+
+    /**
+     * Wrong-PIN limit per address: 5 free tries, then a wait that doubles each time (30 s up to 1 hour).
+     * A right PIN clears it. With this, trying every 6-digit PIN would take far longer than anyone would bother.
+     */
+    static final class Guard {
+        private static final Map<String, long[]> FAILS = new HashMap<>(); // address -> {count, blockedUntil}
+
+        static synchronized long blockedFor(String who) {
+            long[] f = FAILS.get(who);
+            long left = f == null ? 0 : f[1] - System.currentTimeMillis();
+            return Math.max(0, left);
+        }
+
+        static synchronized void failed(String who) {
+            long[] f = FAILS.computeIfAbsent(who, k -> new long[2]);
+            f[0]++;
+            if (f[0] >= 5) f[1] = System.currentTimeMillis() + Math.min(3_600_000L, 30_000L << Math.min(7, f[0] - 5));
+            if (FAILS.size() > 500) FAILS.clear(); // never grows without bound
+        }
+
+        static synchronized void ok(String who) {
+            FAILS.remove(who);
         }
     }
 
@@ -353,9 +386,9 @@ final class RemoteServer {
                 + "Content-Type: " + type + "\r\n"
                 + "Content-Length: " + body.length + "\r\n"
                 + "Cache-Control: no-store\r\n"
-                + "Access-Control-Allow-Origin: *\r\n"
-                + "Access-Control-Allow-Headers: X-Pin, Content-Type\r\n"
-                + "Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\n"
+                + "X-Content-Type-Options: nosniff\r\n"
+                + "X-Frame-Options: DENY\r\n"
+                + "Referrer-Policy: no-referrer\r\n"
                 + "Connection: close\r\n\r\n";
         out.write(bytes(head));
         out.write(body);
@@ -371,6 +404,7 @@ final class RemoteServer {
             case 404: return "Not Found";
             case 411: return "Length Required";
             case 413: return "Payload Too Large";
+            case 429: return "Too Many Requests";
             default: return "Error";
         }
     }

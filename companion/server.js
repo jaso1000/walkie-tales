@@ -267,6 +267,10 @@ async function pushUpdate(req, res, p, force) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // No framing (tap-tricks), no type sniffing, no referrer leaks (PINs can be in cover image links).
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
   const url = req.url || '/';
   const pathname = url.split('?')[0];
   if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
