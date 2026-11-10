@@ -196,6 +196,55 @@ function toMp3(input) {
     ff.stdin.end(input);
   });
 }
+// ---- Library thumbnails. Covers come from the player at full size (often 600-1300 px, no caching), which made the
+// remote's Library slow to scroll. The server fetches each cover once, shrinks it to 360 px, keeps it, and lets the
+// browser keep it for a week (the page asks with the folder's stamp, so a new cover gets a new address).
+// The PIN is part of the key, so a wrong PIN never gets a kept picture: it goes to the player and is refused there.
+const THUMB_MAX = 500;
+const thumbs = new Map(); // key -> Buffer (null = no cover), oldest first
+function thumbKey(id, pin, folder, v) { return crypto.createHash('sha256').update([id, pin, folder, v].join('\n')).digest('hex'); }
+function keepThumb(k, buf) {
+  thumbs.delete(k); thumbs.set(k, buf);
+  while (thumbs.size > THUMB_MAX) thumbs.delete(thumbs.keys().next().value);
+}
+function shrink(input) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vf',
+      "scale='if(gt(iw,ih),-2,min(360,iw))':'if(gt(iw,ih),min(360,ih),-2)'", '-frames:v', '1', '-q:v', '5',
+      '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:1']);
+    const out = [];
+    ff.stdout.on('data', (c) => out.push(c));
+    ff.stderr.on('data', () => {});
+    ff.on('error', reject);
+    ff.on('close', (code) => code === 0 && out.length ? resolve(Buffer.concat(out)) : reject(new Error('shrink failed')));
+    ff.stdin.on('error', () => {});
+    ff.stdin.end(input);
+  });
+}
+async function serveThumb(req, res, p, q) {
+  const folder = q.get('folder') || '', v = q.get('v') || '';
+  const pin = p.pin || req.headers['x-pin'] || q.get('pin') || '';
+  const k = thumbKey(p.id, pin, folder, v);
+  const cache = v ? 'private, max-age=604800, immutable' : 'private, max-age=600';
+  if (thumbs.has(k)) {
+    const b = thumbs.get(k); keepThumb(k, b);
+    if (!b) { res.writeHead(404, { 'Cache-Control': cache }); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': b.length, 'Cache-Control': cache });
+    return res.end(b);
+  }
+  let r;
+  try { r = await playerCall(p, pin, 'GET', '/api/cover?folder=' + encodeURIComponent(folder)); }
+  catch (e) { return json(res, 502, { error: 'Player unreachable' }); }
+  seen[p.id] = Date.now();
+  if (r.status === 404) { keepThumb(k, null); res.writeHead(404, { 'Cache-Control': cache }); return res.end(); }
+  if (r.status !== 200) return json(res, r.status, { error: 'Player answered ' + r.status });
+  let b;
+  try { b = await shrink(r.body); } catch (e) { b = r.body; } // fall back to the full picture
+  keepThumb(k, b);
+  res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': b.length, 'Cache-Control': cache });
+  return res.end(b);
+}
+
 /** Make one folder play on an iPhone. Android players are left alone (they play Ogg). */
 async function fixForIphone(p, pin, folder) {
   const st = await pjson(p, pin, 'GET', '/api/status');
@@ -378,6 +427,14 @@ const handler = async (req, res) => {
     if (!b.folder) return json(res, 400, { error: 'Which folder?' });
     try { return json(res, 200, await fixForIphone(p, req.headers['x-pin'], String(b.folder))); }
     catch (e) { return json(res, e.status === 401 ? 401 : 502, { error: e.message }); }
+  }
+
+  // ---- small cached cover for a Library tile
+  m = pathname.match(/^\/p\/([0-9a-f]{8})\/thumb$/);
+  if (m && req.method === 'GET') {
+    const p = players.find(x => x.id === m[1]);
+    if (!p) return json(res, 404, { error: 'That player was removed' });
+    return serveThumb(req, res, p, new URL(url, 'http://x').searchParams);
   }
 
   // ---- /p/<id>/api/... goes to that player

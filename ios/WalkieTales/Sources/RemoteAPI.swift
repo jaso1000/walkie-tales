@@ -239,6 +239,7 @@ extension PlayerViewController {
             let tracks = Store.listTracks(f)
             arr.append([
                 "name": f, "tracks": tracks.count, "live": Store.isLiveOnly(f), "autoCover": Art.hasAuto(f), "cards": 0,
+                "coverStamp": Int64(Store.stamp(f) * 1000), // the remote keeps covers until the folder changes
                 "info": LibraryViewController.info(f, player: p), "color": Art.hex(Art.colorFor(f)),
                 "progress": LibraryViewController.progress(f), "played": Store.ud.double(forKey: "played:" + f) * 1000,
                 "shuffle": Store.flag("shuffle", f, false), "repeat": Store.flag("repeat", f, false),

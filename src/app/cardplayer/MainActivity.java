@@ -728,6 +728,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             o.put("tracks", i.tracks);
             o.put("live", i.live);
             o.put("autoCover", ArtFinder.hasAuto(f));
+            o.put("coverStamp", i.stamp); // changes when anything in the folder does: the remote keeps covers until then
             o.put("cards", Store.cardsFor(cards, f));
             o.put("info", tileInfo(f, i.tracks, i.live));
             o.put("progress", progressOf(i));

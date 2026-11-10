@@ -33,7 +33,7 @@
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; }
   .dot.on { background: var(--good); }
 
-  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(15,15,22,.96); backdrop-filter: blur(10px);
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(15,15,22,.97);
     border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
   nav button { flex: 1; max-width: 140px; background: none; border: 0; padding: 10px 4px 12px; color: var(--muted);
     display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
@@ -93,7 +93,9 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 14px; }
   .tile { cursor: pointer; }
   .tile .art { aspect-ratio: 1; border-radius: 18px; overflow: hidden; display: grid; place-items: center;
-    font-size: 64px; font-weight: 800; color: #fff; box-shadow: 0 8px 20px rgba(0,0,0,.35); position: relative; }
+    font-size: 64px; font-weight: 800; color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,.3); position: relative; }
+  /* tiles off the screen aren't drawn until they're scrolled near */
+  #grid .tile { content-visibility: auto; contain-intrinsic-size: auto 230px; }
   .tile .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .tile b { display: block; margin-top: 8px; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile small { color: var(--muted); }
@@ -270,7 +272,7 @@
   .tile { position: relative; }
   .tile b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
   .tile .more { position: absolute; top: 8px; right: 8px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 0;
-    background: rgba(0,0,0,.55); backdrop-filter: blur(6px); display: grid; place-items: center; cursor: pointer; }
+    background: rgba(0,0,0,.6); display: grid; place-items: center; cursor: pointer; }
   .tile .more svg { width: 20px; height: 20px; fill: #fff; }
   .tile.now .art { outline: 3px solid var(--accent); outline-offset: 3px; }
   .tile .badge-now { position: absolute; left: 8px; bottom: 8px; z-index: 2; background: var(--accent); color: #fff; font-size: 12px;
@@ -646,6 +648,9 @@
   function toast(t) { const n = $('#toast'); n.textContent = t; n.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => n.classList.remove('on'), 2600); }
   function setConn(ok, text) { $('#dot').classList.toggle('on', ok); $('#connText').textContent = ok ? 'Connected' : (text || 'Offline'); }
   const coverUrl = (f) => base + '/api/cover?folder=' + encodeURIComponent(f) + (pin ? '&pin=' + encodeURIComponent(pin) : '');
+  // Library tiles: a small copy the companion server keeps (and the browser keeps for a week, until the folder changes).
+  const thumbUrl = (f) => !players || !cur ? coverUrl(f.name)
+    : '/p/' + cur.id + '/thumb?folder=' + encodeURIComponent(f.name) + (f.coverStamp ? '&v=' + f.coverStamp : '') + (pin ? '&pin=' + encodeURIComponent(pin) : '');
   const fmt = (ms) => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
     return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
 
@@ -938,7 +943,7 @@
       const t = el('div', 'tile'); t.dataset.folder = f.name;
       const a = el('div', 'art', f.name === '@all' ? '★' : f.name.charAt(0).toUpperCase());
       a.style.background = 'linear-gradient(135deg, ' + f.color + ', color-mix(in srgb, ' + f.color + ' 45%, #000))';
-      if (f.name !== '@all') { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.onerror = () => img.remove(); img.src = coverUrl(f.name); a.appendChild(img); }
+      if (f.name !== '@all') { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.onerror = () => img.remove(); img.src = thumbUrl(f); a.appendChild(img); }
       t.appendChild(a); t.appendChild(el('b', '', f.name === '@all' ? 'Everything' : f.name));
       t.appendChild(el('small', '', f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '')));
       if (f.name !== '@all') {
