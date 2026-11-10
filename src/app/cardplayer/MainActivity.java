@@ -1205,7 +1205,6 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             m.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
             m.setDataSource(tracks.get(i).source);
             m.prepare();
-            if (!tracks.get(i).live && SleepSounds.loops(folder)) m.setLooping(true); // sleep sounds repeat until stopped
             if (posMs > 0 && posMs < m.getDuration() - 2000) m.seekTo(posMs);
         } catch (Exception e) {
             m.release();
@@ -1217,9 +1216,45 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             }
             return;
         }
-        m.setOnCompletionListener(x -> onTrackDone());
+        // Sleep sounds repeat until stopped, with no gap: a second copy waits ready and takes over at the exact sample
+        // (setLooping leaves a short pause on some phones while it reopens the file).
+        final boolean loop = SleepSounds.loops(folder);
+        final String src = tracks.get(i).source;
+        m.setOnCompletionListener(x -> { if (loop) loopHandover(m, src); else onTrackDone(); });
         mp = m;
+        if (loop) queueLoop(m, src);
         if (play) play(); else updateUi();
+    }
+
+    MediaPlayer loopNext;
+    float playerVol = 1f;
+
+    void queueLoop(MediaPlayer cur, String src) {
+        MediaPlayer n = new MediaPlayer();
+        try {
+            n.setAudioAttributes(attrs());
+            n.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
+            n.setDataSource(src);
+            n.prepare();
+            n.setVolume(playerVol, playerVol);
+            n.setOnCompletionListener(x -> loopHandover(n, src));
+            cur.setNextMediaPlayer(n);
+            loopNext = n;
+        } catch (Exception e) {
+            n.release();
+            cur.setLooping(true); // fall back to the plain loop
+        }
+    }
+
+    /** The copy has already started playing; make it the player and queue the next copy behind it. */
+    void loopHandover(MediaPlayer old, String src) {
+        MediaPlayer n = loopNext;
+        if (old != mp || n == null) { if (old == mp) onTrackDone(); return; }
+        loopNext = null;
+        mp = n;
+        try { old.release(); } catch (Exception ignored) { }
+        queueLoop(n, src);
+        updateUi();
     }
 
     // ---------------------------------------------------------------- live streams (radio)
@@ -1344,7 +1379,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void setPlayerVolume(float v) {
         if (!ready()) return; // not allowed while a station is still connecting
+        playerVol = v;
         try { mp.setVolume(v, v); } catch (Exception ignored) { }
+        if (loopNext != null) try { loopNext.setVolume(v, v); } catch (Exception ignored) { }
     }
 
     // ================================================================ daily listening limit
@@ -1477,6 +1514,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (mp != null) {
             try { mp.release(); } catch (Exception ignored) { }
             mp = null;
+        }
+        if (loopNext != null) {
+            try { loopNext.release(); } catch (Exception ignored) { }
+            loopNext = null;
         }
     }
 

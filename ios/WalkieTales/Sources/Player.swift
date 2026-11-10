@@ -13,6 +13,7 @@ final class Player: NSObject {
     private(set) var connecting = false
     private var wantPlay = false
     private var endObserver: Any?
+    private var looper: AVPlayerLooper? // sleep sounds: gapless repeat
     private var statusObs: NSKeyValueObservation?
     private var timeObs: Any?
     private var fadeTimer: Timer?
@@ -93,7 +94,17 @@ final class Player: NSObject {
         } else {
             item = AVPlayerItem(url: Store.playableURL(t.source)) // e.g. AAC saved with an .mp3 name
         }
-        let p = AVPlayer(playerItem: item)
+        // Sleep sounds repeat with no gap: AVPlayerLooper queues copies that join at the exact sample
+        // (seeking back at the end left a short pause).
+        let loop = !t.live && SleepSounds.loops(folder)
+        let p: AVPlayer
+        if loop {
+            let q = AVQueuePlayer()
+            looper = AVPlayerLooper(player: q, templateItem: item)
+            p = q
+        } else {
+            p = AVPlayer(playerItem: item)
+        }
         p.automaticallyWaitsToMinimizeStalling = t.live
         player = p
         statusObs = item.observe(\.status, options: [.new]) { [weak self] it, _ in
@@ -146,6 +157,7 @@ final class Player: NSObject {
         if let o = endObserver { NotificationCenter.default.removeObserver(o) }
         if let o = timeObs { player?.removeTimeObserver(o) }
         endObserver = nil; timeObs = nil; statusObs = nil
+        looper?.disableLooping(); looper = nil
         player?.pause()
         player = nil
         connecting = false
