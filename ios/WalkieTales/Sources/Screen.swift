@@ -32,8 +32,11 @@ extension PlayerViewController {
     @objc func dimNow() {
         if screenLocked { return }
         if !dimmed { savedBrightness = UIScreen.main.brightness }
+        let mode = Bedtime.nightMode
         let dark = Bedtime.darkOn
-        let nightLight = !dark && Store.bool("night_light")
+        let nightLight = mode != 0
+        lastNightMode = mode
+        if nightLight { paintNight(mode) }
         UIScreen.main.brightness = dark ? 0 : (nightLight ? 0.12 : 0.02)
         blackout.isHidden = !dark
         night.isHidden = !nightLight
@@ -42,9 +45,22 @@ extension PlayerViewController {
         updateKeepOn()
     }
 
+    func paintNight(_ mode: Int) {
+        night.backgroundColor = mode == 2 ? UIColor(red: 0.06, green: 0.32, blue: 0.12, alpha: 1) : UIColor(red: 0.28, green: 0.13, blue: 0.04, alpha: 1)
+        nightIcon.text = mode == 2 ? "☀️" : "🌙"
+    }
+
     /// Bedtime starts or ends while the screen is already dimmed: switch between black and the normal dim.
     func checkBedtime() {
-        if screenLocked || !dimmed { return }
+        if screenLocked { return }
+        let mode = Bedtime.nightMode
+        if mode != lastNightMode { // night light starting, turning green, or ending
+            lastNightMode = mode
+            if mode != 0 || dimmed { dimNow() } else { updateKeepOn() }
+            if mode == 0 { wake() }
+            return
+        }
+        if !dimmed { return }
         if Bedtime.darkOn == blackout.isHidden { dimNow() }
     }
 

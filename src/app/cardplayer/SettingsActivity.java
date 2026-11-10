@@ -228,8 +228,10 @@ public class SettingsActivity extends Activity {
         choice("Keep the screen on", "screen_on", KEEP_VALUES, KEEP_LABELS, 0);
         choice("Screen turns off after", "screen_timeout", TIMEOUT_VALUES, TIMEOUT_LABELS, 60);
         panel("Night light and clock");
-        toggle("Night light", null, "night_light", false);
+        toggle("Night light", "A warm glow all through bedtime, instead of a black screen. Keep the player on its charger", "night_light", false);
         toggle("Clock on the night light", null, "night_clock", true);
+        toggle("OK to wake", "The night light turns green when bedtime ends", "ok_to_wake", true);
+        choice("Green for", "wake_glow_mins", new int[]{30, 60, 90, 120}, new String[]{"30 minutes", "1 hour", "90 minutes", "2 hours"}, 60);
         toggle("Clock and battery", null, "show_status", true);
     }
 

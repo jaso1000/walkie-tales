@@ -29,7 +29,8 @@ final class PlayerViewController: UIViewController {
     let chipsRow = UIStackView()
     let libraryBtn = Chip(icon: "square.grid.3x3.fill", title: "Library")
     let tracksBtn = Chip(icon: "music.note.list", title: "Tracks")
-    let blackout = UIView(), night = UIView(), nightClock = UILabel()
+    let blackout = UIView(), night = UIView(), nightClock = UILabel(), nightIcon = UILabel()
+    var lastNightMode = -1
     var artSize: NSLayoutConstraint!
     var scrubbing = false
 
@@ -302,6 +303,12 @@ final class PlayerViewController: UIViewController {
         nightClock.textColor = UIColor(red: 1, green: 0.9, blue: 0.76, alpha: 0.55)
         nightClock.translatesAutoresizingMaskIntoConstraints = false
         night.addSubview(nightClock)
+        nightIcon.font = .systemFont(ofSize: 72)
+        nightIcon.text = "🌙"
+        nightIcon.translatesAutoresizingMaskIntoConstraints = false
+        night.addSubview(nightIcon)
+        NSLayoutConstraint.activate([nightIcon.centerXAnchor.constraint(equalTo: night.centerXAnchor),
+                                     nightIcon.centerYAnchor.constraint(equalTo: night.centerYAnchor, constant: 60)])
         NSLayoutConstraint.activate([nightClock.centerXAnchor.constraint(equalTo: night.centerXAnchor),
                                      nightClock.topAnchor.constraint(equalTo: night.safeAreaLayoutGuide.topAnchor, constant: 110)])
     }
@@ -703,7 +710,7 @@ final class PlayerViewController: UIViewController {
         let mode = Store.int("screen_on")
         let charging = [.charging, .full].contains(UIDevice.current.batteryState)
         let forCards = Store.bool("cards") && Store.bool("cards_awake") && (charging || Bedtime.darkOn)
-        let on = Finder.shared.ringing || (!screenLocked && (mode == 1 || (mode == 2 && p.isPlaying) || forCards))
+        let on = Finder.shared.ringing || (!screenLocked && (mode == 1 || (mode == 2 && p.isPlaying) || forCards || Bedtime.nightMode != 0))
         if UIApplication.shared.isIdleTimerDisabled != on { UIApplication.shared.isIdleTimerDisabled = on }
     }
 }

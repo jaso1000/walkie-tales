@@ -140,6 +140,13 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             if let t = Store.listTracks(f).first(where: { $0.name.lowercased().contains(q) }) { hits[f] = t; return true }
             return false
         }
+        if q.isEmpty && cat != "music" && cat != "radio" {
+            let keys = Dictionary(uniqueKeysWithValues: items.map { ($0, Self.recentKey($0)) })
+            items = items.enumerated().sorted { a, b in
+                let ka = keys[a.element] ?? 0, kb = keys[b.element] ?? 0
+                return ka != kb ? ka > kb : a.offset < b.offset // stable: others keep their order
+            }.map { $0.element }
+        }
         if items.count > 1 && cat == "all" && q.isEmpty { items.append(Store.ALL) }
         empty.isHidden = !items.isEmpty || (q.isEmpty && cat == "all")
         empty.text = q.isEmpty ? "Nothing here yet" : "Nothing called “\(query)”"
@@ -194,9 +201,33 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         let tracks = Store.listTracks(f)
         if !tracks.isEmpty && tracks.allSatisfy({ $0.live }) { return tracks.count == 1 ? "Live radio" : "\(tracks.count) radio stations" }
         let n = tracks.count
+        let cat = Store.category(f)
+        let unit = cat == "audiobook" ? "Chapter" : cat == "podcast" ? "Episode" : "Track"
+        let at = resumeIndex(f, n)
+        if at > 0 { return "\(unit) \(at + 1) of \(n)" }
+        return "\(n) " + unit.lowercased() + (n == 1 ? "" : "s")
+    }
+
+    /// Where the folder carries on from (0 when it starts from the top).
+    static func resumeIndex(_ f: String, _ n: Int) -> Int {
         let at = Store.position(f).0
-        if Store.flag("resume", f, true) && !Store.flag("shuffle", f, false) && at > 0 && at < n { return "Track \(at + 1) of \(n)" }
-        return "\(n) " + (n == 1 ? "track" : "tracks")
+        return Store.flag("resume", f, true) && !Store.flag("shuffle", f, false) && at > 0 && at < n ? at : 0
+    }
+
+    /// How far through a book or podcast, 0...1 (0 when not started).
+    static func progress(_ f: String) -> Double {
+        let cat = Store.category(f)
+        guard cat == "audiobook" || cat == "podcast" else { return 0 }
+        let n = Store.listTracks(f).count
+        return n < 2 ? 0 : Double(resumeIndex(f, n)) / Double(n)
+    }
+
+    /// Books and podcasts played in the last 30 days come first ("keep listening").
+    static func recentKey(_ f: String) -> Double {
+        let cat = Store.category(f)
+        guard cat == "audiobook" || cat == "podcast" else { return 0 }
+        let t = Store.ud.double(forKey: "played:" + f)
+        return Date().timeIntervalSince1970 - t < 30 * 86400 ? t : 0
     }
 
     func collectionView(_ c: UICollectionView, numberOfItemsInSection s: Int) -> Int { items.count }
@@ -209,6 +240,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         cell.image.image = covers[f] ?? Art.letter(all ? "★" : String(f.prefix(1)).uppercased(), color)
         cell.name.text = all ? "Everything" : f
         cell.name.textColor = f == Player.shared.folder ? Art.tint(color, 0.35) : .white
+        cell.setProgress(f == Store.ALL ? 0 : Self.progress(f), color: Art.tint(color, 0.25))
         if let hit = hits[f] {
             cell.info.text = "♪ " + hit.name
             cell.info.textColor = UIColor(white: 1, alpha: 0.9)
@@ -234,6 +266,17 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
 final class TileCell: UICollectionViewCell {
     let image = UIImageView(), name = UILabel(), info = UILabel()
+    private let bar = UIView(), fill = UIView()
+    private var fillWidth: NSLayoutConstraint?
+
+    /// How far through a book or podcast: a thin bar under the cover (hidden at 0).
+    func setProgress(_ p: Double, color: UIColor) {
+        bar.isHidden = p <= 0
+        fill.backgroundColor = color
+        fillWidth?.isActive = false
+        fillWidth = fill.widthAnchor.constraint(equalTo: bar.widthAnchor, multiplier: CGFloat(max(0.03, min(1, p))))
+        fillWidth?.isActive = true
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -245,10 +288,22 @@ final class TileCell: UICollectionViewCell {
         name.numberOfLines = 2
         info.font = .systemFont(ofSize: 13)
         info.textColor = UIColor(white: 1, alpha: 0.55)
-        let s = UIStackView(arrangedSubviews: [image, name, info])
+        bar.backgroundColor = UIColor(white: 1, alpha: 0.2)
+        bar.layer.cornerRadius = 2.5
+        bar.clipsToBounds = true
+        bar.isHidden = true
+        fill.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(fill)
+        NSLayoutConstraint.activate([
+            bar.heightAnchor.constraint(equalToConstant: 5),
+            fill.leadingAnchor.constraint(equalTo: bar.leadingAnchor), fill.topAnchor.constraint(equalTo: bar.topAnchor),
+            fill.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+        ])
+        let s = UIStackView(arrangedSubviews: [image, bar, name, info])
         s.axis = .vertical
         s.spacing = 4
         s.setCustomSpacing(8, after: image)
+        s.setCustomSpacing(8, after: bar)
         s.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(s)
         NSLayoutConstraint.activate([

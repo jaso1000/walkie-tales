@@ -73,7 +73,8 @@ final class SettingsViewController: UITableViewController {
                     .info("Screen turns off after", "Set Auto-Lock in iPhone Settings → Display & Brightness"),
                 ]),
                 ("Night light and clock", [
-                    .toggle("Night light", nil, "night_light"),
+                    .toggle("Night light", "A warm glow all through bedtime, instead of a black screen. Keep it on the charger", "night_light"),
+                    .toggle("OK to wake", "The night light turns green when bedtime ends", "ok_to_wake"),
                     .toggle("Clock on the night light", nil, "night_clock"),
                     .toggle("Clock and battery", nil, "show_status"),
                 ]),

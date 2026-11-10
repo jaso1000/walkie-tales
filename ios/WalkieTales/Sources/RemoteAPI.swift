@@ -219,6 +219,7 @@ extension PlayerViewController {
         s["locked"] = UIAccessibility.isGuidedAccessEnabled
         s["nfc"] = "not on iPhone yet"
         s["screenOff"] = screenLocked
+        s["night"] = Bedtime.nightMode // 0 off, 1 orange night light, 2 green "OK to wake"
         s["bedtime"] = Bedtime.now
         s["dark"] = !blackout.isHidden
         return s
@@ -231,6 +232,7 @@ extension PlayerViewController {
             arr.append([
                 "name": f, "tracks": tracks.count, "live": Store.isLiveOnly(f), "autoCover": Art.hasAuto(f), "cards": 0,
                 "info": LibraryViewController.info(f, player: p), "color": Art.hex(Art.colorFor(f)),
+                "progress": LibraryViewController.progress(f), "played": Store.ud.double(forKey: "played:" + f) * 1000,
                 "shuffle": Store.flag("shuffle", f, false), "repeat": Store.flag("repeat", f, false),
                 "category": Store.category(f), "autoCategory": Store.autoCategory(f),
             ])

@@ -74,6 +74,7 @@ final class Player: NSObject {
         var i = 0, ms = 0
         if resume { (i, ms) = Store.position(f); if !list.indices.contains(i) { i = 0; ms = 0 } }
         Store.set("last", f)
+        Store.set("played:" + f, Date().timeIntervalSince1970)
         if !play && list[i].live { release(); index = i; changed(); return } // don't connect to radio until asked
         start(i, at: Double(ms) / 1000, play: play)
     }
@@ -399,5 +400,18 @@ enum Bedtime {
         return s <= e ? (m >= s && m < e) : (m >= s || m < e)
     }
 
-    static var darkOn: Bool { Store.bool("bedtime_dark") && now }
+    static var darkOn: Bool { Store.bool("bedtime_dark") && now && nightMode == 0 } // the night light takes over
+
+    /// 0: no night light now; 1: orange, all through bedtime; 2: green "OK to wake" for a while after bedtime ends.
+    static var nightMode: Int {
+        if !Store.bool("night_light") { return 0 }
+        if now { return 1 }
+        if Store.bool("ok_to_wake") {
+            let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            let m = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            let since = ((m - Store.int("quiet_end")) % 1440 + 1440) % 1440
+            if since < max(5, Store.int("wake_glow_mins")) { return 2 }
+        }
+        return 0
+    }
 }

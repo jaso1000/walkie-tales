@@ -128,6 +128,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     boolean ttsReady;
     EqView eq;
     TextClock nightClock;
+    TextView nightIcon;                  // 🌙 all night, ☀️ when it's OK to get up
+    GradientDrawable nightGlow;
+    int lastNightMode = -1;
     int shownVolume = -1;
     ValueAnimator fade;
     ObjectAnimator breathe;
@@ -306,6 +309,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
      */
     void handleIntent(Intent i) {
         if (i == null) return;
+        if (i.getBooleanExtra("night", false)) { // bedtime alarm: night light on
+            i.removeExtra("night");
+            turnScreenOn();
+            lastNightMode = -1;
+            h.postDelayed(this::checkBedtime, 1500);
+            scheduleNightAlarm();
+        }
         String f = i.getStringExtra("folder");
         String link = i.getStringExtra("link");
         i.removeExtra("folder");
@@ -684,6 +694,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         s.put("locked", Kiosk.isLocked(this));
         s.put("nfc", nfcState);
         s.put("screenOff", screenLocked);
+        s.put("night", nightMode()); // 0 off, 1 orange night light, 2 green "OK to wake"
         s.put("finding", findTone != null);
         s.put("bedtime", bedtimeNow());
         s.put("dark", blackout.getVisibility() == View.VISIBLE);
@@ -701,6 +712,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             o.put("autoCover", ArtFinder.hasAuto(f));
             o.put("cards", Store.cardsFor(cards, f));
             o.put("info", tileInfo(f, i.tracks, i.live));
+            o.put("progress", progressOf(i));
+            o.put("played", prefs.getLong("played:" + f, 0));
             o.put("color", String.format(Locale.ROOT, "#%06X", Ui.colorFor(f) & 0xFFFFFF));
             o.put("category", Store.category(prefs, i));
             o.put("autoCategory", i.autoCategory);
@@ -846,6 +859,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     void applySettings() {
+        scheduleNightAlarm();
+        h.post(this::checkBedtime); // night light switched on or off: show or leave the glow now
         volumeRow.setVisibility(prefs.getBoolean("show_volume", true) ? View.VISIBLE : View.GONE);
         statusGroup.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
         battery.setVisibility(prefs.getBoolean("show_status", true) ? View.VISIBLE : View.GONE);
@@ -883,7 +898,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         // Cards need the screen on for the reader: then it stays on while charging, and through the bedtime black screen,
         // unless a grown-up chose to let it sleep anyway ("Keep the screen on for cards").
         boolean forCards = cardsOn() && prefs.getBoolean("cards_awake", true) && (charging || bedtimeDarkOn());
-        boolean on = !screenLocked && (mode == 1 || (mode == 2 && ready() && mp.isPlaying()) || forCards);
+        boolean on = !screenLocked && (mode == 1 || (mode == 2 && ready() && mp.isPlaying()) || forCards || nightMode() != 0);
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -1139,7 +1154,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             } catch (Exception ignored) { }
             if (i < 0 || i >= list.size()) { i = 0; pos = 0; }
         }
-        prefs.edit().putString("last", f).apply();
+        prefs.edit().putString("last", f).putLong("played:" + f, System.currentTimeMillis()).apply();
         applyTheme(f);
         if (!play && list.get(i).live) {
             // Restoring a radio folder (e.g. after a restart): don't connect until play is pressed.
@@ -1958,7 +1973,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         // ---- night light overlay (shown instead of a dark screen when idle)
         GradientDrawable glow = new GradientDrawable();
         glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        glow.setColors(new int[]{0xFFFFB86B, 0xFF8A4214, 0xFF140904});
+        glow.setColors(NIGHT_ORANGE);
+        nightGlow = glow;
         glow.setGradientRadius(dp(380));
         FrameLayout nv = new FrameLayout(this);
         nv.setBackground(glow);
@@ -1972,6 +1988,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         FrameLayout.LayoutParams ncl = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         ncl.topMargin = dp(120);
         nv.addView(nightClock, ncl);
+        nightIcon = Ui.text(this, "🌙", 72, Color.WHITE, false);
+        nightIcon.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams nil = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER);
+        nil.topMargin = dp(60);
+        nv.addView(nightIcon, nil);
         nightView = nv;
         rootView.addView(nightView, new FrameLayout.LayoutParams(-1, -1));
 
@@ -2084,6 +2105,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             items.add(i);
         }
         renderLibChips(present);
+        if (q.isEmpty() && !libCat.equals("music") && !libCat.equals("radio")) // keep listening: recent books first
+            Collections.sort(items, (x, y) -> Long.compare(recentKey(y), recentKey(x)));
         boolean withAll = items.size() > 1 && libCat.equals("all") && q.isEmpty();
 
         if (items.isEmpty() && (!q.isEmpty() || !libCat.equals("all"))) {
@@ -2140,6 +2163,23 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             img.setClipToOutline(true);
             img.setElevation(dp(8));
             cell.addView(img, new LinearLayout.LayoutParams(tile, tile));
+            float prog = progressOf(fi);
+            if (prog > 0) { // how far through the book or podcast
+                FrameLayout track = new FrameLayout(this);
+                GradientDrawable tb = new GradientDrawable();
+                tb.setColor(0x33FFFFFF);
+                tb.setCornerRadius(dp(3));
+                track.setBackground(tb);
+                View fill = new View(this);
+                GradientDrawable fb = new GradientDrawable();
+                fb.setColor(Ui.tint(c, 0.25f));
+                fb.setCornerRadius(dp(3));
+                fill.setBackground(fb);
+                track.addView(fill, new FrameLayout.LayoutParams(Math.max(dp(6), (int) (tile * prog)), -1));
+                LinearLayout.LayoutParams tl2 = new LinearLayout.LayoutParams(tile, dp(5));
+                tl2.topMargin = dp(8);
+                cell.addView(track, tl2);
+            }
             TextView name = Ui.text(this, all ? "Everything" : f, 16, Color.WHITE, true);
             name.setMaxLines(2);
             name.setEllipsize(TextUtils.TruncateAt.END);
@@ -2239,11 +2279,39 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (f.equals(folder) && ready() && mp.isPlaying()) return "Now playing";
         if (Store.ALL.equals(f)) return "Shuffle it all";
         if (live) return n == 1 ? "Live radio" : n + " radio stations";
+        String cat = catOf(f);
+        String unit = cat.equals("audiobook") ? "Chapter" : cat.equals("podcast") ? "Episode" : "Track";
+        int at = resumeIndex(f, n);
+        if (at > 0) return unit + " " + (at + 1) + " of " + n;
+        return n + " " + (n == 1 ? unit.toLowerCase(Locale.ROOT) : unit.toLowerCase(Locale.ROOT) + "s");
+    }
+
+    String catOf(String f) {
+        try { return Store.category(prefs, Store.info(f)); } catch (Exception e) { return "music"; }
+    }
+
+    /** Where the folder will carry on from (0 when it starts from the top). */
+    int resumeIndex(String f, int n) {
         int at = 0;
         try { at = Integer.parseInt(prefs.getString("pos:" + f, "0:0").split(":")[0]); } catch (Exception ignored) { }
         boolean resumes = prefs.getBoolean("resume:" + f, true) && !prefs.getBoolean("shuffle:" + f, false);
-        if (resumes && at > 0 && at < n) return "Track " + (at + 1) + " of " + n;
-        return n + (n == 1 ? " track" : " tracks");
+        return resumes && at > 0 && at < n ? at : 0;
+    }
+
+    /** How far through a book or podcast, 0..1 (0 when not started). */
+    float progressOf(Store.FolderInfo fi) {
+        if (fi == null || fi.live || fi.tracks < 2) return 0;
+        String cat = Store.category(prefs, fi);
+        if (!cat.equals("audiobook") && !cat.equals("podcast")) return 0;
+        return resumeIndex(fi.name, fi.tracks) / (float) fi.tracks;
+    }
+
+    /** Books and podcasts played lately come first ("keep listening"); everything else keeps its order. */
+    long recentKey(Store.FolderInfo fi) {
+        String cat = Store.category(prefs, fi);
+        if (!cat.equals("audiobook") && !cat.equals("podcast")) return 0;
+        long t = prefs.getLong("played:" + fi.name, 0);
+        return System.currentTimeMillis() - t < 30L * 24 * 3600_000 ? t : 0;
     }
 
     void closeBrowser() {
@@ -2682,10 +2750,55 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         return prefs.getBoolean("bedtime_dark", false) && bedtimeNow();
     }
 
+    static final int[] NIGHT_ORANGE = {0xFFFFB86B, 0xFF8A4214, 0xFF140904};
+    static final int[] NIGHT_GREEN = {0xFF8CF29A, 0xFF1F7A33, 0xFF04140A};
+
+    /**
+     * 0: no night light now; 1: orange, all through bedtime; 2: green, "OK to wake", for a while after bedtime ends.
+     * The night light keeps the screen on (dim) all night, so it's meant for a player on its charger.
+     */
+    int nightMode() {
+        if (!prefs.getBoolean("night_light", false)) return 0;
+        if (bedtimeNow()) return 1;
+        if (prefs.getBoolean("ok_to_wake", true)) {
+            Calendar c = Calendar.getInstance();
+            int m = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
+            int e = prefs.getInt("quiet_end", 7 * 60), len = Math.max(5, prefs.getInt("wake_glow_mins", 60));
+            int since = ((m - e) % 1440 + 1440) % 1440;
+            if (since < len) return 2;
+        }
+        return 0;
+    }
+
+    void paintNight(int mode) {
+        nightGlow.setColors(mode == 2 ? NIGHT_GREEN : NIGHT_ORANGE);
+        nightIcon.setText(mode == 2 ? "☀️" : "🌙");
+        nightClock.setTextColor(mode == 2 ? 0xCCE9FFEC : 0x8CFFE6C2);
+    }
+
+    /** Wake the player at the next bedtime so the night light comes on even if the screen had gone to sleep. */
+    void scheduleNightAlarm() {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            Intent i = new Intent(this, MainActivity.class).putExtra("night", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 7, i, android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+            am.cancel(pi);
+            if (!prefs.getBoolean("night_light", false)) return;
+            Calendar c = Calendar.getInstance();
+            int s = prefs.getInt("quiet_start", 19 * 60);
+            c.set(Calendar.HOUR_OF_DAY, s / 60); c.set(Calendar.MINUTE, s % 60); c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0);
+            if (c.getTimeInMillis() <= System.currentTimeMillis()) c.add(Calendar.DAY_OF_YEAR, 1);
+            am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, c.getTimeInMillis(), pi); // may run a few minutes late in deep sleep
+        } catch (Exception ignored) { }
+    }
+
     final Runnable dim = () -> {
         if (screenLocked) return;
-        boolean dark = bedtimeDarkOn();
-        boolean night = !dark && prefs.getBoolean("night_light", false);
+        int mode = nightMode();
+        boolean night = mode != 0;
+        boolean dark = !night && bedtimeDarkOn(); // the night light takes over from the bedtime black screen
+        if (night) paintNight(mode);
+        lastNightMode = mode;
         setBrightness(dark ? 0f : night ? 0.12f : 0.02f);
         showBlackout(dark);
         if (night && nightView.getVisibility() != View.VISIBLE) {
@@ -2735,6 +2848,16 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     /** Bedtime starts or ends while the screen is already dimmed: switch between black and the normal dim. */
     void checkBedtime() {
         if (screenLocked) return;
+        int mode = nightMode();
+        if (mode != lastNightMode) {
+            boolean starting = lastNightMode <= 0 && mode != 0;
+            lastNightMode = mode;
+            if (starting) turnScreenOn();
+            if (mode != 0 || dimmed) dim.run(); // show the glow (or leave it) straight away
+            updateKeepOn();
+            if (mode == 0) wake();
+            return;
+        }
         boolean dark = bedtimeDarkOn();
         if (dimmed && dark != (blackout.getVisibility() == View.VISIBLE)) dim.run();
         else if (!dimmed && dark && !h.hasCallbacks(dim)) wake();

@@ -70,6 +70,8 @@ final class Store {
         SETTINGS.put("screen_timeout", 60);
         SETTINGS.put("night_light", false);
         SETTINGS.put("night_clock", true);
+        SETTINGS.put("ok_to_wake", true);      // night light turns green when bedtime ends
+        SETTINGS.put("wake_glow_mins", 60);    // ...and stays green this long
         SETTINGS.put("show_status", true);
         SETTINGS.put("gate", true);
         SETTINGS.put("power_menu", true);
