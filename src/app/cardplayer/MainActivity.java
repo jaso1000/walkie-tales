@@ -343,6 +343,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     protected void onResume() {
         super.onResume();
         preloadLibrary();
+        SleepSounds.ensure(this, () -> h.post(() -> { libSnapshot = null; preloadLibrary(); }));
         reloadCards();
         applySettings();
         hideSystemBars();
@@ -491,6 +492,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 if (cards.values().removeIf(f::equals)) { Store.saveCards(cards); cardsStamp = Store.cardsFile().lastModified(); }
                 flash("Deleted “" + f + "”", 3000);
                 if (browsing) openBrowser();
+                break;
+            }
+            case "/api/limit": { // remote: {add: minutes} for today, or {off: true} for no limit today
+                String d = today();
+                if (b.optBoolean("off", false)) prefs.edit().putString("limit_off_day", d).apply();
+                else {
+                    int add = Math.max(0, Math.min(600, b.optInt("add", 30)));
+                    int extra = (d.equals(prefs.getString("limit_extra_day", "")) ? prefs.getInt("limit_extra", 0) : 0) + add;
+                    prefs.edit().putString("limit_extra_day", d).putInt("limit_extra", extra).apply();
+                }
+                flash("More music time today ★", 4000);
                 break;
             }
             case "/api/folder/rename": { // remote → "Find names": give the folder the real album or book name
@@ -695,6 +707,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         s.put("nfc", nfcState);
         s.put("screenOff", screenLocked);
         s.put("night", nightMode()); // 0 off, 1 orange night light, 2 green "OK to wake"
+        int allowed = allowedToday();
+        s.put("listenedToday", (int) (listenedTodayMs() / 60_000));
+        s.put("allowedToday", allowed == Integer.MAX_VALUE ? -1 : allowed);
+        s.put("limitReached", limitReached());
         s.put("finding", findTone != null);
         s.put("bedtime", bedtimeNow());
         s.put("dark", blackout.getVisibility() == View.VISIBLE);
@@ -1187,6 +1203,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             m.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
             m.setDataSource(tracks.get(i).source);
             m.prepare();
+            if (!tracks.get(i).live && SleepSounds.loops(folder)) m.setLooping(true); // sleep sounds repeat until stopped
             if (posMs > 0 && posMs < m.getDuration() - 2000) m.seekTo(posMs);
         } catch (Exception e) {
             m.release();
@@ -1286,6 +1303,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     void play() {
+        if (limitReached()) { // music time is finished for today
+            flash("Music time is finished for today 🌙", 5000);
+            updateUi();
+            return;
+        }
         if (preparing) { // still connecting to a station (mp may not exist yet): start as soon as it's ready
             wantPlay = true;
             updateUi();
@@ -1314,12 +1336,66 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             setPlayerVolume(1f);
             mp.start();
         }
+        startLimitCount();
         updateUi();
     }
 
     void setPlayerVolume(float v) {
         if (!ready()) return; // not allowed while a station is still connecting
         try { mp.setVolume(v, v); } catch (Exception ignored) { }
+    }
+
+    // ================================================================ daily listening limit
+
+    /** Its own handler, so it keeps counting while the screen is off (the main one is cleared when it sleeps). */
+    final Handler limitH = new Handler(android.os.Looper.getMainLooper());
+    long limitTick;
+
+    String today() { return new java.text.SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new java.util.Date()); }
+
+    /** Minutes allowed today: the setting plus anything a grown-up added; Integer.MAX_VALUE when there's no limit. */
+    int allowedToday() {
+        int lim = prefs.getInt("daily_limit", 0);
+        if (lim <= 0 || today().equals(prefs.getString("limit_off_day", ""))) return Integer.MAX_VALUE;
+        int extra = today().equals(prefs.getString("limit_extra_day", "")) ? prefs.getInt("limit_extra", 0) : 0;
+        return lim + extra;
+    }
+
+    long listenedTodayMs() {
+        return today().equals(prefs.getString("listen_day", "")) ? prefs.getLong("listen_ms", 0) : 0;
+    }
+
+    boolean countsTowardLimit() { return folder != null && !SleepSounds.loops(folder); }
+
+    boolean limitReached() {
+        int a = allowedToday();
+        return a != Integer.MAX_VALUE && countsTowardLimit() && listenedTodayMs() >= a * 60_000L;
+    }
+
+    /** Every 20 s while playing: add the time to today's total and stop once it's used up. */
+    final Runnable limitCount = new Runnable() {
+        @Override public void run() {
+            long now = SystemClock.elapsedRealtime();
+            boolean playing = ready() && mp.isPlaying() && countsTowardLimit();
+            if (playing && limitTick > 0) {
+                String d = today();
+                long ms = (d.equals(prefs.getString("listen_day", "")) ? prefs.getLong("listen_ms", 0) : 0) + Math.min(60_000, now - limitTick);
+                prefs.edit().putString("listen_day", d).putLong("listen_ms", ms).apply();
+                if (limitReached()) {
+                    pause();
+                    flash("Music time is finished for today 🌙", 8000);
+                }
+            }
+            limitTick = playing ? now : 0;
+            limitH.removeCallbacks(this);
+            if (playing) limitH.postDelayed(this, 20_000);
+        }
+    };
+
+    void startLimitCount() {
+        limitTick = SystemClock.elapsedRealtime();
+        limitH.removeCallbacks(limitCount);
+        limitH.postDelayed(limitCount, 20_000);
     }
 
     void pause() {

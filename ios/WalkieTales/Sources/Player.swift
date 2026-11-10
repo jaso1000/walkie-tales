@@ -155,6 +155,7 @@ final class Player: NSObject {
     // MARK: controls
 
     func play() {
+        if Limit.reached(folder) { onMessage?("Music time is finished for today 🌙", 5); changed(); return }
         guard let p = player else { return }
         if connecting { wantPlay = true; changed(); return }
         try? AVAudioSession.sharedInstance().setActive(true)
@@ -173,6 +174,7 @@ final class Player: NSObject {
             p.volume = 1
             p.play()
         }
+        Limit.start(self)
         changed()
     }
 
@@ -238,6 +240,9 @@ final class Player: NSObject {
     var repeats: Bool { folder == Store.ALL || (folder.map { Store.flag("repeat", $0, false) } ?? false) }
 
     private func trackEnded() {
+        if SleepSounds.loops(folder), let p = player { // sleep sounds repeat until stopped
+            p.seek(to: .zero); p.play(); return
+        }
         if index + 1 < tracks.count {
             start(index + 1, play: true)
         } else if repeats {
@@ -388,6 +393,52 @@ final class Volume: NSObject {
     func enforceCap() {
         if overrideCap { return }
         if level > capSteps { set(level: capSteps) }
+    }
+}
+
+/// Daily listening limit (Settings → Sound): minutes of playing a day; sleep sounds don't count. Same as Android.
+enum Limit {
+    private static var timer: Timer?
+    private static var tick: Date?
+
+    static var today: String { let f = DateFormatter(); f.dateFormat = "yyyyMMdd"; f.locale = Locale(identifier: "en_US_POSIX"); return f.string(from: Date()) }
+
+    /// Minutes allowed today, or nil for no limit.
+    static var allowedToday: Int? {
+        let lim = Store.int("daily_limit")
+        if lim <= 0 || Store.ud.string(forKey: "limit_off_day") == today { return nil }
+        let extra = Store.ud.string(forKey: "limit_extra_day") == today ? Store.ud.integer(forKey: "limit_extra") : 0
+        return lim + extra
+    }
+
+    static var listenedMs: Double { Store.ud.string(forKey: "listen_day") == today ? Store.ud.double(forKey: "listen_ms") : 0 }
+
+    static func counts(_ folder: String?) -> Bool { folder != nil && !SleepSounds.loops(folder) }
+
+    static func reached(_ folder: String?) -> Bool {
+        guard let a = allowedToday, counts(folder) else { return false }
+        return listenedMs >= Double(a) * 60_000
+    }
+
+    static func add(_ minutes: Int) {
+        let extra = (Store.ud.string(forKey: "limit_extra_day") == today ? Store.ud.integer(forKey: "limit_extra") : 0) + minutes
+        Store.set("limit_extra_day", today); Store.set("limit_extra", extra)
+    }
+
+    static func offToday() { Store.set("limit_off_day", today) }
+
+    /// Count while playing (runs in the background too, while audio plays).
+    static func start(_ p: Player) {
+        tick = Date()
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak p] t in
+            guard let p = p, p.isPlaying, counts(p.folder) else { timer?.invalidate(); timer = nil; return }
+            let now = Date()
+            let ms = listenedMs + min(60_000, now.timeIntervalSince(tick ?? now) * 1000)
+            Store.set("listen_day", today); Store.set("listen_ms", ms)
+            tick = now
+            if reached(p.folder) { p.pause(); p.onMessage?("Music time is finished for today 🌙", 8) }
+        }
     }
 }
 

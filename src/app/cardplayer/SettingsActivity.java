@@ -196,6 +196,21 @@ public class SettingsActivity extends Activity {
         toggle("Volume buttons on screen", null, "show_volume", true);
         toggle("Fade in", null, "fade_in", true);
         toggle("Say the name out loud", null, "announce", false);
+        panel("Music time");
+        choice("Daily listening limit", "daily_limit", new int[]{0, 30, 60, 90, 120, 180},
+                new String[]{"No limit", "30 minutes", "1 hour", "90 minutes", "2 hours", "3 hours"}, 0);
+        if (prefs.getInt("daily_limit", 0) > 0) {
+            String d = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(new java.util.Date());
+            long used = d.equals(prefs.getString("listen_day", "")) ? prefs.getLong("listen_ms", 0) / 60_000 : 0;
+            boolean off = d.equals(prefs.getString("limit_off_day", ""));
+            int extra = d.equals(prefs.getString("limit_extra_day", "")) ? prefs.getInt("limit_extra", 0) : 0;
+            valueRow("Today", off ? "No limit today" : used + " of " + (prefs.getInt("daily_limit", 0) + extra) + " minutes", v -> {});
+            link("+30 minutes today", "Sleep sounds never count", v -> {
+                prefs.edit().putString("limit_extra_day", d).putInt("limit_extra", extra + 30).apply();
+                build();
+            });
+            link("No limit today", null, v -> { prefs.edit().putString("limit_off_day", d).apply(); build(); });
+        }
         if (Headphones.hasBluetooth(this)) {
             panel("Headphones");
             toggle("Headphones button", "Switches Bluetooth on and off from the player", "headphones_button", true);

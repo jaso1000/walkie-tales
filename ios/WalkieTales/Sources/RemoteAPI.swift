@@ -118,6 +118,9 @@ extension PlayerViewController {
                 flash("Renamed to “\(to)”", 3)
                 libraryChanged()
             }
+        case "/api/limit": // remote: {add: minutes} for today, or {off: true} for no limit today
+            if (b["off"] as? Bool) == true { Limit.offToday() } else { Limit.add(max(0, min(600, (b["add"] as? NSNumber)?.intValue ?? 30))) }
+            flash("More music time today ★", 4)
         case "/api/folder/category": // remote → folder menu → Type: auto, music, podcast, audiobook or radio
             let f = b["folder"] as? String ?? ""
             guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
@@ -219,6 +222,9 @@ extension PlayerViewController {
         s["locked"] = UIAccessibility.isGuidedAccessEnabled
         s["nfc"] = "not on iPhone yet"
         s["screenOff"] = screenLocked
+        s["listenedToday"] = Int(Limit.listenedMs / 60_000)
+        s["allowedToday"] = Limit.allowedToday ?? -1
+        s["limitReached"] = Limit.reached(p.folder)
         s["night"] = Bedtime.nightMode // 0 off, 1 orange night light, 2 green "OK to wake"
         s["bedtime"] = Bedtime.now
         s["dark"] = !blackout.isHidden

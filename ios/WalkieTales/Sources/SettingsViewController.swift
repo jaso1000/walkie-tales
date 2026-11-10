@@ -144,6 +144,12 @@ final class SettingsViewController: UITableViewController {
         sections = [
             (nil, [.slider("Maximum volume", "max_volume")]),
             (nil, [.toggle("Volume buttons on screen", nil, "show_volume"), .toggle("Fade in", nil, "fade_in")]),
+            ("Music time", [
+                .value("Daily listening limit", { let m = Store.int("daily_limit"); return m <= 0 ? "No limit" : "\(m) minutes" }, { [weak self] in self?.pickLimit() }),
+                .value("Today", { if let a = Limit.allowedToday { return "\(Int(Limit.listenedMs / 60_000)) of \(a) minutes" }; return Store.int("daily_limit") > 0 ? "No limit today" : "—" }, {}),
+                .value("+30 minutes today", { "Sleep sounds never count" }, { [weak self] in Limit.add(30); self?.reload() }),
+                .value("No limit today", { "" }, { [weak self] in Limit.offToday(); self?.reload() }),
+            ]),
             ("Headphones", [
                 .toggle("Headphones button", "Picks headphones or the speaker from the player", "headphones_button"),
                 .value("Pair new headphones", { "iPhone Settings → Bluetooth" }, { Self.openSettings("Bluetooth") }),
@@ -153,6 +159,15 @@ final class SettingsViewController: UITableViewController {
     }
 
     private func reload() { build(); tableView.reloadData() }
+
+    private func pickLimit() {
+        let a = UIAlertController(title: "Daily listening limit", message: "Sleep sounds never count.", preferredStyle: .alert)
+        for (m, label) in [(0, "No limit"), (30, "30 minutes"), (60, "1 hour"), (90, "90 minutes"), (120, "2 hours"), (180, "3 hours")] {
+            a.addAction(UIAlertAction(title: label, style: .default) { [weak self] _ in Store.set("daily_limit", m); self?.reload() })
+        }
+        a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(a, animated: true)
+    }
 
     /// Set, change or remove the grown-up PIN: asked for instead of the sum before settings.
     private func editGatePin() {
