@@ -123,6 +123,14 @@
   .set.slider { display: block; }
   .set.slider .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .set.slider .val { color: #b9a6ff; font-weight: 700; }
+  .menu-head { color: #b9a6ff; font-weight: 700; font-size: 14px; margin: 18px 6px 8px; }
+  .set-search { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 14px; padding: 0 12px; margin-bottom: 12px; }
+  .set-search svg { width: 22px; height: 22px; fill: var(--muted); flex: none; }
+  .set-search input[type=search] { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); font-size: 17px; padding: 13px 0; }
+  #tab-set.searching .page-head button { display: none; }
+  #tab-set.searching .page-head h2 { font-size: 15px; color: #b9a6ff; }
+  #tab-set.searching .setpage { margin-bottom: 8px; }
+  .no-hits { color: var(--muted); padding: 20px 8px; }
   .menu-group { background: var(--panel); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
   .menu-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px 12px 16px; min-height: 66px; background: none;
     border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; }
@@ -403,42 +411,61 @@
 <!-- ================= SETTINGS ================= -->
 <section id="tab-set"><div class="wrap">
   <!-- Same topics, order and wording as the player's Grown-up settings (SettingsActivity.java): keep the two in step. -->
+  <label class="set-search"><svg viewBox="0 0 24 24"><path d="M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z"/></svg>
+    <input type="search" id="setQuery" placeholder="Search settings" autocomplete="off"></label>
   <div id="setMenu"></div>
-  <div class="setpage" data-page="kid" data-title="Your child" hidden>
-    <div class="card"><h2>Child's name</h2><input type="text" id="s_kid_name" maxlength="40" placeholder="Name"></div>
+  <div class="no-hits" id="setNoHits" hidden></div>
+  <div class="setpage" data-page="kid" data-title="Your child" data-words="kid name son daughter" hidden>
+    <div class="card"><div class="set"><div class="grow">Child's name<small>Shown on the player and the remote</small></div><input type="text" id="s_kid_name" maxlength="40" placeholder="Name" style="max-width:190px"></div></div>
   </div>
-  <div class="setpage" data-page="library" data-title="Library" hidden>
+  <div class="setpage" data-page="library" data-title="Library" data-words="folders albums covers art pictures" hidden>
     <div class="card"><h2>Folders</h2><button class="btn ghost wide" id="goLib">Open the Library</button></div>
     <div class="card" id="setCovers"><h2>Covers</h2></div>
-    <div class="card" id="setOnPlayer"><h2>On the player</h2></div>
   </div>
-  <div class="setpage" data-page="cards" data-title="Cards" hidden>
+  <div class="setpage" data-page="cards" data-title="Cards" data-words="nfc tag tap link" hidden>
     <div class="card" id="setCards"></div>
     <div class="card"><h2>Linked cards</h2><button class="btn ghost wide" id="goCards">Link and manage cards</button></div>
   </div>
-  <div class="setpage" data-page="sound" data-title="Sound" hidden>
+  <div class="setpage" data-page="sound" data-title="Sound" data-words="volume loud quiet fade" hidden>
     <div class="card" id="setMax"></div>
     <div class="card" id="setSound"></div>
-    <div class="card" id="setLimit"><h2>Music time</h2></div>
+    <div class="card"><button class="btn ghost wide" data-go="bedtime">Bedtime volume</button></div>
   </div>
-  <div class="setpage" data-page="bedtime" data-title="Bedtime" hidden>
+  <div class="setpage" data-page="headphones" data-title="Headphones" data-words="bluetooth earphones earbuds pair speaker" hidden>
+    <div class="card" id="setHeadphones"><div class="hint" style="text-align:left;margin:4px 0 0">Pair new headphones on the player: Grown-up settings → Headphones.</div></div>
+  </div>
+  <div class="setpage" data-page="musictime" data-title="Music time" data-words="limit daily hours minutes screen time allowance" hidden>
+    <div class="card" id="setLimit"></div>
+  </div>
+  <div class="setpage" data-page="messages" data-title="Messages" data-words="voice record mum dad mom story microphone" hidden>
+    <div class="card"><h2>From Mum &amp; Dad</h2>
+      <div class="set"><div class="grow">Voice and typed messages<small>Hold the red button to record “Goodnight, love you!” or a whole story. It plays on the player and stays in the From Mum &amp; Dad folder.</small></div></div>
+      <button class="btn wide" id="goMsg" style="margin-top:8px">Send a message</button>
+    </div>
+  </div>
+  <div class="setpage" data-page="bedtime" data-title="Bedtime" data-words="night sleep quiet times evening" hidden>
     <div class="card" id="setTimes"><h2>Times</h2></div>
     <div class="card" id="setDuring"><h2>During bedtime</h2></div>
+    <div class="card"><button class="btn ghost wide" data-go="nightlight">Night light</button></div>
   </div>
-  <div class="setpage" data-page="screen" data-title="Screen" hidden>
+  <div class="setpage" data-page="nightlight" data-title="Night light" data-words="glow orange green ok to wake morning lamp" hidden>
+    <div class="card" id="setNight"></div>
+    <div class="card" id="setWake"><h2>OK to wake</h2></div>
+  </div>
+  <div class="setpage" data-page="screen" data-title="Screen" data-words="display brightness dim sleep timeout" hidden>
     <div class="card" id="setSleep"><h2>Sleeping</h2></div>
-    <div class="card" id="setNight"><h2>Night light and clock</h2></div>
+    <div class="card" id="setOnPlayer"><h2>On the player</h2></div>
   </div>
-  <div class="setpage" data-page="safety" data-title="Safety" hidden>
+  <div class="setpage" data-page="safety" data-title="Safety" data-words="pin password lock kiosk sum check" hidden>
     <div class="card" id="setSafety"></div>
   </div>
-  <div class="setpage" data-page="remote" data-title="Remote control" hidden>
+  <div class="setpage" data-page="remote" data-title="Remote control" data-words="wifi pin address app forget" hidden>
     <div class="card"><h2>Connect</h2>
       <div class="set"><div class="grow">Address<small id="remoteAddr"></small></div></div>
       <button class="btn ghost wide" id="forget" style="margin-top:8px">Forget PIN on this device</button>
     </div>
   </div>
-  <div class="setpage" data-page="about" data-title="About" hidden>
+  <div class="setpage" data-page="about" data-title="About" data-words="version update free space storage" hidden>
     <div class="card"><div class="set"><div class="grow"><span id="about"></span><small id="aboutFree"></small></div></div></div>
     <div class="card" id="updateCard" hidden><h2>Update players</h2>
       <div class="set"><div class="grow">Newest version<small id="updLatest"></small></div></div>
@@ -1625,12 +1652,14 @@
   // ---------------------------------------------------------------- settings
   const SWITCHES = {
     setCovers: [['find_art', 'Find missing covers online']],
-    setOnPlayer: [['browse', 'Library button'], ['track_list', 'Tracks button']],
+    setOnPlayer: [['show_status', 'Clock and battery'], ['show_volume', 'Volume buttons on screen'], ['browse', 'Library button'], ['track_list', 'Tracks button']],
     setCards: [['cards', 'Use NFC cards'], ['rest_mode', 'Pause when the card is lifted off'], ['cards_awake', 'Keep the screen on for cards (charging, bedtime)']],
-    setSound: [['show_volume', 'Volume buttons on screen'], ['headphones_button', 'Headphones button'], ['fade_in', 'Fade in'], ['announce', 'Say the name out loud']],
+    setSound: [['fade_in', 'Fade in', 'Starts quietly and gets louder'], ['announce', 'Say the name out loud', 'When a card or folder starts']],
+    setHeadphones: [['headphones_button', 'Headphones button', 'Switches Bluetooth headphones on and off from the player']],
     setDuring: [['bedtime_dark', 'Screen off at bedtime', 'Goes black 30 seconds after the last touch'], ['quiet', 'Quieter at bedtime']],
-    setNight: [['night_light', 'Night light', 'Glows orange at bedtime'], ['ok_to_wake', 'OK to wake', 'Turns green at wake-up time, so they know they can get up'],
-      ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery']],
+    setNight: [['night_light', 'Night light', 'A warm orange glow all through bedtime, instead of a black screen. Keep the player on its charger'],
+      ['night_clock', 'Clock on the night light']],
+    setWake: [['ok_to_wake', 'OK to wake', 'The night light turns green when bedtime ends, so they know they can get up']],
     setSafety: [['gate', 'Grown-up check before settings', 'A quick sum, or the grown-up PIN if one is set'], ['power_menu', 'Power button can switch it off']],
   };
   const DIM = [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']];
@@ -1638,20 +1667,25 @@
   const TIMEOUT = [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes']];
   const CHEVRON = '<svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>';
   const MENU = [
-    [['kid', 'Your child', 'M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z']],
-    [['library', 'Library', 'M4,8h4V4H4v4zM10,20h4v-4h-4v4zM4,20h4v-4H4v4zM4,14h4v-4H4v4zM10,14h4v-4h-4v4zM16,4v4h4V4h-4zM10,8h4V4h-4v4zM16,14h4v-4h-4v4zM16,20h4v-4h-4v4z'],
-     ['cards', 'Cards', 'M20,4H4C2.89,4 2,4.89 2,6v12c0,1.11 0.89,2 2,2h16c1.11,0 2,-0.89 2,-2V6C22,4.89 21.11,4 20,4zM20,18H4v-6h16v6zM20,8H4V6h16v2z']],
-    [['sound', 'Sound', 'M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z'],
-     ['bedtime', 'Bedtime', 'M12.34,2.02C6.59,1.82 2,6.42 2,12c0,5.52 4.48,10 10,10c3.71,0 6.93,-2.02 8.66,-5.02C13.15,16.73 8.55,8.55 12.34,2.02z'],
+    [null, ['kid', 'Your child', 'M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z']],
+    ['Listening', ['library', 'Library', 'M4,8h4V4H4v4zM10,20h4v-4h-4v4zM4,20h4v-4H4v4zM4,14h4v-4H4v4zM10,14h4v-4h-4v4zM16,4v4h4V4h-4zM10,8h4V4h-4v4zM16,14h4v-4h-4v4zM16,20h4v-4h-4v4z'],
+     ['cards', 'Cards', 'M20,4H4C2.89,4 2,4.89 2,6v12c0,1.11 0.89,2 2,2h16c1.11,0 2,-0.89 2,-2V6C22,4.89 21.11,4 20,4zM20,18H4v-6h16v6zM20,8H4V6h16v2z'],
+     ['sound', 'Sound', 'M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z'],
+     ['headphones', 'Headphones', 'M12,1c-4.97,0 -9,4.03 -9,9v7c0,1.66 1.34,3 3,3h3v-8H5v-2c0,-3.87 3.13,-7 7,-7s7,3.13 7,7v2h-4v8h3c1.66,0 3,-1.34 3,-3v-7c0,-4.97 -4.03,-9 -9,-9z']],
+    ['Family', ['musictime', 'Music time', 'M15,1H9v2h6V1zM11,14h2V8h-2v6zM19.03,7.39l1.42,-1.42c-0.43,-0.51 -0.9,-0.99 -1.41,-1.41l-1.42,1.42C16.07,4.74 14.12,4 12,4c-4.97,0 -9,4.03 -9,9s4.02,9 9,9 9,-4.03 9,-9c0,-2.12 -0.74,-4.07 -1.97,-5.61zM12,20c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7z'],
+     ['messages', 'Messages', 'M12,14c1.66,0 2.99,-1.34 2.99,-3L15,5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17.3,11c0,3 -2.54,5.1 -5.3,5.1S6.7,14 6.7,11H5c0,3.41 2.72,6.23 6,6.72V21h2v-3.28c3.28,-0.48 6,-3.3 6,-6.72h-1.7z']],
+    ['Night', ['bedtime', 'Bedtime', 'M12.34,2.02C6.59,1.82 2,6.42 2,12c0,5.52 4.48,10 10,10c3.71,0 6.93,-2.02 8.66,-5.02C13.15,16.73 8.55,8.55 12.34,2.02z'],
+     ['nightlight', 'Night light', 'M9,21c0,0.55 0.45,1 1,1h4c0.55,0 1,-0.45 1,-1v-1H9v1zM12,2C8.14,2 5,5.14 5,9c0,2.38 1.19,4.47 3,5.74V17c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1v-2.26c1.81,-1.27 3,-3.36 3,-5.74 0,-3.86 -3.14,-7 -7,-7z'],
      ['screen', 'Screen', 'M17,1.01L7,1C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3C19,1.9 18.1,1.01 17,1.01zM17,19H7V5h10V19z']],
-    [['safety', 'Safety', 'M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5L12,1z'],
+    ['Player and safety', ['safety', 'Safety', 'M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5L12,1z'],
      ['remote', 'Remote control', 'M1,9l2,2c4.97,-4.97 13.03,-4.97 18,0l2,-2C16.93,2.93 7.08,2.93 1,9zM9,17l3,3 3,-3c-1.65,-1.66 -4.34,-1.66 -6,0zM5,13l2,2c2.76,-2.76 7.24,-2.76 10,0l2,-2C15.14,9.14 8.87,9.14 5,13z'],
      ['about', 'About', 'M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z']],
   ];
   // The menu and each page's back arrow never change, so they're only built once.
   function buildMenu() {
     const m = $('#setMenu');
-    MENU.forEach(items => {
+    MENU.forEach(([head, ...items]) => {
+      if (head) m.appendChild(el('div', 'menu-head', head));
       const g = el('div', 'menu-group');
       items.forEach(([id, title, path]) => {
         const b = el('button', 'menu-row'); b.type = 'button';
@@ -1670,9 +1704,37 @@
       h.appendChild(b); h.appendChild(el('h2', '', p.dataset.title)); p.prepend(h);
     });
     $('#goLib').onclick = () => document.querySelector('nav button[data-tab=lib]').click();
+    $('#goMsg').onclick = () => $('#qaMsg').click();
+    document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => showSetPage(b.dataset.go));
+    $('#setQuery').oninput = () => setSearch($('#setQuery').value);
     $('#goCards').onclick = () => document.querySelector('nav button[data-tab=cards]').click();
   }
+  // Search: every page at once, showing only the rows that match (they work right there).
+  function setSearch(q) {
+    q = q.trim().toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
+    const hit = (t) => words.every(w => t.toLowerCase().includes(w));
+    $('#tab-set').classList.toggle('searching', !!q);
+    $('#setMenu').hidden = !!q;
+    let any = 0;
+    document.querySelectorAll('.setpage').forEach(p => {
+      if (!q) { p.hidden = true; p.querySelectorAll('.card, .set, .card > button, .card > .hint, .card > .row').forEach(e => e.hidden = false); return; }
+      const whole = hit(p.dataset.title + ' ' + (p.dataset.words || ''));
+      let shown = 0;
+      p.querySelectorAll('.card').forEach(c => {
+        let n = 0;
+        c.querySelectorAll(':scope > .set, :scope > button.wide').forEach(r => { const ok = whole || hit(r.textContent); r.hidden = !ok; if (ok) n++; });
+        c.querySelectorAll(':scope > .hint, :scope > .row').forEach(r => r.hidden = !(whole || n > 0));
+        c.hidden = !n; shown += n;
+      });
+      p.hidden = !shown; any += shown;
+    });
+    $('#setNoHits').hidden = !q || !!any;
+    if (!q) showLimit(); // its buttons only show when there's a limit
+    $('#setNoHits').textContent = 'Nothing called “' + q + '”. Try a word like volume, PIN, night or limit.';
+  }
   function showSetPage(id) {
+    if ($('#setQuery').value) { $('#setQuery').value = ''; setSearch(''); }
     $('#setMenu').hidden = id !== 'menu';
     document.querySelectorAll('.setpage').forEach(p => p.hidden = p.dataset.page !== id);
     window.scrollTo(0, 0);
@@ -1762,6 +1824,10 @@
       library: folderCount == null ? '' : folderCount + (folderCount === 1 ? ' folder' : ' folders'),
       cards: !s.cards ? 'Off' : 'On' + (cardCount == null ? '' : '  ·  ' + cardCount + ' linked'),
       sound: 'Maximum volume ' + s.max_volume + '%',
+      headphones: s.headphones_button === false ? 'Button hidden' : 'Button on the player',
+      musictime: +s.daily_limit > 0 ? pick([[30, '30 minutes'], [60, '1 hour'], [90, '90 minutes'], [120, '2 hours'], [180, '3 hours']], +s.daily_limit) + ' a day' : 'No daily limit',
+      messages: 'Voice or typed, to the player',
+      nightlight: !s.night_light ? 'Off' : s.ok_to_wake ? 'On  ·  green at ' + clock(s.quiet_end) : 'On',
       bedtime: clock(s.quiet_start) + ' to ' + clock(s.quiet_end),
       screen: on === 1 ? 'Always on' : (on === 2 ? 'On while playing, then off after ' : 'Off after ') + after,
       safety: !s.gate ? 'Grown-up check off' : s.gate_pin_set ? 'Grown-up PIN on' : 'Grown-up sum on',
@@ -1807,8 +1873,7 @@
     sl.appendChild(choice('dim_after', 'Dim the screen after', DIM));
     sl.appendChild(choice('screen_on', 'Keep the screen on', KEEP));
     sl.appendChild(choice('screen_timeout', 'Screen turns off after', TIMEOUT));
-    $('#setNight').insertBefore(choice('wake_glow_mins', 'Stays green for', [[30, '30 minutes'], [60, '1 hour'], [90, '90 minutes'], [120, '2 hours']]),
-      $('#s_night_clock').closest('.set'));
+    $('#setWake').appendChild(choice('wake_glow_mins', 'Stays green for', [[30, '30 minutes'], [60, '1 hour'], [90, '90 minutes'], [120, '2 hours']]));
     // Daily listening limit; sleep sounds never count.
     const lim = $('#setLimit');
     lim.appendChild(choice('daily_limit', 'Daily listening limit', [[0, 'No limit'], [30, '30 minutes'], [60, '1 hour'], [90, '90 minutes'], [120, '2 hours'], [180, '3 hours']]));

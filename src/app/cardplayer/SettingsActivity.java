@@ -110,44 +110,197 @@ public class SettingsActivity extends Activity {
         list.removeAllViews();
         group = null;
         syncBack();
-        switch (page) {
+        buildPage(page);
+    }
+
+    void buildPage(String p) {
+        switch (p) {
+            case "child": buildChild(); break;
             case "library": buildLibrary(); break;
             case "cards": buildCards(); break;
             case "sound": buildSound(); break;
+            case "headphones": buildHeadphones(); break;
+            case "musictime": buildMusicTime(); break;
+            case "messages": buildMessages(); break;
             case "bedtime": buildBedtime(); break;
+            case "nightlight": buildNightLight(); break;
             case "screen": buildScreen(); break;
             case "safety": buildSafety(); break;
+            case "phone": buildPhone(); break;
             case "remote": buildRemote(); break;
             case "about": buildAbout(); break;
             default: buildMenu();
         }
     }
 
+    // ------------------------------------------------------------------ search
+
+    /** Every page, in menu order, with everyday words that should find it ("volume", "pin", "green"…). */
+    static final String[][] PAGES = {
+            {"child", "Your child", "kid name son daughter"},
+            {"library", "Library", "folders albums covers art pictures shuffle"},
+            {"cards", "Cards", "nfc tag tap link"},
+            {"sound", "Sound", "volume loud quiet fade speak announce"},
+            {"headphones", "Headphones", "bluetooth earphones earbuds pair speaker"},
+            {"musictime", "Music time", "limit daily hours minutes screen time allowance"},
+            {"messages", "Messages", "voice record mum dad mom story microphone"},
+            {"bedtime", "Bedtime", "night sleep quiet times evening"},
+            {"nightlight", "Night light", "glow orange green ok to wake morning lamp"},
+            {"screen", "Screen", "display brightness dim sleep timeout"},
+            {"safety", "Safety", "pin password lock kiosk sum check"},
+            {"phone", "Phone", "restart reboot android settings wifi home launcher"},
+            {"remote", "Remote control", "wifi pin address app"},
+            {"about", "About", "version update free space storage"},
+    };
+
+    String query = "";
+    String searching;          // lower-case query while building search results, else null
+    boolean pageHit, rowShown = true;
+    String searchTitle, pendingHeading;
+    LinearLayout pendingGroup, searchWrap;
+    android.widget.EditText searchBox;
+    int found;
+
+    boolean matches(String text) {
+        String t = text.toLowerCase(Locale.ROOT);
+        for (String w : searching.split("\\s+")) if (!w.isEmpty() && !t.contains(w)) return false;
+        return true;
+    }
+
+    void searchBar() {
+        if (searchWrap == null) {
+            searchWrap = new LinearLayout(this);
+            searchWrap.setGravity(Gravity.CENTER_VERTICAL);
+            searchWrap.setPadding(dp(12), 0, dp(8), 0);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(PANEL);
+            bg.setCornerRadius(dp(14));
+            searchWrap.setBackground(bg);
+            searchWrap.addView(icon(R.drawable.ic_search, MUTED, 22));
+            searchBox = new android.widget.EditText(this);
+            searchBox.setHint("Search settings");
+            searchBox.setSingleLine(true);
+            searchBox.setBackground(null);
+            searchBox.setTextColor(0xFFFFFFFF);
+            searchBox.setHintTextColor(MUTED);
+            searchBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+            searchBox.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+            searchWrap.addView(searchBox, new LinearLayout.LayoutParams(0, dp(48), 1f));
+            TextView clear = Ui.text(this, "✕", 18, MUTED, false);
+            clear.setPadding(dp(10), dp(8), dp(8), dp(8));
+            clear.setOnClickListener(v -> searchBox.setText(""));
+            searchWrap.addView(clear);
+            searchBox.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+                @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+                @Override public void afterTextChanged(android.text.Editable s) {
+                    query = s.toString().trim();
+                    clear.setVisibility(query.isEmpty() ? View.INVISIBLE : View.VISIBLE);
+                    if (!MENU.equals(page)) return;
+                    int at = list.indexOfChild(searchWrap);
+                    if (at >= 0) list.removeViews(at + 1, list.getChildCount() - at - 1);
+                    group = null;
+                    menuBody();
+                }
+            });
+            clear.setVisibility(View.INVISIBLE);
+        }
+        if (searchWrap.getParent() != null) ((android.view.ViewGroup) searchWrap.getParent()).removeView(searchWrap);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(4);
+        list.addView(searchWrap, lp);
+    }
+
+    /** Matching rows from every page, live (switches and choices work right here), under "Page › Section". */
+    void buildResults() {
+        searching = query.toLowerCase(Locale.ROOT);
+        found = 0;
+        try {
+            for (String[] pg : PAGES) {
+                pageHit = matches(pg[1] + " " + pg[2]);
+                searchTitle = pg[1];
+                pendingGroup = null;
+                buildPage(pg[0]);
+            }
+        } finally {
+            searching = null;
+            pendingGroup = null;
+            rowShown = true;
+        }
+        if (found == 0) {
+            TextView none = Ui.text(this, "Nothing called “" + query + "”. Try a word like volume, PIN, night or limit.", 16, MUTED, false);
+            none.setPadding(dp(8), dp(24), dp(8), 0);
+            list.addView(none);
+        }
+    }
+
+    /** Search mode: a panel only appears once one of its rows matches. */
+    void flushPending() {
+        if (pendingGroup == null) return;
+        TextView t = Ui.text(this, searchTitle + (pendingHeading != null ? "  ›  " + pendingHeading : ""), 14, ACCENT, true);
+        t.setPadding(dp(6), dp(16), dp(6), dp(8));
+        list.addView(t);
+        list.addView(pendingGroup, new LinearLayout.LayoutParams(-1, -2));
+        pendingGroup = null;
+        found++;
+    }
+
     // ------------------------------------------------------------------ the menu
 
     void buildMenu() {
         header("Grown-up settings", false);
+        searchBar();
+        menuBody();
+    }
+
+    void menuBody() {
+        if (!query.isEmpty()) { buildResults(); return; }
         String kid = prefs.getString("kid_name", "").trim();
         int folders = Store.folders().size();
         int linked = Store.loadCards().size();
+        int limit = prefs.getInt("daily_limit", 0);
+        int msgs = messageCount();
 
         panel(null);
         menuItem(R.drawable.ic_person, "Your child", kid.isEmpty() ? "Not set" : kid, v -> editName());
-        panel(null);
+        panel("Listening");
         menuPage(R.drawable.ic_grid, "Library", folders + (folders == 1 ? " folder" : " folders"), "library");
         menuPage(R.drawable.ic_card, "Cards",
                 prefs.getBoolean("cards", true) ? "On  ·  " + linked + " linked" : "Off", "cards");
-        panel(null);
         menuPage(R.drawable.ic_vol_up, "Sound", "Maximum volume " + prefs.getInt("max_volume", 70) + "%", "sound");
+        menuPage(R.drawable.ic_headphones, "Headphones", !Headphones.hasBluetooth(this) ? "No Bluetooth on this phone"
+                : prefs.getBoolean("headphones_button", true) ? "Button on the player" : "Button hidden", "headphones");
+        panel("Family");
+        menuPage(R.drawable.ic_timer, "Music time", limit <= 0 ? "No daily limit" : limitLabel(limit) + " a day", "musictime");
+        menuPage(R.drawable.ic_mic, "Messages", msgs == 0 ? "Record one for them" : msgs + (msgs == 1 ? " message" : " messages"), "messages");
+        panel("Night");
         menuPage(R.drawable.ic_moon, "Bedtime",
                 formatTime(prefs.getInt("quiet_start", 19 * 60)) + " to " + formatTime(prefs.getInt("quiet_end", 7 * 60)),
                 "bedtime");
+        menuPage(R.drawable.ic_bulb, "Night light", !prefs.getBoolean("night_light", false) ? "Off"
+                : prefs.getBoolean("ok_to_wake", true) ? "On  ·  green at " + formatTime(prefs.getInt("quiet_end", 7 * 60)) : "On", "nightlight");
         menuPage(R.drawable.ic_phone, "Screen", screenSummary(), "screen");
-        panel(null);
+        panel("Phone and safety");
         menuPage(R.drawable.ic_shield, "Safety", !prefs.getBoolean("gate", true) ? "Grown-up check off"
                 : Store.gatePin(prefs).isEmpty() ? "Grown-up sum on" : "Grown-up PIN on", "safety");
+        menuPage(R.drawable.ic_power, "Phone", "Restart, Android settings", "phone");
         menuPage(R.drawable.ic_wifi, "Remote control", prefs.getBoolean("remote", true) ? "On" : "Off", "remote");
         menuPage(R.drawable.ic_info, "About", "WalkieTales " + version(), "about");
+    }
+
+    static final int[] LIMIT_VALUES = {0, 30, 60, 90, 120, 180};
+    static final String[] LIMIT_LABELS = {"No limit", "30 minutes", "1 hour", "90 minutes", "2 hours", "3 hours"};
+
+    String limitLabel(int m) {
+        for (int i = 0; i < LIMIT_VALUES.length; i++) if (LIMIT_VALUES[i] == m) return LIMIT_LABELS[i];
+        return m + " minutes";
+    }
+
+    int messageCount() {
+        File[] fs = new File(Store.root(), VOICE_FOLDER).listFiles();
+        int n = 0;
+        if (fs != null) for (File f : fs) if (Store.isAudio(f)) n++;
+        return n;
     }
 
     String screenSummary() {
@@ -169,9 +322,13 @@ public class SettingsActivity extends Activity {
         link("Shuffle everything", null, v -> playNow(Store.ALL));
         panel("Covers");
         toggle("Find missing covers online", null, "find_art", true);
-        panel("On the player");
-        toggle("Library button", null, "browse", true);
-        toggle("Tracks button", null, "track_list", true);
+    }
+
+    void buildChild() {
+        header("Your child", true);
+        panel(null);
+        String kid = prefs.getString("kid_name", "").trim();
+        valueRow("Child's name", kid.isEmpty() ? "Not set" : kid, v -> editName());
     }
 
     void buildCards() {
@@ -193,13 +350,30 @@ public class SettingsActivity extends Activity {
         panel(null);
         seek("Maximum volume", "max_volume", 10, 100, 70);
         panel(null);
-        toggle("Volume buttons on screen", null, "show_volume", true);
-        toggle("Fade in", null, "fade_in", true);
-        toggle("Say the name out loud", null, "announce", false);
-        panel("Music time");
-        choice("Daily listening limit", "daily_limit", new int[]{0, 30, 60, 90, 120, 180},
-                new String[]{"No limit", "30 minutes", "1 hour", "90 minutes", "2 hours", "3 hours"}, 0);
+        toggle("Fade in", "Starts quietly and gets louder", "fade_in", true);
+        toggle("Say the name out loud", "When a card or folder starts", "announce", false);
+        panel(null);
+        row("Bedtime volume", "In Bedtime", v -> open("bedtime"));
+    }
+
+    void buildHeadphones() {
+        header("Headphones", true);
+        panel(null);
+        if (!Headphones.hasBluetooth(this)) {
+            row("No Bluetooth on this phone", null, null);
+            return;
+        }
+        toggle("Headphones button", "Switches Bluetooth headphones on and off from the player", "headphones_button", true);
+        link("Pair new headphones", "Opens Bluetooth settings", v -> openSystem(Settings.ACTION_BLUETOOTH_SETTINGS));
+    }
+
+    void buildMusicTime() {
+        header("Music time", true);
+        panel(null);
+        choice("Daily listening limit", "daily_limit", LIMIT_VALUES, LIMIT_LABELS, 0);
+        row("Sleep sounds never count", "When it's used up, the player says “Music time is finished” until tomorrow", null);
         if (prefs.getInt("daily_limit", 0) > 0) {
+            panel("Today");
             String d = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(new java.util.Date());
             long used = d.equals(prefs.getString("listen_day", "")) ? prefs.getLong("listen_ms", 0) / 60_000 : 0;
             boolean off = d.equals(prefs.getString("limit_off_day", ""));
@@ -211,13 +385,16 @@ public class SettingsActivity extends Activity {
             });
             link("No limit today", null, v -> { prefs.edit().putString("limit_off_day", d).apply(); build(); });
         }
-        panel("From Mum & Dad");
+    }
+
+    void buildMessages() {
+        header("Messages", true);
+        panel(null);
         link("Record a message", "“Goodnight, love you!” or a bedtime story", v -> recordMessage());
-        if (Headphones.hasBluetooth(this)) {
-            panel("Headphones");
-            toggle("Headphones button", "Switches Bluetooth on and off from the player", "headphones_button", true);
-            link("Pair new headphones", "Opens Bluetooth settings", v -> openSystem(Settings.ACTION_BLUETOOTH_SETTINGS));
-        }
+        int n = messageCount();
+        if (n > 0) link("Play the messages", n + (n == 1 ? " message" : " messages") + " in “" + VOICE_FOLDER + "”", v -> playNow(VOICE_FOLDER));
+        panel(null);
+        row("From your phone", "On the remote, tap Message and hold the red button to record", null);
     }
 
     void buildBedtime() {
@@ -229,6 +406,21 @@ public class SettingsActivity extends Activity {
         toggle("Screen off at bedtime", "Goes black 30 seconds after the last touch", "bedtime_dark", false);
         toggle("Quieter at bedtime", null, "quiet", false);
         seek("Bedtime maximum volume", "quiet_volume", 10, 100, 40);
+        panel(null);
+        row("Night light", "Orange through the night, green at wake-up", v -> open("nightlight"));
+    }
+
+    void buildNightLight() {
+        header("Night light", true);
+        panel(null);
+        toggle("Night light", "A warm orange glow all through bedtime, instead of a black screen. Keep the player on its charger", "night_light", false);
+        toggle("Clock on the night light", null, "night_clock", true);
+        panel("OK to wake");
+        toggle("OK to wake", "The night light turns green when bedtime ends ("
+                + formatTime(prefs.getInt("quiet_end", 7 * 60)) + "), so they know they can get up", "ok_to_wake", true);
+        choice("Stays green for", "wake_glow_mins", new int[]{30, 60, 90, 120}, new String[]{"30 minutes", "1 hour", "90 minutes", "2 hours"}, 60);
+        panel(null);
+        row("Bedtime times", formatTime(prefs.getInt("quiet_start", 19 * 60)) + " to " + formatTime(prefs.getInt("quiet_end", 7 * 60)), v -> open("bedtime"));
     }
 
     static final int[] DIM_VALUES = {30, 90, 300, 0};
@@ -244,12 +436,11 @@ public class SettingsActivity extends Activity {
         choice("Dim the screen after", "dim_after", DIM_VALUES, DIM_LABELS, 90);
         choice("Keep the screen on", "screen_on", KEEP_VALUES, KEEP_LABELS, 0);
         choice("Screen turns off after", "screen_timeout", TIMEOUT_VALUES, TIMEOUT_LABELS, 60);
-        panel("Night light and clock");
-        toggle("Night light", "A warm glow all through bedtime, instead of a black screen. Keep the player on its charger", "night_light", false);
-        toggle("Clock on the night light", null, "night_clock", true);
-        toggle("OK to wake", "The night light turns green when bedtime ends", "ok_to_wake", true);
-        choice("Green for", "wake_glow_mins", new int[]{30, 60, 90, 120}, new String[]{"30 minutes", "1 hour", "90 minutes", "2 hours"}, 60);
+        panel("On the player");
         toggle("Clock and battery", null, "show_status", true);
+        toggle("Volume buttons on screen", null, "show_volume", true);
+        toggle("Library button", null, "browse", true);
+        toggle("Tracks button", null, "track_list", true);
     }
 
     void buildSafety() {
@@ -259,7 +450,11 @@ public class SettingsActivity extends Activity {
         valueRow("Grown-up PIN", Store.gatePin(prefs).isEmpty() ? "Not set" : "Set", v -> editGatePin());
         lockToggle();
         if (Kiosk.isOwner(this)) toggle("Power button can switch it off", null, "power_menu", true);
-        panel("Phone");
+    }
+
+    void buildPhone() {
+        header("Phone", true);
+        panel(null);
         if (Kiosk.isOwner(this)) {
             link("Restart the phone", null,
                     v -> confirm("Restart the phone?", "It takes about a minute.", () -> {
@@ -522,6 +717,7 @@ public class SettingsActivity extends Activity {
     // ------------------------------------------------------------------ building blocks
 
     void header(String title, boolean back) {
+        if (searching != null) return;
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
         head.setPadding(0, dp(16), 0, dp(8));
@@ -545,18 +741,18 @@ public class SettingsActivity extends Activity {
 
     /** Start a new rounded group of rows, with an optional small heading. */
     void panel(String heading) {
+        if (searching != null) {
+            group = newGroup();
+            pendingGroup = group;
+            pendingHeading = heading;
+            return;
+        }
         if (heading != null) {
             TextView t = Ui.text(this, heading, 14, ACCENT, true);
             t.setPadding(dp(6), dp(16), dp(6), dp(8));
             list.addView(t);
         }
-        group = new LinearLayout(this);
-        group.setOrientation(LinearLayout.VERTICAL);
-        group.setClipToOutline(true);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(PANEL);
-        bg.setCornerRadius(dp(18));
-        group.setBackground(bg);
+        group = newGroup();
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = heading != null ? 0 : dp(12);
         list.addView(group, lp);
@@ -712,7 +908,28 @@ public class SettingsActivity extends Activity {
         if (rec != null) finishRecording(); // the screen went off mid-story: keep what was said
     }
 
+    LinearLayout newGroup() {
+        LinearLayout g = new LinearLayout(this);
+        g.setOrientation(LinearLayout.VERTICAL);
+        g.setClipToOutline(true);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(PANEL);
+        bg.setCornerRadius(dp(18));
+        g.setBackground(bg);
+        return g;
+    }
+
     LinearLayout rowShell(String title, String sub) {
+        if (searching != null) {
+            rowShown = pageHit || matches(title + " " + (sub == null ? "" : sub));
+            if (!rowShown) { // built but never shown, so the page's code runs as usual
+                LinearLayout off = new LinearLayout(this);
+                off.addView(new LinearLayout(this));
+                ((LinearLayout) off.getChildAt(0)).addView(new TextView(this));
+                return off;
+            }
+            flushPending();
+        }
         if (group.getChildCount() > 0) {
             View line = new View(this);
             line.setBackgroundColor(LINE);
@@ -818,7 +1035,7 @@ public class SettingsActivity extends Activity {
             @Override public void onStopTrackingTouch(SeekBar s) { }
         });
         sb.setPadding(dp(20), 0, dp(20), dp(16));
-        group.addView(sb, new LinearLayout.LayoutParams(-1, -2));
+        if (rowShown) group.addView(sb, new LinearLayout.LayoutParams(-1, -2));
     }
 
     String choiceLabel(String key, int[] values, String[] labels, int def) {

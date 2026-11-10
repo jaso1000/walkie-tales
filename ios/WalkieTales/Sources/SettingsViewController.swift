@@ -3,7 +3,7 @@ import AVFoundation
 
 /// Grown-up settings (behind the cog and the quick sum). Like the Android player and the remote's Settings tab:
 /// a short menu of topics, each opening its own page, with the same order and wording.
-final class SettingsViewController: UITableViewController {
+final class SettingsViewController: UITableViewController, UISearchResultsUpdating {
     weak var owner: PlayerViewController?
     /// nil = the menu; otherwise the page shown ("library", "cards", "sound", …).
     var page: String?
@@ -29,6 +29,11 @@ final class SettingsViewController: UITableViewController {
         overrideUserInterfaceStyle = .dark
         navigationController?.overrideUserInterfaceStyle = .dark
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(done))
+        if page == nil { // search every setting from the menu
+            navigationItem.searchController = search
+            navigationItem.hidesSearchBarWhenScrolling = false
+            definesPresentationContext = true
+        }
         build()
     }
 
@@ -42,18 +47,148 @@ final class SettingsViewController: UITableViewController {
         navigationController?.dismiss(animated: true) { o?.applySettings(); o?.wake() }
     }
 
-    static let titles = ["library": "Library", "cards": "Cards", "sound": "Sound", "bedtime": "Bedtime", "screen": "Screen",
-                         "safety": "Safety", "remote": "Remote control", "about": "About"]
+    /// Every page in menu order, with everyday words that should find it in search (same as Android and the remote).
+    static let pages: [(id: String, title: String, words: String)] = [
+        ("child", "Your child", "kid name son daughter"),
+        ("library", "Library", "folders albums covers art pictures shuffle"),
+        ("cards", "Cards", "nfc tag tap link"),
+        ("sound", "Sound", "volume loud quiet fade"),
+        ("headphones", "Headphones", "bluetooth earphones earbuds pair speaker"),
+        ("musictime", "Music time", "limit daily hours minutes screen time allowance"),
+        ("messages", "Messages", "voice record mum dad mom story microphone"),
+        ("bedtime", "Bedtime", "night sleep quiet times evening"),
+        ("nightlight", "Night light", "glow orange green ok to wake morning lamp"),
+        ("screen", "Screen", "display brightness dim sleep timeout"),
+        ("safety", "Safety", "pin password lock guided access sum check"),
+        ("phone", "Phone", "iphone settings wifi auto-lock"),
+        ("remote", "Remote control", "wifi pin address app"),
+        ("about", "About", "version update free space storage"),
+    ]
+    static var titles: [String: String] { Dictionary(uniqueKeysWithValues: pages.map { ($0.id, $0.title) }) }
+
+    private var query = ""
+    private lazy var search: UISearchController = {
+        let s = UISearchController(searchResultsController: nil)
+        s.searchResultsUpdater = self
+        s.obscuresBackgroundDuringPresentation = false
+        s.hidesNavigationBarDuringPresentation = false
+        s.searchBar.placeholder = "Search settings"
+        return s
+    }()
+
+    func updateSearchResults(for s: UISearchController) {
+        let q = (s.searchBar.text ?? "").trimmingCharacters(in: .whitespaces)
+        if q == query { return }
+        query = q
+        reload()
+    }
 
     private func build() {
-        switch page {
-        case "library": buildLibrary()
+        if page == nil && !query.isEmpty { buildResults(); return }
+        sections = page.map { pageSections($0) } ?? menuSections()
+    }
+
+    /// Matching rows from every page (they work right here), under "Page › Section".
+    private func buildResults() {
+        let words = query.lowercased().split(separator: " ").map(String.init)
+        func hit(_ text: String) -> Bool { let t = text.lowercased(); return words.allSatisfy { t.contains($0) } }
+        var out: [(String?, [Row])] = []
+        for p in Self.pages {
+            let whole = hit(p.title + " " + p.words)
+            for (head, rows) in pageSections(p.id) {
+                let keep = rows.filter { whole || hit(Self.text($0)) }
+                if !keep.isEmpty { out.append((p.title + (head.map { "  ›  " + $0 } ?? ""), keep)) }
+            }
+        }
+        if out.isEmpty { out = [(nil, [.info("Nothing called “\(query)”", "Try a word like volume, PIN, night or limit.")])] }
+        sections = out
+    }
+
+    private static func text(_ r: Row) -> String {
+        switch r {
+        case let .menu(_, t, s, _): return t + " " + s()
+        case let .toggle(t, s, _): return t + " " + (s ?? "")
+        case let .value(t, v, _): return t + " " + v()
+        case let .slider(t, _): return t
+        case let .info(t, s): return t + " " + (s ?? "")
+        }
+    }
+
+    private func menuSections() -> [(String?, [Row])] {
+        [
+            (nil, [.menu("person.fill", "Your child", { let n = Store.string("kid_name"); return n.isEmpty ? "Not set" : n }, "@name")]),
+            ("Listening", [
+                .menu("square.grid.3x3.fill", "Library", { let n = Store.folders().count; return "\(n) " + (n == 1 ? "folder" : "folders") }, "library"),
+                .menu("creditcard.fill", "Cards", { "Not on iPhone yet" }, "cards"),
+                .menu("speaker.wave.2.fill", "Sound", { "Maximum volume \(Store.int("max_volume"))%" }, "sound"),
+                .menu("headphones", "Headphones", { Store.bool("headphones_button") ? "Button on the player" : "Button hidden" }, "headphones"),
+            ]),
+            ("Family", [
+                .menu("timer", "Music time", { let m = Store.int("daily_limit"); return m <= 0 ? "No daily limit" : Self.limitLabel(m) + " a day" }, "musictime"),
+                .menu("mic.fill", "Messages", { let n = Self.messageCount(); return n == 0 ? "Record one for them" : "\(n) " + (n == 1 ? "message" : "messages") }, "messages"),
+            ]),
+            ("Night", [
+                .menu("moon.fill", "Bedtime", { Self.time(Store.int("quiet_start")) + " to " + Self.time(Store.int("quiet_end")) }, "bedtime"),
+                .menu("lightbulb.fill", "Night light", { !Store.bool("night_light") ? "Off" : Store.bool("ok_to_wake") ? "On  ·  green at " + Self.time(Store.int("quiet_end")) : "On" }, "nightlight"),
+                .menu("iphone", "Screen", { Self.screenSummary() }, "screen"),
+            ]),
+            ("Phone and safety", [
+                .menu("shield.fill", "Safety", { !Store.bool("gate") ? "Grown-up check off" : Store.gatePin().isEmpty ? "Grown-up sum on" : "Grown-up PIN on" }, "safety"),
+                .menu("power", "Phone", { "iPhone settings" }, "phone"),
+                .menu("wifi", "Remote control", { Store.bool("remote") ? "On" : "Off" }, "remote"),
+                .menu("info.circle.fill", "About", { "WalkieTales " + Self.version }, "about"),
+            ]),
+        ]
+    }
+
+    private static let limits = [(0, "No limit"), (30, "30 minutes"), (60, "1 hour"), (90, "90 minutes"), (120, "2 hours"), (180, "3 hours")]
+    static func limitLabel(_ m: Int) -> String { limits.first { $0.0 == m }?.1 ?? "\(m) minutes" }
+
+    static func messageCount() -> Int {
+        let fs = (try? FileManager.default.contentsOfDirectory(atPath: Store.dir(voiceFolder).path)) ?? []
+        return fs.filter { ["mp3", "m4a", "aac", "wav"].contains(($0 as NSString).pathExtension.lowercased()) }.count
+    }
+
+    private func pageSections(_ p: String) -> [(String?, [Row])] {
+        switch p {
+        case "child":
+            return [(nil, [.value("Child's name", { let n = Store.string("kid_name"); return n.isEmpty ? "Not set" : n }, { [weak self] in self?.editName() })])]
+        case "library": return librarySections()
         case "cards":
-            sections = [(nil, [.info("Cards aren't on the iPhone player yet",
-                                     "An iPhone only reads NFC cards inside a scan pop-up, so there's no tap-and-play like on Android. Use the Library instead.")])]
-        case "sound": buildSound()
+            return [(nil, [.info("Cards aren't on the iPhone player yet",
+                                 "An iPhone only reads NFC cards inside a scan pop-up, so there's no tap-and-play like on Android. Use the Library instead.")])]
+        case "sound":
+            return [
+                (nil, [.slider("Maximum volume", "max_volume")]),
+                (nil, [.toggle("Fade in", "Starts quietly and gets louder", "fade_in")]),
+                (nil, [.menu("moon.fill", "Bedtime volume", { "In Bedtime" }, "bedtime")]),
+            ]
+        case "headphones":
+            return [(nil, [
+                .toggle("Headphones button", "Picks headphones or the speaker from the player", "headphones_button"),
+                .value("Pair new headphones", { "iPhone Settings → Bluetooth" }, { Self.openSettings("Bluetooth") }),
+                .info("Pairing needs Guided Access off", "Triple-click the Home button to leave it, pair in Settings, then start Guided Access again."),
+            ])]
+        case "musictime":
+            var s: [(String?, [Row])] = [(nil, [
+                .value("Daily listening limit", { Self.limitLabel(Store.int("daily_limit")) }, { [weak self] in self?.pickLimit() }),
+                .info("Sleep sounds never count", "When it's used up, the player says “Music time is finished” until tomorrow"),
+            ])]
+            if Store.int("daily_limit") > 0 {
+                s.append(("Today", [
+                    .value("Today", { if let a = Limit.allowedToday { return "\(Int(Limit.listenedMs / 60_000)) of \(a) minutes" }; return "No limit today" }, {}),
+                    .value("+30 minutes today", { "" }, { [weak self] in Limit.add(30); self?.reload() }),
+                    .value("No limit today", { "" }, { [weak self] in Limit.offToday(); self?.reload() }),
+                ]))
+            }
+            return s
+        case "messages":
+            var rows: [Row] = [.value("Record a message", { "Goodnight or a story" }, { [weak self] in self?.recordMessage() })]
+            let n = Self.messageCount()
+            if n > 0 { rows.append(.value("Play the messages", { "\(n) in “\(Self.voiceFolder)”" }, { [weak self] in self?.playNow(Self.voiceFolder) })) }
+            return [(nil, rows), (nil, [.info("From your phone", "On the remote, tap Message and hold the red button to record")])]
         case "bedtime":
-            sections = [
+            return [
                 ("Times", [
                     .value("Bedtime starts", { Self.time(Store.int("quiet_start")) }, { [weak self] in self?.pickTime("quiet_start") }),
                     .value("Bedtime ends", { Self.time(Store.int("quiet_end")) }, { [weak self] in self?.pickTime("quiet_end") }),
@@ -63,9 +198,23 @@ final class SettingsViewController: UITableViewController {
                     .toggle("Quieter at bedtime", nil, "quiet"),
                     .slider("Bedtime maximum volume", "quiet_volume"),
                 ]),
+                (nil, [.menu("lightbulb.fill", "Night light", { "Orange through the night, green at wake-up" }, "nightlight")]),
+            ]
+        case "nightlight":
+            return [
+                (nil, [
+                    .toggle("Night light", "A warm orange glow all through bedtime, instead of a black screen. Keep it on the charger", "night_light"),
+                    .toggle("Clock on the night light", nil, "night_clock"),
+                ]),
+                ("OK to wake", [
+                    .toggle("OK to wake", "The night light turns green when bedtime ends (\(Self.time(Store.int("quiet_end")))), so they know they can get up", "ok_to_wake"),
+                    .value("Stays green for", { Self.cycleLabel("wake_glow_mins", [30, 60, 90, 120], ["30 minutes", "1 hour", "90 minutes", "2 hours"]) },
+                           { [weak self] in self?.cycle("wake_glow_mins", [30, 60, 90, 120]) }),
+                ]),
+                (nil, [.menu("moon.fill", "Bedtime times", { Self.time(Store.int("quiet_start")) + " to " + Self.time(Store.int("quiet_end")) }, "bedtime")]),
             ]
         case "screen":
-            sections = [
+            return [
                 ("Sleeping", [
                     .value("Dim the screen after", { Self.cycleLabel("dim_after", [30, 90, 300, 0], ["30 seconds", "90 seconds", "5 minutes", "Never"]) },
                            { [weak self] in self?.cycle("dim_after", [30, 90, 300, 0]) }),
@@ -73,24 +222,26 @@ final class SettingsViewController: UITableViewController {
                            { [weak self] in self?.cycle("screen_on", [0, 2, 1]) }),
                     .info("Screen turns off after", "Set Auto-Lock in iPhone Settings → Display & Brightness"),
                 ]),
-                ("Night light and clock", [
-                    .toggle("Night light", "A warm glow all through bedtime, instead of a black screen. Keep it on the charger", "night_light"),
-                    .toggle("OK to wake", "The night light turns green when bedtime ends", "ok_to_wake"),
-                    .toggle("Clock on the night light", nil, "night_clock"),
+                ("On the player", [
                     .toggle("Clock and battery", nil, "show_status"),
+                    .toggle("Volume buttons on screen", nil, "show_volume"),
+                    .toggle("Library button", nil, "browse"),
+                    .toggle("Tracks button", nil, "track_list"),
                 ]),
             ]
         case "safety":
-            sections = [
-                (nil, [
-                    .toggle("Grown-up check before settings", Store.gatePin().isEmpty ? "A quick sum" : "The grown-up PIN", "gate"),
-                    .value("Grown-up PIN", { Store.gatePin().isEmpty ? "Not set" : "Set" }, { [weak self] in self?.editGatePin() }),
-                    .info("Lock to this app", UIAccessibility.isGuidedAccessEnabled ? "On (Guided Access)" : "Triple-click the Home button to start Guided Access"),
-                ]),
-                ("Phone", [.value("iPhone settings", { "Wi-Fi, Bluetooth, brightness" }, { Self.openSettings(nil) })]),
-            ]
+            return [(nil, [
+                .toggle("Grown-up check before settings", Store.gatePin().isEmpty ? "A quick sum" : "The grown-up PIN", "gate"),
+                .value("Grown-up PIN", { Store.gatePin().isEmpty ? "Not set" : "Set" }, { [weak self] in self?.editGatePin() }),
+                .info("Lock to this app", UIAccessibility.isGuidedAccessEnabled ? "On (Guided Access)" : "Triple-click the Home button to start Guided Access"),
+            ])]
+        case "phone":
+            return [(nil, [
+                .value("iPhone settings", { "Wi-Fi, Bluetooth, brightness" }, { Self.openSettings(nil) }),
+                .info("Auto-Lock", "iPhone Settings → Display & Brightness"),
+            ])]
         case "remote":
-            sections = [
+            return [
                 (nil, [.toggle("Remote control", nil, "remote")]),
                 ("Connect", [
                     .info("Address", RemoteServer.address ?? "Not on Wi-Fi"),
@@ -101,64 +252,22 @@ final class SettingsViewController: UITableViewController {
                 ]),
             ]
         case "about":
-            sections = [
+            return [
                 (nil, [.info("WalkieTales " + Self.version + " for iPhone", Self.freeSpace())]),
                 ("Updates", [.info("New versions", "Install them with TrollStore. Android players update from the remote.")]),
             ]
-        default: buildMenu()
+        default: return menuSections()
         }
     }
 
-    private func buildMenu() {
-        sections = [
-            (nil, [.menu("person.fill", "Your child", { let n = Store.string("kid_name"); return n.isEmpty ? "Not set" : n }, "@name")]),
-            (nil, [
-                .menu("square.grid.3x3.fill", "Library", { let n = Store.folders().count; return "\(n) " + (n == 1 ? "folder" : "folders") }, "library"),
-                .menu("creditcard.fill", "Cards", { "Not on iPhone yet" }, "cards"),
-            ]),
-            (nil, [
-                .menu("speaker.wave.2.fill", "Sound", { "Maximum volume \(Store.int("max_volume"))%" }, "sound"),
-                .menu("moon.fill", "Bedtime", { Self.time(Store.int("quiet_start")) + " to " + Self.time(Store.int("quiet_end")) }, "bedtime"),
-                .menu("iphone", "Screen", { Self.screenSummary() }, "screen"),
-            ]),
-            (nil, [
-                .menu("shield.fill", "Safety", { !Store.bool("gate") ? "Grown-up check off" : Store.gatePin().isEmpty ? "Grown-up sum on" : "Grown-up PIN on" }, "safety"),
-                .menu("wifi", "Remote control", { Store.bool("remote") ? "On" : "Off" }, "remote"),
-                .menu("info.circle.fill", "About", { "WalkieTales " + Self.version }, "about"),
-            ]),
-        ]
-    }
-
-    private func buildLibrary() {
+    private func librarySections() -> [(String?, [Row])] {
         let folders = Store.folders()
         var lib: [Row] = folders.map { f in .value(f, { Self.folderSummary(f) }, { [weak self] in self?.folderOptions(f) }) }
         if folders.isEmpty { lib.append(.info("No folders yet", "Add music from the remote, or with the Files app (On My iPhone → WalkieTales → Cards)")) }
         lib.append(.value("Shuffle everything", { "" }, { [weak self] in self?.playNow(Store.ALL) }))
-        sections = [
+        return [
             ("Folders", lib),
             ("Covers", [.toggle("Find missing covers online", nil, "find_art")]),
-            ("On the player", [.toggle("Library button", nil, "browse"), .toggle("Tracks button", nil, "track_list")]),
-        ]
-    }
-
-    private func buildSound() {
-        sections = [
-            (nil, [.slider("Maximum volume", "max_volume")]),
-            (nil, [.toggle("Volume buttons on screen", nil, "show_volume"), .toggle("Fade in", nil, "fade_in")]),
-            ("Music time", [
-                .value("Daily listening limit", { let m = Store.int("daily_limit"); return m <= 0 ? "No limit" : "\(m) minutes" }, { [weak self] in self?.pickLimit() }),
-                .value("Today", { if let a = Limit.allowedToday { return "\(Int(Limit.listenedMs / 60_000)) of \(a) minutes" }; return Store.int("daily_limit") > 0 ? "No limit today" : "—" }, {}),
-                .value("+30 minutes today", { "Sleep sounds never count" }, { [weak self] in Limit.add(30); self?.reload() }),
-                .value("No limit today", { "" }, { [weak self] in Limit.offToday(); self?.reload() }),
-            ]),
-            ("From Mum & Dad", [
-                .value("Record a message", { "Goodnight or a story" }, { [weak self] in self?.recordMessage() }),
-            ]),
-            ("Headphones", [
-                .toggle("Headphones button", "Picks headphones or the speaker from the player", "headphones_button"),
-                .value("Pair new headphones", { "iPhone Settings → Bluetooth" }, { Self.openSettings("Bluetooth") }),
-                .info("Pairing needs Guided Access off", "Triple-click the Home button to leave it, pair in Settings, then start Guided Access again."),
-            ]),
         ]
     }
 
