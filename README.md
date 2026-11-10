@@ -85,7 +85,7 @@ The player runs a small PIN-protected web server on port 8080. Open the address 
 - all settings
 - messages to the screen
 
-[`companion/`](companion/) packages the same page as a Docker container for a home server, with extras: it handles **several players** (switch by tapping the name at the top, or let it find them on the Wi-Fi), and it can be added to a phone's home screen as an app with its own icon. See [companion/README.md](companion/README.md).
+[`companion/`](companion/) packages the same page as a Docker container for a home server, with extras: it handles **several players** (switch by tapping the name at the top, or let it find them on the Wi-Fi), and it can be added to a phone's home screen as an app with its own icon. A ready-made image is published as `ghcr.io/jaso1000/walkie-tales-remote` (amd64 and Raspberry Pi), so `docker compose up -d` with [its compose file](companion/docker-compose.yml) is all it takes. See [companion/README.md](companion/README.md).
 
 ## Download
 

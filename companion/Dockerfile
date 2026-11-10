@@ -1,4 +1,8 @@
 FROM node:22-alpine
+# Published as ghcr.io/jaso1000/walkie-tales-remote by .github/workflows/docker-publish.yml
+LABEL org.opencontainers.image.title="WalkieTales remote" \
+      org.opencontainers.image.description="Web remote for WalkieTales kids' music players: several players, uploads, voice messages, settings" \
+      org.opencontainers.image.source="https://github.com/jaso1000/walkie-tales"
 WORKDIR /app
 COPY server.js ./
 COPY web ./web
