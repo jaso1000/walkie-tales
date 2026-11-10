@@ -1,175 +1,102 @@
-# WalkieTales
+<p align="center"><img src="docs/images/banner.jpg" alt="WalkieTales playing Bluey, Emma Memma, Tummy Tom and Hairy Maclary" width="100%"></p>
 
-*Tap a card, hear a story.* A homemade, card-based audio player for the Walker kids.
+<p align="center">
+  <b>Turn an old phone into a music and story player your kids can use on their own.</b><br>
+  No ads, no accounts, no internet needed. Just their songs and stories, big and bright.
+</p>
 
-WalkieTales turns an old Android phone into a kids' card-based audio player: tap an NFC card on the back of the phone and it plays a folder of music or stories. Built for a Nexus 5 running LineageOS 23.2 (Android 16), and works on any NFC Android phone with Android 8 or newer.
+<p align="center">
+  <a href="https://github.com/jaso1000/walkie-tales/releases/latest"><b>Download for Android</b></a> ·
+  <a href="#iphone">iPhone</a> ·
+  <a href="#the-remote">The remote</a> ·
+  <a href="docs/SETUP.md">Full setup guide</a>
+</p>
 
-The app is native Android in plain Java, using only the framework (no AndroidX, Gradle or Flutter). It's about 100 KB and runs fine on 32-bit phones.
+---
 
-## Features
+## Why WalkieTales
 
-**For kids**
-- Tap a card to play its folder. Tap again to pause. Each folder carries on where it stopped.
-- Optional *Toniebox mode*: plays while the card rests on the phone and pauses when it's lifted.
-- Big play/pause/skip buttons and a scrub bar to drag through a track. Swipe the cover to skip, swipe up for the track list, hold ⏮ to start over.
-- Two big buttons along the bottom: **Library** (a grid of covers, works without cards) and **Tracks** (every track in the folder). Grown-ups can hide either.
-- Volume buttons with a dot meter, a sleep timer (moon button) and a friendly greeting ("Good morning, Sam!").
-- The look follows the cover art. There's an equalizer animation, crossfades, and a night-light glow with a bedside clock.
-- Bluetooth/headset play, pause and skip buttons work.
+That old phone in the drawer can be your child's very own player. WalkieTales takes over the whole screen, so there's
+no web browser, no app store and no way out. All that's left is the music and stories you put on it.
 
-**For grown-ups** (press and hold the ⚙ cog, then answer a quick sum)
-- Link cards to folders or to actions: Shuffle everything, Pause, Skip, Sleep timer, Volume up/down. Cards can be switched off for a browse-only player (handy on phones whose NFC doesn't work).
-- Per-folder shuffle, repeat and resume settings.
-- Maximum volume, fade-in, and spoken titles (text-to-speech).
-- **Bedtime:** a lower volume limit overnight, and an optional black screen 30 s after the last touch.
-- **Battery:** the screen sleeps after a set time (30 s to 5 min), even while playing or charging. Music carries on with the screen off.
-- **Safety:** kiosk lock (as device owner it blocks the notification shade, Home and Recents), the power-button menu can be blocked so it can't be switched off, and *Restart the phone* is in settings. "Android settings" steps out of the lock and it locks again when you return.
-- Radio stations are hidden from the Library while there's no internet.
-- A remote control over Wi-Fi (see below).
+- **Tap a picture to play.** Every album, audiobook and podcast is a big picture tile. Little ones don't need to read.
+- **Tap a card to play.** Stick NFC cards to pictures or toys, and tapping one on the phone plays its music (Android).
+- **Books remember where they were.** Audiobooks and podcasts carry on from the right chapter, and recently played
+  stories come first.
+- **A night light that tells the time.** It glows warm orange through bedtime and turns **green when it's OK to get up**.
+- **Sleep sounds built in.** Rain, ocean waves, white noise and a heartbeat, made on the phone and looping with no gaps.
+- **Messages from you.** Send "Dinner's ready!" to their screen, or record "Goodnight, love you!" and it plays on their player.
+- **Grown-ups stay in charge.** A maximum volume, a quieter bedtime, a daily listening limit, and settings locked
+  behind a quick sum or your own PIN.
 
-## Music
+<p align="center"><img src="docs/images/player.jpg" alt="Library, keep listening, tracks, night light, OK to wake and sleep sounds" width="100%"></p>
 
-Put music on the phone in `Music/Cards/`, one folder per card:
+<p align="center"><img src="docs/images/grownups.jpg" alt="Grown-up check, settings, search, music time, bedtime and messages" width="100%"></p>
 
-```
-Music/Cards/
-  Gruffalo/
-    cover.jpg        <- optional picture
-    01 - Part one.mp3
-    02 - Part two.mp3
-  Bedtime Songs/
-    ...
-```
+## Get started
 
-Supported formats are MP3, M4A/M4B, AAC, OGG, Opus, FLAC (including 24-bit) and WAV. Subfolders are included, sorted naturally. Card links are stored in `Music/Cards/cards.txt`, so they survive reinstalling the app.
+### Android
 
-## Automatic covers
+1. Download **WalkieTales.apk** from the [latest release](https://github.com/jaso1000/walkie-tales/releases/latest).
+2. Install it and copy music to the phone's `Music/Cards` folder, **one folder per album or book** (a `cover.jpg` is optional;
+   WalkieTales finds covers itself).
+3. To lock the phone to WalkieTales, connect it to a computer and run the few commands in the
+   [setup guide](docs/SETUP.md#android). Works on Android 8 or newer, with or without Google.
 
-Folders without a picture get one automatically (setting: *Find missing covers online*, on by default). The result is saved as `cover.auto.jpg`:
+After that, the [Docker remote](#one-remote-for-all-your-players-docker) can update every player over Wi-Fi.
 
-- **Music and audiobooks:** Apple's keyless iTunes Search API. It searches with the album/artist tags from the files if they have them, otherwise the folder name.
-- **Radio stations:** station logos from radio-browser.info.
-- **Kid-safe matching:** a result is only kept if its name genuinely matches, nothing marked explicit is ever used, and a guess from a folder name alone only accepts children's/family results. (Without that rule, "Demo Songs" found a whiskey-bottle album.)
-- **Each track's own picture while it plays:** if a music file has a picture built in (like a single's cover), the player and the remote show it during that track. The Library tile keeps the folder's picture.
-- **Your own pictures win:** a `cover.jpg` (or any image) you add always takes precedence, and so does art embedded in the music files.
-- **Wrong picture?** Tap that link under the folder in the remote's Library. It's removed and never fetched again for that folder. *Find missing covers* retries on demand. Otherwise folders with no match are retried weekly.
-- Searching sends folder names (or album tags) to Apple and radio-browser.info.
+### iPhone
 
-## Internet radio
+The iPhone app runs on iOS 15 to 17.0 and installs with [TrollStore](https://github.com/opa334/TrollStore) (no jailbreak
+or Apple developer account). It's locked in place with Guided Access. See the [iPhone guide](docs/SETUP.md#iphone).
 
-A folder can hold radio stations instead of (or as well as) music files. A station is a small playlist file with the stream address:
+### Using it
 
-```
-Music/Cards/Radio/
-  cover.jpg
-  Kids Radio.m3u      <- #EXTM3U / #EXTINF:-1,Kids Radio / https://example.com/stream.mp3
-  Groove Salad.m3u
-```
+- **Tap a tile** to play. **Library** shows everything, with picture tabs for Music, Podcasts, Books and Radio.
+- **Press and hold the cog** (top right), then answer the sum, for grown-up settings. The search box finds any setting.
+- Settings are grouped by what you want to do: *Listening*, *Family* (music time, messages), *Night* (bedtime,
+  night light, screen) and *Phone and safety*.
 
-- `.m3u`, `.m3u8`, `.pls` and `.url` files are understood. A station's "listen live" link to a `.pls` or `.m3u` is followed automatically.
-- StreamTheWorld links that name a numbered server (`12345.live.streamtheworld.com/…`) are switched to StreamTheWorld's official redirect, because those servers rotate.
-- The easiest way to add one is the remote's *Library → Add a radio station*.
-- A station folder works like any other folder: tap it in browse, link a card to it, sleep timer, volume limit. With several stations in a folder, ⏮/⏭ switch stations.
-- The player shows **LIVE** instead of a progress bar, connects without freezing the screen, and says so if a station can't be reached or drops out (press play to reconnect).
-- Stations are left out of "Everything" (shuffle), since a live stream never ends.
-- Needs Wi-Fi, of course. Plain `http://` streams are allowed as well as `https://`.
+## The remote
 
-## Remote control and Docker companion
+<p align="center"><img src="docs/images/remote.jpg" alt="The WalkieTales remote: now playing, library, voice messages, all players and settings" width="100%"></p>
 
-The player runs a small PIN-protected web server on port 8080. Open the address shown in *Grown-up settings → Remote control* on your phone (same Wi-Fi) and you get a remote with:
-- now playing, playback controls and the track list
-- volume, maximum volume and the sleep timer
-- **turn the screen off**: black, taps ignored, and it switches itself back off if the power button wakes it
-- a library you can tap to play, plus music upload and adding radio stations
-- card linking
-- all settings
-- messages to the screen
+Every player has a remote built in. In *Grown-up settings → Remote control* it shows an address and a PIN. Open the
+address in any phone's browser on the same Wi-Fi, enter the PIN, and you can:
 
-[`companion/`](companion/) packages the same page as a Docker container for a home server, with extras: it handles **several players** (switch by tapping the name at the top, or let it find them on the Wi-Fi), and it can be added to a phone's home screen as an app with its own icon. A ready-made image is published as `ghcr.io/jaso1000/walkie-tales-remote` (amd64 and Raspberry Pi), so `docker compose up -d` with [its compose file](companion/docker-compose.yml) is all it takes. See [companion/README.md](companion/README.md).
+- play, pause, skip and drag through songs, change the volume and set a sleep timer
+- browse the Library, **add music** from your phone, and add internet radio stations
+- send a message to their screen, or **hold to record a voice message**
+- change any setting, link cards, or turn their screen off from the next room
 
-## Download
+Tip: *Add to Home Screen* makes it open like an app.
 
-Each [release](https://github.com/jaso1000/walkie-tales/releases) has a ready-built `WalkieTales.apk`. It's signed with this project's own key, so a later release installs over an earlier one. A copy you build yourself is signed with your own key and won't install over a release (uninstall first, after releasing kiosk control).
+### One remote for all your players (Docker)
 
-## Build
+Run the remote on a home server and you get one page for **every** player, plus:
 
-You need the Android SDK (build-tools 36, platform android-36), JDK 17 and Python 3. Gradle isn't needed.
+- **All players at a glance:** battery, free space, version, what's playing and when each was last seen
+- **Send to all:** upload an album or a radio station to every player in one go
+- **Voice messages** recorded on your phone, converted for every player
+- **iPhone-friendly music:** audio iPhones can't play is converted automatically
+- **One-tap updates** for every Android player
 
 ```bash
-bash build.sh          # -> WalkieTales.apk
+curl -O https://raw.githubusercontent.com/jaso1000/walkie-tales/main/companion/docker-compose.yml
+# set HTTPS_HOSTS to your server's address, then:
+docker compose up -d
 ```
 
-`build.sh` expects the SDK at `/c/Android/sdk`; override it with `ANDROID_SDK=...`. On the first build it creates `debug.keystore` to sign the app. **Keep a backup of that file.** An update signed with a different key won't install over the existing app.
+Open `http://<your server>:8090`, tap the name at the top and add your players (or let it find them on your Wi-Fi).
+The image is `ghcr.io/jaso1000/walkie-tales-remote`, for normal servers and Raspberry Pi. Keep it up to date with
+`docker compose pull && docker compose up -d`. More in the [remote's guide](companion/README.md).
 
-## Install on the phone
+## Good to know
 
-```bash
-adb install -r WalkieTales.apk
-adb shell appops set app.cardplayer MANAGE_EXTERNAL_STORAGE allow       # read Music/Cards
-adb shell cmd package set-home-activity app.cardplayer/.MainActivity    # make it the home screen
-adb shell dpm set-device-owner app.cardplayer/.AdminReceiver            # full kiosk (needs no accounts on the phone)
-```
+- **Private by design.** No accounts and no tracking. The only things that go online are cover-art searches (only
+  folder names are sent), internet radio if you add it, and the Docker remote checking GitHub for updates. The remote needs the player's PIN, and too many wrong PINs locks it out for a while. Keep ports 8080, 8090
+  and 8490 off the internet.
+- **Plays almost anything:** MP3, M4A/M4B audiobooks, AAC, FLAC, Ogg, Opus and WAV, plus internet radio.
+- **Small and light.** The Android app is about 300 KB and runs on phones from 2013 onwards.
 
-On **Android 10 and older** (for example a stock Galaxy S10) there's no all-files access; grant storage instead of the `appops` line:
-
-```bash
-adb shell pm grant app.cardplayer android.permission.READ_EXTERNAL_STORAGE
-adb shell pm grant app.cardplayer android.permission.WRITE_EXTERNAL_STORAGE
-```
-
-On LineageOS, new apps have no network access. Enable it in *App info → Wi-Fi data usage → Allow network access*, or the remote won't work.
-
-**Undo the kiosk:** *Grown-up settings → About → Release kiosk control*. Do this before uninstalling.
-
-Handy for testing without a card: `adb shell am start -n app.cardplayer/.MainActivity -e folder "Folder name"`.
-
-## Phone setup notes (Nexus 5 / hammerhead)
-
-- **ROM:** unofficial LineageOS 23.2 by acroreiser (XDA). It needs TWRP `3.7.0_9-HH.R.17` and the `hh_repart_v_32gb` repartition script (or the 16 GB version).
-- **Pick the no-Google ("vanilla") build** (`lineage-23.2-…-hammerhead-signed.zip`, not `…_gms_go_2gb…`). WalkieTales doesn't use any Google services. The first player was flashed with the Google build, and Play Services only costs battery and RAM. The one thing you lose is a text-to-speech voice for "Say the name out loud". Install one separately if you want that feature.
-- **Windows:** fastboot needs Google's USB driver (`android_winusb.inf`).
-
-## Phone setup notes (Galaxy Note 3 / hlte, SM-N9005)
-
-- **ROM:** unofficial LineageOS 21.0 by html6405 (Android 14, XDA thread "[ROM][UNOFFICIAL][14] LineageOS 21.0 for Samsung Galaxy Note 3"). Flash it without Google apps. It needs TWRP 3.3 or newer (official `twrp-3.7.0_9-0-hlte.img` works). If the phone already has an older TWRP, write the new one from it (`dd` to the recovery partition) with no Odin. Otherwise use Odin/Heimdall.
-- **Install:** format data, wipe system/cache/dalvik, then flash the zip. First boot takes ~7 minutes.
-- **Quirks:**
-  - `adb install` needs `--no-streaming`.
-  - `screencap` doesn't work, so read the screen with `uiautomator dump`.
-  - Some users report random reboots on LOS 21; the fallback is the same developer's LineageOS 20.
-- **NFC:** the antenna is on the original Samsung battery (EB-B800BE with NFC). With a replacement battery the NFC chip works but never sees a card. Use a genuine NFC battery or an NFC antenna sticker.
-
-## Phone setup notes (stock Samsung, e.g. Galaxy S10)
-
-- No custom ROM needed: factory reset, skip every account (device owner needs none), turn on USB debugging, then install as above.
-- `tools/phone-tune.sh` disables about 130 Samsung, Google and preloaded apps (reversible with `--undo`).
-- One UI turns Wi-Fi **and** Bluetooth off with airplane mode. The script turns Wi-Fi back on; switch Bluetooth on by hand in *Android settings → Bluetooth* (adb can't). Both are remembered after that.
-
-### Making another player: checklist
-
-1. Unlock the bootloader, then flash TWRP, repartition and sideload the **vanilla** ROM (see above). Skip adding a Google account during setup.
-2. Turn on Developer options → USB debugging.
-3. `bash build.sh`, then run the install commands above (install, file access, home screen, device owner). Use the same `debug.keystore` so updates install over every player.
-4. App info → Wi-Fi data usage → **Allow network access** (LineageOS blocks new apps by default).
-5. `bash tools/phone-tune.sh` disables unused apps and background scanning, switches off the mobile radio (no SIM needed; Wi-Fi and Bluetooth stay on), lets the screen sleep on the charger, and lets the remote reach the player while its screen is off (`--undo` reverses it). With two phones connected, pick one with `ANDROID_SERIAL=...`. Then `adb reboot`.
-6. Give the phone a DHCP reservation in the router and copy music into `Music/Cards/`.
-
-## Project layout
-
-```
-AndroidManifest.xml
-build.sh
-res/                         icons, theme, device-admin policy
-src/app/cardplayer/
-  MainActivity.java          player screen, NFC, playback, kiosk, remote API handlers
-  SettingsActivity.java      grown-up settings
-  RemoteServer.java          tiny HTTP server for the remote
-  Store.java                 library, card links, radio playlists, settings registry
-  Track.java                 a music file or a live stream
-  ArtFinder.java             automatic covers (iTunes / radio-browser.info)
-  Kiosk.java                 lock-task / device-owner kiosk
-  Ui.java, EqView.java       drawing helpers
-  AdminReceiver.java         device-admin receiver
-companion/                   web remote (shared page) + Docker container (several players, app icons)
-tools/                       phone-tune.sh (battery/speed), make-web-icons.py
-```
+**Building it yourself, phone-by-phone notes and how it all works:** see [docs/SETUP.md](docs/SETUP.md).

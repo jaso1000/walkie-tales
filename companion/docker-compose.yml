@@ -18,7 +18,7 @@ services:
       # first start: the certificate is made once (delete /data/tls in the volume to make a new one).
       HTTPS_HOSTS: ""
       # Optional starting player(s). You can also add players in the app (tap the name at the top),
-      # or let it find them on the Wi-Fi. Format for several: "Riv=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"
+      # or let it find them on the Wi-Fi. Format for several: "Ruby=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"
       PLAYERS: ""
       # Optional: extra networks to search with "Find players on the Wi-Fi", e.g. "192.168.2"
       # SCAN_SUBNETS: ""

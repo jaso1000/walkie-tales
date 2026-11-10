@@ -1,7 +1,7 @@
 // WalkieTales companion: serves the remote-control page (installable as an app) and forwards
 // /p/<player id>/api/* to that player. Several players can be added, found on the Wi-Fi, renamed and removed.
 // No dependencies. Configure with environment variables (all optional):
-//   PLAYERS       starting list, e.g. "Riv=http://192.168.1.222:8080,Sam=http://192.168.1.223:8080"
+//   PLAYERS       starting list, e.g. "Ruby=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"
 //   PLAYER_URL    a single starting player (older setups)
 //   PLAYER_PIN    PIN for the PLAYER_URL player (if set, the page won't ask for it)
 //   SCAN_SUBNETS  extra /24 networks to search, e.g. "192.168.1,10.0.0" (the players' own networks are always searched)
