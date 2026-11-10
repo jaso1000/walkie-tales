@@ -56,8 +56,18 @@
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .np .title { font-size: 26px; font-weight: 800; margin: 0; }
   .np .sub { color: var(--muted); margin: 4px 0 14px; min-height: 22px; }
-  .bar { height: 7px; background: rgba(255,255,255,.14); border-radius: 9px; overflow: hidden; cursor: pointer; }
+  /* the song's progress: drag (or tap) anywhere along it to move through the song */
+  .scrub { position: relative; padding: 14px 0; margin: -14px 0; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .bar { height: 7px; background: rgba(255,255,255,.14); border-radius: 9px; overflow: hidden; transition: height .15s; }
   .bar > i { display: block; height: 100%; width: 0; background: #fff; border-radius: 9px; transition: width .4s linear; }
+  .scrub .knob { position: absolute; top: 50%; left: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.4); transition: transform .15s, left .4s linear; pointer-events: none; }
+  .scrub.drag .bar { height: 10px; }
+  .scrub.drag .bar > i, .scrub.drag .knob { transition: none; }
+  .scrub.drag .knob { transform: scale(1.5); }
+  .scrub.off { cursor: default; }
+  .scrub.off .knob { display: none; }
+  .scrub:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 9px; }
   .times { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 6px; }
   .controls { display: flex; justify-content: center; align-items: center; gap: 22px; margin: 16px 0 6px; }
   .rb { border: 0; border-radius: 50%; width: 62px; height: 62px; background: rgba(255,255,255,.12); display: grid; place-items: center; cursor: pointer; }
@@ -342,7 +352,7 @@
     <div class="cover" id="cover">♪</div>
     <p class="title" id="title">Nothing playing</p>
     <p class="sub" id="sub">Tap a card on the player, or pick something in the Library</p>
-    <div class="bar" id="bar"><i id="barFill"></i></div>
+    <div class="scrub" id="scrub" role="slider" tabindex="0" aria-label="Position in the song"><div class="bar" id="bar"><i id="barFill"></i></div><b class="knob" id="knob"></b></div>
     <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
     <div class="controls">
       <button class="rb" id="prev" title="Previous (hold: start over)"><svg viewBox="0 0 24 24"><path d="M6,6h2v12H6zM9.5,12l8.5,6V6z"/></svg></button>
@@ -772,9 +782,19 @@
   }
 
 
+  let scrubbing = false;
+  function showAt(p, dur) {
+    const pc = dur ? Math.max(0, Math.min(100, p * 100 / dur)) : 0;
+    $('#barFill').style.width = pc + '%'; $('#knob').style.left = pc + '%';
+    $('#pos').textContent = fmt(p); $('#dur').textContent = fmt(dur);
+    const sc = $('#scrub'); sc.setAttribute('aria-valuenow', Math.round(p / 1000)); sc.setAttribute('aria-valuemax', Math.round(dur / 1000));
+    sc.setAttribute('aria-valuetext', fmt(p) + ' of ' + fmt(dur));
+  }
   function tickProgress() {
-    if (!st) return;
+    if (!st || scrubbing) return;
+    $('#scrub').classList.toggle('off', !!st.live || !st.duration);
     if (st.live) { // radio: no duration
+      $('#knob').style.left = '0';
       $('#barFill').style.width = st.connecting ? '0' : '100%';
       $('#pos').textContent = st.connecting ? 'Connecting…' : (st.playing ? '● LIVE' : 'LIVE');
       $('#dur').textContent = '';
@@ -783,12 +803,45 @@
     let p = st.position || 0; const dur = st.duration || 0;
     if (st.playing) p += Date.now() - lastPoll;
     p = Math.min(p, dur);
-    $('#barFill').style.width = dur ? (p * 100 / dur) + '%' : '0';
-    $('#pos').textContent = fmt(p); $('#dur').textContent = fmt(dur);
+    showAt(p, dur);
   }
   setInterval(tickProgress, 500);
-  $('#bar').onclick = (e) => { if (!st || st.live || !st.duration) return; const r = e.currentTarget.getBoundingClientRect();
-    act('/api/seek', { ms: Math.round((e.clientX - r.left) / r.width * st.duration) }); };
+  // Scrubbing: the bar and time follow the finger, and the player jumps once, when it's let go.
+  function seekTo(ms) {
+    ms = Math.max(0, Math.min(st.duration - 500, Math.round(ms)));
+    st.position = ms; lastPoll = Date.now(); // show the new place straight away, not the old one until the next poll
+    showAt(ms, st.duration);
+    act('/api/seek', { ms });
+  }
+  (() => {
+    const sc = $('#scrub');
+    let target = 0;
+    const at = (e) => { const r = $('#bar').getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * st.duration; };
+    const canSeek = () => st && !st.live && st.duration > 0;
+    sc.onpointerdown = (e) => {
+      if (!canSeek() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      e.preventDefault();
+      scrubbing = true; sc.classList.add('drag'); sc.setPointerCapture(e.pointerId);
+      target = at(e); showAt(target, st.duration);
+    };
+    sc.onpointermove = (e) => { if (!scrubbing) return; target = at(e); showAt(target, st.duration); };
+    const end = (e, go) => {
+      if (!scrubbing) return;
+      scrubbing = false; sc.classList.remove('drag');
+      try { sc.releasePointerCapture(e.pointerId); } catch (x) { /* already released */ }
+      if (go && canSeek()) seekTo(target); else tickProgress();
+    };
+    sc.onpointerup = (e) => end(e, true);
+    sc.onpointercancel = (e) => end(e, false);
+    // keyboard: arrows move 10 seconds, Page Up/Down a minute, Home/End the start and end
+    sc.onkeydown = (e) => {
+      if (!canSeek()) return;
+      let p = (st.position || 0) + (st.playing ? Date.now() - lastPoll : 0);
+      const step = { ArrowRight: 10000, ArrowUp: 10000, ArrowLeft: -10000, ArrowDown: -10000, PageUp: 60000, PageDown: -60000 }[e.key];
+      if (step) p += step; else if (e.key === 'Home') p = 0; else if (e.key === 'End') p = st.duration; else return;
+      e.preventDefault(); seekTo(p);
+    };
+  })();
   $('#play').onclick = () => act('/api/toggle');
   $('#next').onclick = () => act('/api/next');
   let holdT;
