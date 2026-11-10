@@ -284,6 +284,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void networkChanged() {
         if (browsing) openBrowser();
+        if (screenLocked) { h.removeCallbacks(offlineCheck); h.post(offlineCheck); } // Wi-Fi went: start the minute now
     }
 
     void syncRemote() {
@@ -2756,9 +2757,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             dimmed = true;
             holdForRemote();
             scheduleScreenOff(1500);
+            offlineSince = 0;
+            h.removeCallbacks(offlineCheck);
+            h.postDelayed(offlineCheck, 15_000);
         } else {
             screenLocked = false;
             h.removeCallbacks(screenOffNow);
+            h.removeCallbacks(offlineCheck);
             releaseLockHolds();
             Kiosk.restoreTimeout(this);
             Kiosk.setTimeout(this, prefs.getInt("screen_timeout", 60));
@@ -2766,6 +2771,38 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             wake();
         }
         updateKeepOn();
+    }
+
+    /**
+     * Only the remote can turn the screen back on, so without Wi-Fi it could stay off for good. While it's off
+     * from the remote, check the Wi-Fi every 15 seconds; after a minute without it, turn the screen back on and
+     * let the player work normally (sleeping after its usual timeout, waking on a tap).
+     */
+    long offlineSince;
+    final Runnable offlineCheck = new Runnable() {
+        @Override public void run() {
+            if (!screenLocked) return;
+            if (onLocalNetwork()) offlineSince = 0;
+            else if (offlineSince == 0) offlineSince = SystemClock.elapsedRealtime();
+            else if (SystemClock.elapsedRealtime() - offlineSince >= 60_000) {
+                setScreenLocked(false);
+                flash("No Wi-Fi, so the screen is back on", 6000);
+                return;
+            }
+            h.postDelayed(this, 15_000);
+        }
+    };
+
+    /** Connected to Wi-Fi (or a wired network), where the remote can reach the player. */
+    boolean onLocalNetwork() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                    || nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
+        } catch (Exception e) {
+            return true; // can't tell: leave it as the remote set it
+        }
     }
 
     final Runnable screenOffNow = () -> {

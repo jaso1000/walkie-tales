@@ -1,3 +1,4 @@
+import Network
 import UIKit
 
 /// Dimming, night light, the bedtime black screen and "screen off" from the remote.
@@ -58,8 +59,10 @@ extension PlayerViewController {
             night.isHidden = true
             UIScreen.main.brightness = 0
             dimmed = true
+            OffGuard.start(self)
         } else {
             screenLocked = false
+            OffGuard.stop()
             wake()
         }
         updateKeepOn() // lets iOS Auto-Lock switch the display off for real
@@ -75,5 +78,53 @@ final class TouchWindow: UIWindow {
             if !p.userTouched() { return }
         }
         super.sendEvent(event)
+    }
+}
+
+/// Only the remote can turn the screen back on, so without Wi-Fi it could stay off for good.
+/// While it's off from the remote: after a minute without Wi-Fi, or as soon as someone wakes the iPhone while
+/// there's no Wi-Fi, turn the screen back on and let the player work normally.
+enum OffGuard {
+    private static let monitor: NWPathMonitor = {
+        let m = NWPathMonitor(requiredInterfaceType: .wifi)
+        m.pathUpdateHandler = { path in
+            DispatchQueue.main.async {
+                let up = path.status == .satisfied
+                if up { downSince = nil } else if downSince == nil { downSince = Date() }
+                wifiUp = up
+            }
+        }
+        m.start(queue: DispatchQueue.global(qos: .utility))
+        return m
+    }()
+    private static var wifiUp = true
+    private static var downSince: Date?
+    private static var timer: Timer?
+    private static var woke: NSObjectProtocol?
+    private static weak var player: PlayerViewController?
+
+    static func start(_ p: PlayerViewController) {
+        _ = monitor
+        player = p
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in check(grace: 60) }
+        if woke == nil {
+            woke = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                check(grace: 0) // someone woke the iPhone: don't leave them with a black screen
+            }
+        }
+    }
+
+    static func stop() {
+        timer?.invalidate(); timer = nil
+        if let w = woke { NotificationCenter.default.removeObserver(w); woke = nil }
+    }
+
+    private static func check(grace: TimeInterval) {
+        guard let p = player, p.screenLocked, !wifiUp, let since = downSince else { return }
+        if Date().timeIntervalSince(since) >= grace {
+            p.setScreenLocked(false)
+            p.flash("No Wi-Fi, so the screen is back on", 6)
+        }
     }
 }
