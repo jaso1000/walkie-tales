@@ -211,6 +211,8 @@ public class SettingsActivity extends Activity {
             });
             link("No limit today", null, v -> { prefs.edit().putString("limit_off_day", d).apply(); build(); });
         }
+        panel("From Mum & Dad");
+        link("Record a message", "“Goodnight, love you!” or a bedtime story", v -> recordMessage());
         if (Headphones.hasBluetooth(this)) {
             panel("Headphones");
             toggle("Headphones button", "Switches Bluetooth on and off from the player", "headphones_button", true);
@@ -558,6 +560,156 @@ public class SettingsActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = heading != null ? 0 : dp(12);
         list.addView(group, lp);
+    }
+
+    // ------------------------------------------------------------------ voice messages
+
+    static final String VOICE_FOLDER = "From Mum & Dad";
+    android.media.MediaRecorder rec;
+    File recFile;
+    long recStart;
+    final android.os.Handler recH = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    /** The microphone: as device owner we can allow it ourselves (no pop-up that lock task would block). */
+    boolean micAllowed() {
+        String perm = android.Manifest.permission.RECORD_AUDIO;
+        if (checkSelfPermission(perm) == android.content.pm.PackageManager.PERMISSION_GRANTED) return true;
+        try {
+            android.app.admin.DevicePolicyManager dpm = getSystemService(android.app.admin.DevicePolicyManager.class);
+            if (dpm != null && dpm.isDeviceOwnerApp(getPackageName())
+                    && dpm.setPermissionGrantState(Kiosk.admin(this), getPackageName(), perm,
+                    android.app.admin.DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED)) return true;
+        } catch (Exception ignored) { }
+        requestPermissions(new String[]{perm}, 71);
+        return false;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(code, perms, res);
+        if (code == 71 && res.length > 0 && res[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) recordMessage();
+    }
+
+    void recordMessage() {
+        if (!micAllowed()) return;
+        new AlertDialog.Builder(this, DIALOG).setTitle("Record a message")
+                .setMessage("It goes into the “" + VOICE_FOLDER + "” folder. Tap Record and start talking.")
+                .setPositiveButton("Record", (d, w) -> startRecording())
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    void startRecording() {
+        try {
+            recFile = new File(getCacheDir(), "message.m4a");
+            rec = new android.media.MediaRecorder();
+            rec.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+            rec.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+            rec.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+            rec.setAudioChannels(1);
+            rec.setAudioSamplingRate(44100);
+            rec.setAudioEncodingBitRate(96_000);
+            rec.setMaxDuration(60 * 60_000);
+            rec.setOutputFile(recFile.getPath());
+            rec.prepare();
+            rec.start();
+        } catch (Exception e) {
+            stopRecorder();
+            new AlertDialog.Builder(this, DIALOG).setMessage("The microphone didn't start (" + e.getMessage() + ").")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        recStart = android.os.SystemClock.elapsedRealtime();
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        TextView time = Ui.text(this, "● 0:00", 34, 0xFFFF6B6B, true);
+        time.setGravity(Gravity.CENTER);
+        time.setPadding(0, dp(20), 0, dp(12));
+        AlertDialog d = new AlertDialog.Builder(this, DIALOG).setTitle("Recording…").setView(time).setCancelable(false)
+                .setPositiveButton("Stop", (x, w) -> finishRecording())
+                .setNegativeButton("Cancel", (x, w) -> { stopRecorder(); recFile.delete(); }).show();
+        recH.post(new Runnable() {
+            @Override public void run() {
+                if (rec == null || !d.isShowing()) return;
+                long s = (android.os.SystemClock.elapsedRealtime() - recStart) / 1000;
+                time.setText(String.format(Locale.ROOT, "● %d:%02d", s / 60, s % 60));
+                recH.postDelayed(this, 500);
+            }
+        });
+    }
+
+    boolean stopRecorder() {
+        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (rec == null) return false;
+        boolean ok = true;
+        try { rec.stop(); } catch (Exception e) { ok = false; } // stop() throws if nothing was recorded
+        rec.release();
+        rec = null;
+        return ok;
+    }
+
+    void finishRecording() {
+        boolean ok = stopRecorder() && android.os.SystemClock.elapsedRealtime() - recStart > 800;
+        if (!ok) {
+            recFile.delete();
+            new AlertDialog.Builder(this, DIALOG).setMessage("That was too short. Try again?")
+                    .setPositiveButton("Record", (x, w) -> startRecording()).setNegativeButton("Cancel", null).show();
+            return;
+        }
+        android.widget.EditText name = new android.widget.EditText(this);
+        name.setHint("e.g. Goodnight, love you!");
+        name.setSingleLine();
+        name.setTextColor(0xFFFFFFFF);
+        name.setHintTextColor(MUTED);
+        LinearLayout box = new LinearLayout(this);
+        box.setPadding(dp(22), dp(8), dp(22), 0);
+        box.addView(name, new LinearLayout.LayoutParams(-1, -2));
+        android.media.MediaPlayer[] listen = new android.media.MediaPlayer[1];
+        Runnable quiet = () -> { if (listen[0] != null) { listen[0].release(); listen[0] = null; } };
+        AlertDialog d = new AlertDialog.Builder(this, DIALOG).setTitle("Give it a name").setView(box)
+                .setPositiveButton("Save", null).setNeutralButton("Listen", null)
+                .setNegativeButton("Throw away", (x, w) -> { quiet.run(); recFile.delete(); }).create();
+        d.setOnShowListener(x -> {
+            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                quiet.run();
+                try {
+                    listen[0] = new android.media.MediaPlayer();
+                    listen[0].setDataSource(recFile.getPath());
+                    listen[0].prepare();
+                    listen[0].start();
+                } catch (Exception ignored) { quiet.run(); }
+            });
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                quiet.run();
+                saveRecording(name.getText().toString());
+                d.dismiss();
+            });
+        });
+        d.show();
+    }
+
+    void saveRecording(String title) {
+        String n = title.replaceAll("[/\\:*?\"<>|]+", " ").replaceAll("^\\.+", "").trim();
+        if (n.isEmpty()) n = "Message " + new java.text.SimpleDateFormat("d MMM h.mm a", Locale.getDefault()).format(new java.util.Date());
+        File dir = new File(Store.root(), VOICE_FOLDER);
+        dir.mkdirs();
+        File out = new File(dir, n + ".m4a");
+        for (int i = 2; out.exists(); i++) out = new File(dir, n + " " + i + ".m4a");
+        boolean ok = recFile.renameTo(out);
+        if (!ok) {
+            try (java.io.InputStream in = new java.io.FileInputStream(recFile); java.io.OutputStream o = new java.io.FileOutputStream(out)) {
+                byte[] buf = new byte[65536];
+                for (int r; (r = in.read(buf)) > 0; ) o.write(buf, 0, r);
+                ok = true;
+            } catch (Exception e) { ok = false; }
+            recFile.delete();
+        }
+        new AlertDialog.Builder(this, DIALOG).setMessage(ok ? "Saved in “" + VOICE_FOLDER + "” 💌" : "Couldn't save it.")
+                .setPositiveButton("OK", null).show();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (rec != null) finishRecording(); // the screen went off mid-story: keep what was said
     }
 
     LinearLayout rowShell(String title, String sub) {

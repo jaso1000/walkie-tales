@@ -5,12 +5,15 @@ services:
     restart: unless-stopped
     ports:
       - "8090:8090"
+      - "8490:8490"   # the same remote over https, for voice messages (accept the certificate warning once)
     volumes:
       - walkie-tales-data:/data   # the players you add in the app
     environment:
       # Optional starting player(s). You can also add players in the app (tap the name at the top),
       # or let it find them on the Wi-Fi. Format for several: "Riv=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"
       PLAYERS: ""
+      # This server's address, written into the https certificate (e.g. 192.168.1.50)
+      HTTPS_HOSTS: ""
       # The address shown on the player in Grown-up settings → Remote control (older single-player setting)
       PLAYER_URL: "http://192.168.1.50:8080"
       # Optional: put the player's PIN here so the page doesn't ask for it.

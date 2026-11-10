@@ -39,6 +39,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: The remote control on your phone connects to the player over Wi-Fi.
+        NSMicrophoneUsageDescription: Grown-ups can record a message or a bedtime story in Settings.
         NSBonjourServices: [_http._tcp]
     settings:
       base:

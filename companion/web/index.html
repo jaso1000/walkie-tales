@@ -145,6 +145,16 @@
 
   .up-list { margin-top: 10px; font-size: 14px; }
   .chip.off { opacity: .45; }
+  /* voice messages */
+  .voice { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .voice h3 { margin: 0 0 4px; font-size: 17px; }
+  .rec-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 14px 0 6px; }
+  .rec { width: 104px; height: 104px; border-radius: 50%; border: 0; background: #e5484d; color: #fff; font-size: 40px; cursor: pointer;
+    box-shadow: 0 8px 22px rgba(229,72,77,.4); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .rec.on { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,72,77,.55); } 50% { box-shadow: 0 0 0 18px rgba(229,72,77,0); } }
+  .rec-time { font-variant-numeric: tabular-nums; font-weight: 700; min-height: 1.3em; }
+  .voice audio { width: 100%; margin-top: 8px; }
   .chip.all { font-weight: 700; border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
   .chip.all:not(.on) { color: color-mix(in srgb, var(--accent) 55%, #fff); }
   .up-list div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; color: var(--muted); }
@@ -197,6 +207,11 @@
   .pl .grow { flex: 1; min-width: 0; }
   .pl .grow b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pl .grow small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl .stats { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .pl .stats span { white-space: nowrap; }
+  .pl .stats .warn { color: var(--warn); }
+  .pl .stats .bad { color: var(--bad); }
+  .pl .stats .good { color: var(--good); }
   .pl .more { background: none; border: 0; color: var(--muted); font-size: 22px; padding: 6px 10px; cursor: pointer; }
 
   /* pin */
@@ -336,7 +351,7 @@
     <button class="qa" id="qaSleep" title="Sleep timer"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12.3,22c-5.5,0 -10,-4.5 -10,-10 0,-4.7 3.2,-8.6 7.7,-9.7a8,8 0 0,0 10,10C19,17.3 16.9,22 12.3,22z"/></svg></span><b>Sleep</b><small id="qaSleepTxt">Off</small></button>
     <button class="qa" id="screenBtn" title="Turn the player's screen off or on"><span class="ic"><svg viewBox="0 0 24 24"><path d="M17,1H7C5.9,1 5,1.9 5,3v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3c0,-1.1 -0.9,-2 -2,-2zM17,19H7V5h10v14z"/></svg></span><b>Screen</b><small id="qaScreenTxt">Turn off</small></button>
     <button class="qa" id="findBtn" title="Ring loudly for 30 seconds, even over the volume limits. Tap its screen to stop it."><span class="ic"><svg viewBox="0 0 24 24"><path d="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.9,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32V4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z"/></svg></span><b>Ring</b><small id="qaFindTxt">Find it</small></button>
-    <button class="qa" id="qaMsg" title="Show a message on the player's screen"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20,2H4C2.9,2 2,2.9 2,4v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z"/></svg></span><b>Message</b><small>To screen</small></button>
+    <button class="qa" id="qaMsg" title="Send a typed or voice message"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20,2H4C2.9,2 2,2.9 2,4v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z"/></svg></span><b>Message</b><small>Text or voice</small></button>
   </div>
 
   <div class="card">
@@ -404,6 +419,7 @@
   <div class="setpage" data-page="sound" data-title="Sound" hidden>
     <div class="card" id="setMax"></div>
     <div class="card" id="setSound"></div>
+    <div class="card" id="setLimit"><h2>Music time</h2></div>
   </div>
   <div class="setpage" data-page="bedtime" data-title="Bedtime" hidden>
     <div class="card" id="setTimes"><h2>Times</h2></div>
@@ -440,7 +456,7 @@
 </nav>
 
 <div id="players"><div class="sheet">
-  <div style="display:flex;align-items:center;margin-bottom:8px"><h2 style="margin:0;flex:1;font-size:20px">Players</h2>
+  <div style="display:flex;align-items:center;margin-bottom:8px"><h2 style="margin:0;flex:1;font-size:20px">All players</h2>
     <button class="btn ghost" id="plClose" style="flex:none;padding:8px 14px">Done</button></div>
   <div id="plList"></div>
   <div class="card" style="background:var(--panel2);margin:14px 0 0">
@@ -465,12 +481,33 @@
 </div></div>
 
 <div class="overlay" id="sheetMsg"><div class="sheet">
-  <div class="sheet-head"><h2>Message to the screen</h2><button class="btn ghost" data-close>Close</button></div>
+  <div class="sheet-head"><h2>Send a message</h2><button class="btn ghost" data-close>Close</button></div>
   <div class="row">
     <input type="text" id="msgText" maxlength="120" placeholder="Type a message…">
     <button class="btn" id="msgSend" style="flex:none">Send</button>
   </div>
   <div class="presets" id="msgPresets"></div>
+
+  <div class="voice" id="voiceBox">
+    <h3>🎤 Voice message</h3>
+    <p class="sub" style="margin:0">Record “Goodnight, love you!” or a whole bedtime story. It goes into the <b>From Mum &amp; Dad</b> folder.</p>
+    <div class="rec-wrap" id="recWrap">
+      <button class="rec" id="recBtn" type="button" aria-label="Record">🎤</button>
+      <div class="rec-time" id="recTime"></div>
+      <div class="hint" id="recHint" style="margin:0">Hold to record, or tap to start and tap again to stop</div>
+    </div>
+    <div id="recInsecure" hidden>
+      <div class="hint" style="text-align:left">The microphone only works on the secure address. <a id="recSecure" href="#">Open it here</a> and accept the warning once (it’s your own server).</div>
+      <span class="label">Or choose a recording from this phone</span>
+      <input type="file" id="recFile" accept="audio/*" capture>
+    </div>
+    <audio id="recPlay" controls hidden></audio>
+    <span class="label">Name</span>
+    <input type="text" id="recName" maxlength="80" placeholder="e.g. Goodnight, love you!">
+    <div class="targets" hidden><span class="label">Send to</span><div class="chips target-list"></div></div>
+    <label class="check"><input type="checkbox" id="recNow" checked> Play it now</label>
+    <div class="row" style="margin-top:12px"><button class="btn" id="recSend" disabled>Send voice message</button></div>
+  </div>
 </div></div>
 
 <div class="overlay" id="sheetFolder"><div class="sheet">
@@ -735,8 +772,108 @@
   ['Dinner’s ready! 🍝', 'Bath time 🛁', 'Bedtime soon 🌙', 'Time to tidy up 🧸', 'Shoes on, we’re going out 👟', 'I love you ❤️'].forEach(t => {
     const c = el('button', 'chip', t); c.onclick = () => { $('#msgText').value = t; $('#msgSend').click(); }; $('#msgPresets').appendChild(c);
   });
+  // ---------------------------------------------------------------- voice messages
+  // Recorded here (or picked from the phone), turned into an MP3 by the companion server, then uploaded into the
+  // "From Mum & Dad" folder on the chosen players, and played straight away if asked.
+  const VOICE_FOLDER = 'From Mum & Dad';
+  let recBlob = null, recMedia = null, recChunks = [], recStart = 0, recTick = null, recDown = 0, recStream = null;
+  const canMic = () => window.isSecureContext && navigator.mediaDevices && window.MediaRecorder;
+  function voiceSetup() {
+    $('#voiceBox').hidden = !players; // needs the companion server to convert the recording
+    $('#recWrap').hidden = !canMic();
+    $('#recInsecure').hidden = !!canMic();
+    $('#recSecure').href = 'https://' + location.hostname + ':8490' + location.pathname;
+  }
+  function recShow(blob) {
+    recBlob = blob;
+    const a = $('#recPlay');
+    if (a.src) URL.revokeObjectURL(a.src);
+    if (blob) { a.src = URL.createObjectURL(blob); a.hidden = false; } else { a.removeAttribute('src'); a.hidden = true; }
+    $('#recSend').disabled = !blob;
+  }
+  async function recBegin() {
+    if (recMedia) return;
+    try { recStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch (e) { return toast('The microphone isn’t allowed (' + e.name + ')'); }
+    recChunks = [];
+    recMedia = new MediaRecorder(recStream);
+    recMedia.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+    recMedia.onstop = () => {
+      recStream.getTracks().forEach(t => t.stop());
+      const secs = (Date.now() - recStart) / 1000;
+      recMedia = null; clearInterval(recTick);
+      $('#recBtn').classList.remove('on'); $('#recBtn').textContent = '🎤';
+      if (secs < 0.8) { $('#recTime').textContent = 'Too short, try again'; return; }
+      recShow(new Blob(recChunks, { type: recChunks[0] ? recChunks[0].type : 'audio/webm' }));
+      $('#recHint').textContent = 'Listen back, or record again';
+    };
+    recMedia.start(1000);
+    recStart = Date.now();
+    $('#recBtn').classList.add('on'); $('#recBtn').textContent = '■';
+    $('#recHint').textContent = 'Recording…';
+    const tick = () => { $('#recTime').textContent = fmt(Date.now() - recStart); };
+    tick(); recTick = setInterval(tick, 250);
+  }
+  function recEnd() { if (recMedia && recMedia.state !== 'inactive') recMedia.stop(); }
+  // Hold to record; a quick tap starts it and the next tap stops it (easier for a long story).
+  $('#recBtn').onpointerdown = (e) => {
+    e.preventDefault();
+    if (recMedia) { recDown = 0; recEnd(); return; }
+    recDown = Date.now(); recShow(null); recBegin();
+  };
+  const recUp = () => { if (recDown && Date.now() - recDown > 600) recEnd(); recDown = 0; };
+  $('#recBtn').onpointerup = recUp; $('#recBtn').onpointercancel = recUp;
+  $('#recBtn').oncontextmenu = (e) => e.preventDefault();
+  $('#recFile').onchange = () => { const f = $('#recFile').files[0]; recShow(f || null); if (f && !$('#recName').value) $('#recName').value = f.name.replace(/\.[^.]+$/, ''); };
+
+  $('#recSend').onclick = async () => {
+    if (!recBlob) return;
+    const targets = upTargets();
+    if (!targets.length) return toast('Choose at least one player');
+    const when = new Date();
+    let name = ($('#recName').value.trim() || 'Message ' + when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' '
+      + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).replace(/[\/\\:*?"<>|]+/g, ' ').replace(/^\.+/, '').trim();
+    const btn = $('#recSend'); btn.disabled = true; btn.textContent = 'Getting it ready…';
+    let mp3;
+    try {
+      const r = await fetch('/convert-audio', { method: 'POST', body: recBlob });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+      mp3 = await r.blob();
+    } catch (e) { btn.disabled = false; btn.textContent = 'Send voice message'; return toast('Couldn’t get it ready: ' + e.message); }
+    btn.textContent = 'Sending…';
+    const playNow = $('#recNow').checked;
+    const res = await Promise.all(targets.map(async t => {
+      try {
+        // Don't replace an older message with the same name.
+        let file = name + '.mp3';
+        try {
+          const have = new Set((await tapi(t, '/api/folder?name=' + encodeURIComponent(VOICE_FOLDER))).files.map(f => f.name.normalize('NFC')));
+          for (let i = 2; have.has(file.normalize('NFC')); i++) file = name + ' ' + i + '.mp3';
+        } catch (e) { /* new folder */ }
+        await upload(VOICE_FOLDER, mp3, () => {}, t, file);
+        if (playNow) {
+          await sleep(800); // let the player see the new file
+          await tapi(t, '/api/play', { folder: VOICE_FOLDER });
+          const s = await tapi(t, '/api/status');
+          const base = file.replace(/\.mp3$/i, '').normalize('NFC');
+          const i = (s.tracks || []).findIndex(n => { n = String(n).normalize('NFC').replace(/\.[^.]+$/, ''); return n === base || n.endsWith(base); });
+          if (i >= 0 && i !== s.trackIndex) await tapi(t, '/api/track', { index: i });
+        }
+        return { ok: true };
+      } catch (e) { return { ok: false, n: t.name || 'this player', e: e.message }; }
+    }));
+    btn.disabled = false; btn.textContent = 'Send voice message';
+    const bad = res.filter(r => !r.ok);
+    if (bad.length) return toast('Didn’t reach ' + bad.map(b => b.n + ' (' + b.e + ')').join(', '));
+    toast(playNow ? 'Playing now 💌' : 'Sent 💌');
+    recShow(null); $('#recName').value = ''; $('#recTime').textContent = ''; $('#recFile').value = '';
+    $('#recHint').textContent = 'Hold to record, or tap to start and tap again to stop';
+    closeSheet('sheetMsg');
+    if (cur && targets.some(t => t.id === cur.id) || !players) loadLibrary();
+  };
+
   $('#qaSleep').onclick = () => openSheet('sheetSleep');
-  $('#qaMsg').onclick = () => { openSheet('sheetMsg'); setTimeout(() => $('#msgText').focus(), 250); };
+  $('#qaMsg').onclick = () => { voiceSetup(); renderUpTargets(); openSheet('sheetMsg'); };
 
   // ---------------------------------------------------------------- sheets (pop-ups from the bottom)
   function openSheet(id) { $('#' + id).classList.add('on'); }
@@ -1492,7 +1629,8 @@
     setCards: [['cards', 'Use NFC cards'], ['rest_mode', 'Pause when the card is lifted off'], ['cards_awake', 'Keep the screen on for cards (charging, bedtime)']],
     setSound: [['show_volume', 'Volume buttons on screen'], ['headphones_button', 'Headphones button'], ['fade_in', 'Fade in'], ['announce', 'Say the name out loud']],
     setDuring: [['bedtime_dark', 'Screen off at bedtime', 'Goes black 30 seconds after the last touch'], ['quiet', 'Quieter at bedtime']],
-    setNight: [['night_light', 'Night light'], ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery']],
+    setNight: [['night_light', 'Night light', 'Glows orange at bedtime'], ['ok_to_wake', 'OK to wake', 'Turns green at wake-up time, so they know they can get up'],
+      ['night_clock', 'Clock on the night light'], ['show_status', 'Clock and battery']],
     setSafety: [['gate', 'Grown-up check before settings', 'A quick sum, or the grown-up PIN if one is set'], ['power_menu', 'Power button can switch it off']],
   };
   const DIM = [[30, '30 seconds'], [90, '90 seconds'], [300, '5 minutes'], [0, 'Never']];
@@ -1669,6 +1807,18 @@
     sl.appendChild(choice('dim_after', 'Dim the screen after', DIM));
     sl.appendChild(choice('screen_on', 'Keep the screen on', KEEP));
     sl.appendChild(choice('screen_timeout', 'Screen turns off after', TIMEOUT));
+    $('#setNight').insertBefore(choice('wake_glow_mins', 'Stays green for', [[30, '30 minutes'], [60, '1 hour'], [90, '90 minutes'], [120, '2 hours']]),
+      $('#s_night_clock').closest('.set'));
+    // Daily listening limit; sleep sounds never count.
+    const lim = $('#setLimit');
+    lim.appendChild(choice('daily_limit', 'Daily listening limit', [[0, 'No limit'], [30, '30 minutes'], [60, '1 hour'], [90, '90 minutes'], [120, '2 hours'], [180, '3 hours']]));
+    const today = el('div', 'hint'); today.id = 'limitToday'; today.style.textAlign = 'left'; lim.appendChild(today);
+    const lr = el('div', 'row'); lr.style.marginTop = '10px';
+    const more = el('button', 'btn ghost', '+30 minutes today'), none = el('button', 'btn ghost', 'No limit today');
+    more.onclick = () => api('/api/limit', { add: 30 }).then(() => { toast('30 more minutes today'); poll(); setTimeout(showLimit, 800); }).catch(err);
+    none.onclick = () => api('/api/limit', { off: true }).then(() => { toast('No limit today'); poll(); setTimeout(showLimit, 800); }).catch(err);
+    lr.appendChild(more); lr.appendChild(none); lim.appendChild(lr);
+    $('#s_daily_limit').addEventListener('change', () => setTimeout(showLimit, 800));
     // Grown-up PIN: asked for instead of the sum on the player. The remote only knows whether one is set.
     const gp = el('div', 'set'); const gg = el('div', 'grow', 'Grown-up PIN'); const gs = el('small'); gs.id = 'gatePinState'; gg.appendChild(gs);
     const gset = el('button', 'btn ghost', 'Set'); gset.id = 'gatePinSet'; gset.style.cssText = 'flex:none;padding:8px 14px';
@@ -1688,6 +1838,15 @@
     $('#setSafety').insertBefore(gp, $('#setSafety').children[1] || null);
     $('#s_kid_name').onchange = (e) => save('kid_name', e.target.value.trim());
   }
+  function showLimit() {
+    const t = $('#limitToday'); if (!t) return;
+    const on = settings && +settings.daily_limit > 0;
+    t.parentElement.querySelector('.row').hidden = !on;
+    if (!on) { t.textContent = 'Sleep sounds never count.'; return; }
+    t.textContent = !st || st.allowedToday === undefined ? 'Update this player to use the limit.'
+      : st.allowedToday < 0 ? 'No limit today.'
+      : 'Today: ' + st.listenedToday + ' of ' + st.allowedToday + ' minutes' + (st.limitReached ? ' (finished for today)' : '') + '. Sleep sounds never count.';
+  }
   async function loadSettings() {
     buildSettings();
     api('/api/library').then(l => { folderCount = l.folders.length; freeBytes = l.freeBytes || 0; showSummaries(); }).catch(() => {});
@@ -1701,7 +1860,7 @@
       else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
       else inp.value = v;
     }
-    showSummaries();
+    showSummaries(); showLimit();
   }
   buildMenu();
 
@@ -1745,6 +1904,7 @@
       const r = el('div', 'pl' + (cur && p.id === cur.id ? ' cur' : '')); r.dataset.id = p.id;
       const av = el('div', 'av', p.name ? p.name.charAt(0).toUpperCase() : '♪');
       const g = el('div', 'grow'); g.appendChild(el('b', '', label(p))); g.appendChild(el('small', '', short(p.url)));
+      g.appendChild(el('div', 'stats'));
       const more = el('button', 'more', '⋯'); more.title = 'Rename or remove';
       more.onclick = (e) => { e.stopPropagation(); playerMenu(p); };
       r.appendChild(av); r.appendChild(g); r.appendChild(more);
@@ -1753,25 +1913,46 @@
     });
   }
   /** A quick look at every player (shows what's playing on the ones whose PIN this device knows). */
+  // The all-players page: battery, free space, version, what's playing and when each was last seen.
+  const ago = (t) => { if (!t) return 'not seen yet'; const m = Math.round((Date.now() - t) / 60000);
+    return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+  const verNum = (v) => { const m = String(v || '').match(/(\d+)\.(\d+)/); return m ? +m[1] * 1000 + +m[2] : 0; };
+  function stat(box, text, cls) { box.appendChild(el('span', cls || '', text)); }
+  let pollAllT = null;
   async function pollAll() {
-    for (const p of players || []) {
-      const row = document.querySelector('.pl[data-id="' + p.id + '"]'); if (!row) continue;
-      const k = store.get(pinKey(p.id)) || '', sm = row.querySelector('small'), av = row.querySelector('.av');
+    clearTimeout(pollAllT);
+    if (!$('#players').classList.contains('on')) return;
+    await loadPlayers(); // fresh "last seen"
+    const vers = {};
+    await Promise.all((players || []).map(async p => {
+      const row = document.querySelector('.pl[data-id="' + p.id + '"]'); if (!row) return;
+      const k = store.get(pinKey(p.id)) || '', sm = row.querySelector('small'), av = row.querySelector('.av'), box = row.querySelector('.stats');
+      box.textContent = '';
       try {
         const r = await fetch('/p/' + p.id + '/api/status', { headers: k ? { 'X-Pin': k } : {}, cache: 'no-store' });
-        if (r.status === 401) { sm.textContent = 'Needs its PIN · ' + short(p.url); continue; }
+        if (r.status === 401) { sm.textContent = 'Needs its PIN · ' + short(p.url); stat(box, 'Seen ' + ago(p.lastSeen)); return; }
         const s = await r.json();
         if (!r.ok) throw new Error(s.error);
         if (s.name) syncName(p, s.name);
-        sm.textContent = (s.screenOff ? 'Screen off · ' : '') + (s.playing ? '▶ ' + (s.title || '') : s.title ? 'Paused · ' + s.title : 'Nothing playing')
-          + (s.battery >= 0 ? ' · ' + s.battery + '%' : '');
+        sm.textContent = (s.playing ? '▶ ' + (s.title || '') : s.title ? 'Paused · ' + s.title : 'Nothing playing');
+        if (s.battery >= 0) stat(box, (s.charging ? '⚡' : '🔋') + s.battery + '%', s.battery <= 15 && !s.charging ? 'bad' : '');
+        if (s.freeBytes) stat(box, (s.freeBytes / 1e9).toFixed(1) + ' GB free', s.freeBytes < 1e9 ? 'warn' : '');
+        if (s.version) { const v = el('span', 'ver', 'v' + s.version); box.appendChild(v); const os = /iOS/.test(s.version) ? 'i' : 'a';
+          vers[os] = Math.max(vers[os] || 0, verNum(s.version)); v.dataset.os = os; v.dataset.n = verNum(s.version); }
+        if (s.night === 1) stat(box, '🌙 Night light'); else if (s.night === 2) stat(box, '☀️ OK to wake', 'good');
+        if (s.screenOff) stat(box, 'Screen off');
+        if (s.allowedToday > 0) stat(box, '⏱ ' + s.listenedToday + ' of ' + s.allowedToday + ' min', s.limitReached ? 'warn' : '');
+        stat(box, 'Seen just now', 'good');
         av.style.background = s.accent || '';
         if (s.folder && s.folder !== '@all') {
           const img = new Image(); img.alt = ''; img.onload = () => { av.textContent = ''; av.appendChild(img); };
           img.src = '/p/' + p.id + '/api/cover?folder=' + encodeURIComponent(s.folder) + (k ? '&pin=' + encodeURIComponent(k) : '');
         }
-      } catch (e) { sm.textContent = 'Offline · ' + short(p.url); }
-    }
+      } catch (e) { sm.textContent = 'Offline · ' + short(p.url); stat(box, 'Last seen ' + ago(p.lastSeen), 'warn'); }
+    }));
+    // Point out a player that's behind the others.
+    document.querySelectorAll('#plList .ver').forEach(v => { if (+v.dataset.n < (vers[v.dataset.os] || 0)) { v.className = 'warn'; v.textContent += ' · update'; } });
+    pollAllT = setTimeout(pollAll, 30000);
   }
   // The player's own name (Grown-up settings → Child's name) is the one shown here: copy it into the list
   // whenever we hear from a player, so renaming it on the device shows up on the remote.

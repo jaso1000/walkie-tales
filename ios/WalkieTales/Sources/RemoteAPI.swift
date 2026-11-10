@@ -190,6 +190,8 @@ extension PlayerViewController {
     func statusJson() -> [String: Any] {
         var s: [String: Any] = [:]
         s["version"] = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " (iOS)"
+        if let v = try? Store.root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+           let c = v.volumeAvailableCapacityForImportantUsage { s["freeBytes"] = c } // for the remote's all-players page
         s["name"] = Store.string("kid_name")
         s["bluetooth"] = HeadphonesButton.bluetooth
         s["headphones"] = HeadphonesButton.output() ?? NSNull()

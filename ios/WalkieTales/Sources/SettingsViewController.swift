@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 /// Grown-up settings (behind the cog and the quick sum). Like the Android player and the remote's Settings tab:
 /// a short menu of topics, each opening its own page, with the same order and wording.
@@ -150,6 +151,9 @@ final class SettingsViewController: UITableViewController {
                 .value("+30 minutes today", { "Sleep sounds never count" }, { [weak self] in Limit.add(30); self?.reload() }),
                 .value("No limit today", { "" }, { [weak self] in Limit.offToday(); self?.reload() }),
             ]),
+            ("From Mum & Dad", [
+                .value("Record a message", { "Goodnight or a story" }, { [weak self] in self?.recordMessage() }),
+            ]),
             ("Headphones", [
                 .toggle("Headphones button", "Picks headphones or the speaker from the player", "headphones_button"),
                 .value("Pair new headphones", { "iPhone Settings → Bluetooth" }, { Self.openSettings("Bluetooth") }),
@@ -159,6 +163,111 @@ final class SettingsViewController: UITableViewController {
     }
 
     private func reload() { build(); tableView.reloadData() }
+
+    // MARK: voice messages (a grown-up records into "From Mum & Dad", same as Android and the remote)
+
+    static let voiceFolder = "From Mum & Dad"
+    private var recorder: AVAudioRecorder?
+    private var recTimer: Timer?
+    private var listen: AVAudioPlayer?
+    private var recURL: URL { FileManager.default.temporaryDirectory.appendingPathComponent("message.m4a") }
+
+    private func recordMessage() {
+        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] ok in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if !ok { self.say("The microphone is off for WalkieTales. Turn it on in iPhone Settings → Privacy → Microphone."); return }
+                let a = UIAlertController(title: "Record a message", message: "It goes into the “\(Self.voiceFolder)” folder. Tap Record and start talking.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                a.addAction(UIAlertAction(title: "Record", style: .default) { [weak self] _ in self?.startRecording() })
+                self.present(a, animated: true)
+            }
+        }
+    }
+
+    private func startRecording() {
+        Player.shared.pause()
+        let s = AVAudioSession.sharedInstance()
+        do {
+            try s.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker])
+            try s.setActive(true)
+            let r = try AVAudioRecorder(url: recURL, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44100,
+                                                             AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 96_000])
+            guard r.record(forDuration: 3600) else { throw NSError(domain: "rec", code: 1) }
+            recorder = r
+        } catch {
+            restoreSession()
+            say("The microphone didn’t start.")
+            return
+        }
+        UIApplication.shared.isIdleTimerDisabled = true
+        let a = UIAlertController(title: "Recording…", message: "● 0:00", preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in self?.stopRecorder(); try? FileManager.default.removeItem(at: self?.recURL ?? URL(fileURLWithPath: "/")) })
+        a.addAction(UIAlertAction(title: "Stop", style: .default) { [weak self] _ in self?.finishRecording() })
+        present(a, animated: true)
+        recTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self, weak a] _ in
+            guard let t = self?.recorder?.currentTime else { return }
+            a?.message = String(format: "● %d:%02d", Int(t) / 60, Int(t) % 60)
+        }
+    }
+
+    @discardableResult private func stopRecorder() -> TimeInterval {
+        recTimer?.invalidate(); recTimer = nil
+        let t = recorder?.currentTime ?? 0
+        recorder?.stop(); recorder = nil
+        restoreSession()
+        UIApplication.shared.isIdleTimerDisabled = false
+        owner?.applySettings() // the player's own keep-awake rules
+        return t
+    }
+
+    private func restoreSession() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+    }
+
+    private func finishRecording() {
+        guard stopRecorder() > 0.8 else {
+            try? FileManager.default.removeItem(at: recURL)
+            let a = UIAlertController(title: nil, message: "That was too short. Try again?", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            a.addAction(UIAlertAction(title: "Record", style: .default) { [weak self] _ in self?.startRecording() })
+            present(a, animated: true)
+            return
+        }
+        askName()
+    }
+
+    private func askName() {
+        let a = UIAlertController(title: "Give it a name", message: nil, preferredStyle: .alert)
+        a.addTextField { $0.placeholder = "e.g. Goodnight, love you!"; $0.autocapitalizationType = .sentences }
+        a.addAction(UIAlertAction(title: "Listen", style: .default) { [weak self, weak a] _ in
+            guard let self = self else { return }
+            self.listen = try? AVAudioPlayer(contentsOf: self.recURL)
+            self.listen?.play()
+            let typed = a?.textFields?.first?.text
+            self.askName()
+            (self.presentedViewController as? UIAlertController)?.textFields?.first?.text = typed
+        })
+        a.addAction(UIAlertAction(title: "Throw away", style: .destructive) { [weak self] _ in
+            self?.listen?.stop(); try? FileManager.default.removeItem(at: self?.recURL ?? URL(fileURLWithPath: "/"))
+        })
+        a.addAction(UIAlertAction(title: "Save", style: .default) { [weak self, weak a] _ in
+            self?.listen?.stop(); self?.saveRecording(a?.textFields?.first?.text ?? "")
+        })
+        present(a, animated: true)
+    }
+
+    private func saveRecording(_ title: String) {
+        var n = title.components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|")).joined(separator: " ")
+            .trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: ".")))
+        if n.isEmpty { let f = DateFormatter(); f.dateFormat = "d MMM h.mm a"; n = "Message " + f.string(from: Date()) }
+        let dir = Store.dir(Self.voiceFolder)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var out = dir.appendingPathComponent(n + ".m4a"), i = 2
+        while FileManager.default.fileExists(atPath: out.path) { out = dir.appendingPathComponent("\(n) \(i).m4a"); i += 1 }
+        do { try FileManager.default.moveItem(at: recURL, to: out); say("Saved in “\(Self.voiceFolder)” 💌") }
+        catch { say("Couldn’t save it.") }
+    }
 
     private func pickLimit() {
         let a = UIAlertController(title: "Daily listening limit", message: "Sleep sounds never count.", preferredStyle: .alert)

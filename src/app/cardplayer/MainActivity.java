@@ -666,6 +666,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         String version = "";
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         s.put("version", version);
+        File music = Store.root().getParentFile(); // free space, for the remote's all-players page
+        s.put("freeBytes", music != null ? music.getUsableSpace() : 0);
         s.put("name", prefs.getString("kid_name", ""));
         s.put("bluetooth", Headphones.bluetoothOn(this));
         android.media.AudioDeviceInfo out = Headphones.output(this);

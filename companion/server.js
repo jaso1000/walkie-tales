@@ -9,6 +9,7 @@
 //   PORT          port to listen on (default 8090)
 'use strict';
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -72,7 +73,9 @@ function save() {
   try { fs.writeFileSync(LIST + '.tmp', JSON.stringify(players, null, 2)); fs.renameSync(LIST + '.tmp', LIST); } catch (e) { console.log('Could not save players:', e.message); }
 }
 function newId() { return crypto.randomBytes(4).toString('hex'); }
-const pub = (p) => ({ id: p.id, name: p.name, url: p.url, pinSaved: !!p.pin });
+// When each player was last heard from (kept in memory; the all-players page shows "Seen 5 min ago").
+const seen = {};
+const pub = (p) => ({ id: p.id, name: p.name, url: p.url, pinSaved: !!p.pin, lastSeen: seen[p.id] || 0 });
 
 // ------------------------------------------------------------------ finding players on the Wi-Fi
 
@@ -137,6 +140,7 @@ function proxy(req, res, p, rest) {
   delete headers.connection;
   if (p.pin) headers['x-pin'] = p.pin;
   const upstream = http.request(target, { method: req.method, headers, timeout: req.method === 'PUT' ? 0 : 15000 }, (pr) => {
+    seen[p.id] = Date.now();
     const h = { ...pr.headers };
     delete h.connection;
     res.writeHead(pr.statusCode || 502, h);
@@ -266,7 +270,31 @@ async function pushUpdate(req, res, p, force) {
   up.end(body);
 }
 
-const server = http.createServer(async (req, res) => {
+// Voice messages: any recording (WebM/Opus from Chrome, MP4/AAC from Safari, a phone recorder file) → MP3,
+// which every player (Android and iPhone) can play.
+function readBody(req, max) {
+  return new Promise((resolve, reject) => {
+    const chunks = []; let n = 0;
+    req.on('data', (c) => { n += c.length; if (n > max) { reject(new Error('Too long')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+function toVoiceMp3(input) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-ac', '1', '-ar', '44100',
+      '-af', 'loudnorm=I=-16:TP=-1.5', '-c:a', 'libmp3lame', '-b:a', '96k', '-f', 'mp3', 'pipe:1']);
+    const out = [], err = [];
+    ff.stdout.on('data', (c) => out.push(c));
+    ff.stderr.on('data', (c) => err.push(c));
+    ff.on('error', (e) => reject(new Error(e.code === 'ENOENT' ? 'ffmpeg is missing on the server' : e.message)));
+    ff.on('close', (code) => code === 0 && out.length ? resolve(Buffer.concat(out)) : reject(new Error('Couldn’t read that recording')));
+    ff.stdin.on('error', () => {});
+    ff.stdin.end(input);
+  });
+}
+
+const handler = async (req, res) => {
   // No framing (tap-tricks), no type sniffing, no referrer leaks (PINs can be in cover image links).
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -332,6 +360,15 @@ const server = http.createServer(async (req, res) => {
     return pushUpdate(req, res, p, /[?&]force=1/.test(url));
   }
 
+  // ---- voice message: recording in, MP3 out
+  if (pathname === '/convert-audio' && req.method === 'POST') {
+    try {
+      const mp3 = await toVoiceMp3(await readBody(req, 50 * 1024 * 1024));
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': mp3.length, 'Cache-Control': 'no-store' });
+      return res.end(mp3);
+    } catch (e) { return json(res, 400, { error: e.message }); }
+  }
+
   // ---- make a folder play on an iPhone (converts Ogg to MP3 on that player only)
   m = pathname.match(/^\/p\/([0-9a-f]{8})\/fix-audio$/);
   if (m && req.method === 'POST') {
@@ -356,7 +393,35 @@ const server = http.createServer(async (req, res) => {
     return proxy(req, res, players[0], url);
   }
   return json(res, 404, { error: 'Not found' });
-});
+};
+const server = http.createServer(handler);
+
+// Check on every player once a minute (its PIN-free front page), so "last seen" stays right even when nobody has the remote open.
+setInterval(() => {
+  for (const p of players) looksLikePlayer(p.url, 5000).then(ok => { if (ok) seen[p.id] = Date.now(); });
+}, 60000).unref();
+setTimeout(() => { for (const p of players) looksLikePlayer(p.url, 5000).then(ok => { if (ok) seen[p.id] = Date.now(); }); }, 2000);
+
+// The same remote over https (a home-made certificate, made once and kept in the data folder): browsers only allow the
+// microphone, for voice messages, on a secure address. The first visit shows a warning to accept once.
+const HTTPS_PORT = Number(process.env.HTTPS_PORT || 0);
+function startHttps() {
+  if (!HTTPS_PORT || !DATA) return;
+  try {
+    const dir = path.join(DATA, 'tls'), key = path.join(dir, 'key.pem'), cert = path.join(dir, 'cert.pem');
+    if (!fs.existsSync(key) || !fs.existsSync(cert)) {
+      fs.mkdirSync(dir, { recursive: true });
+      const san = ['DNS:localhost', 'IP:127.0.0.1'].concat((process.env.HTTPS_HOSTS || '').split(',').map(h => h.trim()).filter(Boolean)
+        .map(h => (/^[0-9.]+$/.test(h) ? 'IP:' : 'DNS:') + h)).join(',');
+      require('child_process').execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '3650',
+        '-subj', '/CN=WalkieTales remote', '-addext', 'subjectAltName=' + san, '-keyout', key, '-out', cert], { stdio: 'ignore' });
+    }
+    const s = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) }, handler);
+    s.requestTimeout = 0;
+    s.listen(HTTPS_PORT, () => console.log('WalkieTales companion https on :' + HTTPS_PORT));
+  } catch (e) { console.log('https not started: ' + e.message); }
+}
+startHttps();
 
 load();
 server.requestTimeout = 0; // allow long uploads
