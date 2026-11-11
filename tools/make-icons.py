@@ -3,7 +3,8 @@ feet (cable legs), on the app's purple.
 
     python tools/make-icons.py
 
-Writes docs/icon/walkietales-icon.svg (the master), the iPhone app icon, the remote's web/home-screen icons and
+Writes docs/icon/walkietales-icon.svg (the master), the logo (docs/icon/walkietales-logo-*.svg and
+docs/images/logo-light.png / logo-dark.png), the iPhone app icon, the remote's web/home-screen icons and
 docs/images/icon.png. The Android launcher icon is a vector drawing of the same shapes in res/drawable/ic_launcher_fg.xml
 (edit both together). PNGs are rendered with Playwright + Microsoft Edge (pip install playwright).
 """
@@ -41,6 +42,19 @@ def svg(rounded=True, scale=1.0, background=True):
             f'{bg}<g transform="{t}">{ART}</g></svg>')
 
 
+def logo(dark):
+    """Logo: the character standing on the name, lettered like the WalkerLab lockup (Segoe UI Bold, two-tone name, spaced
+    grey tagline). Transparent background; dark=True for dark pages (white name and legs)."""
+    art = ART if dark else ART.replace('stroke="#FFFFFF" stroke-width="3.5"', f'stroke="{NAVY}" stroke-width="3.5"')
+    name, accent, tag = ("#FFFFFF", "#B9A6FF", "#9A96AE") if dark else (NAVY, PURPLE, "#8A879A")
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 300" width="520" height="300">'
+            f'<g transform="translate(165 -12) scale({190 / 120:.4f})">{art}</g>'
+            f'<text x="260" y="236" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-weight="700" '
+            f'font-size="64" letter-spacing="-1" fill="{name}">Walkie<tspan fill="{accent}">Tales</tspan></text>'
+            f'<text x="260" y="276" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif" font-weight="600" '
+            f'font-size="15" letter-spacing="3" fill="{tag}">MUSIC AND STORIES FOR LITTLE HANDS</text></svg>')
+
+
 def main():
     from playwright.sync_api import sync_playwright
     os.makedirs(os.path.join(ROOT, "docs", "icon"), exist_ok=True)
@@ -57,8 +71,19 @@ def main():
         (os.path.join(web, "favicon.png"), 64, svg(rounded=True, scale=1.0), True),
         (os.path.join(ROOT, "docs", "images", "icon.png"), 512, svg(rounded=True, scale=1.0), True),
     ]
+    for dark in (False, True):
+        with open(os.path.join(ROOT, "docs", "icon", f"walkietales-logo-{'dark' if dark else 'light'}.svg"), "w", encoding="utf-8") as f:
+            f.write(logo(dark))
     with sync_playwright() as p:
         b = p.chromium.launch(channel="msedge")
+        for dark in (False, True):  # the logo, at twice size, on a transparent background
+            page = b.new_page(viewport={"width": 1040, "height": 600})
+            page.set_content(f'<html><body style="margin:0;background:transparent">'
+                             f'{logo(dark).replace("width=\"520\" height=\"300\"", "width=\"1040\" height=\"600\"", 1)}</body></html>')
+            out = os.path.join(ROOT, "docs", "images", f"logo-{'dark' if dark else 'light'}.png")
+            page.screenshot(path=out, omit_background=True, clip={"x": 0, "y": 0, "width": 1040, "height": 600})
+            page.close()
+            print("wrote", os.path.relpath(out, ROOT))
         for path, size, code, clear in jobs:
             page = b.new_page(viewport={"width": size, "height": size})
             page.set_content(f'<html><body style="margin:0;background:transparent">'
