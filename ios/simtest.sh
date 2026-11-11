@@ -108,8 +108,7 @@ for f in $(ls -t ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i walkie |
   python3 - ~/Library/Logs/DiagnosticReports/"$f" >> "$R" <<'PY'
 import json, sys
 raw = open(sys.argv[1]).read()
-body = json.loads(raw[raw.index("
-") + 1:])  # .ips: a header line, then the report
+body = json.loads(raw.split(chr(10), 1)[1])  # .ips: a header line, then the report
 print("  exception:", json.dumps(body.get("exception")), "| termination:", json.dumps(body.get("termination", {}).get("indicator") or body.get("termination")))
 print("  asi:", json.dumps(body.get("asi"))[:400])
 images = body.get("usedImages", [])
