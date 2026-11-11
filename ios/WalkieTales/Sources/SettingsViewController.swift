@@ -242,7 +242,7 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
             ])]
         case "remote":
             return [
-                (nil, [.toggle("Remote control", nil, "remote")]),
+                (nil, [.toggle("Remote control", "Control this player from any phone, tablet or computer on the same Wi-Fi", "remote")]),
                 ("Connect", [
                     .info("Address", RemoteServer.address ?? "Not on Wi-Fi"),
                     .info("Secure address", RemoteServer.ip.map { "https://\($0):\(RemoteServer.httpsPort)  ·  for voice messages (accept the warning once)" } ?? "Not on Wi-Fi"),
@@ -250,6 +250,17 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
                     .value("Change PIN", { "" }, { [weak self] in
                         self?.confirm("Make a new PIN?", "Remote controls will need the new PIN.") { RemoteServer.newPin(); self?.reload() }
                     }),
+                ]),
+                ("How to use it", [
+                    .info("1.  Join the same Wi-Fi", "Your phone needs to be on the same Wi-Fi as this player"),
+                    .info("2.  Open the address", RemoteServer.ip.map { "Type \($0):\(RemoteServer.port) into Safari or Chrome on your phone" }
+                          ?? "Connect this player to Wi-Fi first, then its address shows here"),
+                    .info("3.  Enter the PIN", RemoteServer.pin + "  ·  each phone asks once"),
+                    .info("4.  Keep it on your home screen", "iPhone: Share → Add to Home Screen.  Android: ⋮ → Add to Home screen"),
+                    .info("Voice messages", "Open the secure address instead and accept the warning once (it's this player's own certificate). Then tap Message and hold the red button"),
+                ]),
+                ("All your players in one place", [
+                    .info("A remote for every player", "Run the WalkieTales remote on a home server (Docker) for one page that controls all your players. See github.com/jaso1000/walkie-tales"),
                 ]),
             ]
         case "about":

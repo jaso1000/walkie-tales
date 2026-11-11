@@ -471,7 +471,7 @@ public class SettingsActivity extends Activity {
     void buildRemote() {
         header("Remote control", true);
         panel(null);
-        toggle("Remote control", null, "remote", true);
+        toggle("Remote control", "Control this player from any phone, tablet or computer on the same Wi-Fi", "remote", true);
         panel("Connect");
         String addr = RemoteServer.address();
         row("Address", addr != null ? addr : "Not on Wi-Fi", null);
@@ -483,6 +483,19 @@ public class SettingsActivity extends Activity {
                     RemoteServer.newPin(this);
                     build();
                 }));
+        // How to use it, step by step (the address and PIN above are all a grown-up needs).
+        String ip = RemoteServer.ip();
+        panel("How to use it");
+        row("1.  Join the same Wi-Fi", "Your phone needs to be on the same Wi-Fi as this player", null);
+        row("2.  Open the address", ip != null ? "Type " + ip + ":" + RemoteServer.PORT + " into Safari or Chrome on your phone"
+                : "Connect this player to Wi-Fi first, then its address shows here", null);
+        row("3.  Enter the PIN", RemoteServer.pin(this) + "  ·  each phone asks once", null);
+        row("4.  Keep it on your home screen", "iPhone: Share → Add to Home Screen.  Android: ⋮ → Add to Home screen", null);
+        row("Voice messages", "Open the secure address instead and accept the warning once (it's this player's own "
+                + "certificate). Then tap Message and hold the red button", null);
+        panel("All your players in one place");
+        row("A remote for every player", "Run the WalkieTales remote on a home server (Docker) for one page that controls "
+                + "all your players. See github.com/jaso1000/walkie-tales", null);
     }
 
     void buildAbout() {
