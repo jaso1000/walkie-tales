@@ -15,6 +15,7 @@ demo/
 *.png
 !res/**/*.png
 !companion/web/*.png
+!docs/**/*.png
 node_modules/
 .DS_Store
 Thumbs.db
