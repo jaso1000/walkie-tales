@@ -83,7 +83,7 @@ To try a build before releasing it, put it in the data volume as `update/local.a
   shortcut with the icon. To have it open as a full-screen app with no address bar, serve the companion over
   `https://` (for example through a reverse proxy or a Cloudflare tunnel). Then Chrome offers **Install app**.
 
-Icons are drawn by `tools/make-web-icons.py companion/web`.
+Icons are drawn by `tools/make-icons.py` (one design for the players, the iPhone and the remote; master in `docs/icon/walkietales-icon.svg`).
 
 ## Security
 

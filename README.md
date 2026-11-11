@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/icon.png" alt="The WalkieTales icon: a happy little music player standing on headphone feet" width="128"></p>
+
 <p align="center"><img src="docs/images/banner.jpg" alt="WalkieTales playing Bluey, Emma Memma, Tummy Tom and Hairy Maclary" width="100%"></p>
 
 <p align="center">

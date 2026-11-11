@@ -284,5 +284,5 @@ src/app/cardplayer/
 ios/                         the iPhone app (Swift)
 companion/                   the remote page + Docker container (several players)
 docs/                        this guide and the pictures for the README
-tools/                       phone-tune.sh, make-web-icons.py
+tools/                       phone-tune.sh, make-icons.py (every icon from one design)
 ```
