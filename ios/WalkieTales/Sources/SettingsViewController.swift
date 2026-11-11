@@ -285,9 +285,9 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
 
     private func reload() { build(); tableView.reloadData() }
 
-    // MARK: voice messages (a grown-up records into "From Mum & Dad", same as Android and the remote)
+    // MARK: voice messages (a grown-up records into the "Messages" folder, same as Android and the remote)
 
-    static let voiceFolder = "From Mum & Dad"
+    static let voiceFolder = Messages.folder
     private var recorder: AVAudioRecorder?
     private var recTimer: Timer?
     private var listen: AVAudioPlayer?
@@ -384,9 +384,8 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
         if n.isEmpty { let f = DateFormatter(); f.dateFormat = "d MMM h.mm a"; n = "Message " + f.string(from: Date()) }
         let dir = Store.dir(Self.voiceFolder)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        var out = dir.appendingPathComponent(n + ".m4a"), i = 2
-        while FileManager.default.fileExists(atPath: out.path) { out = dir.appendingPathComponent("\(n) \(i).m4a"); i += 1 }
-        do { try FileManager.default.moveItem(at: recURL, to: out); say("Saved in “\(Self.voiceFolder)” 💌") }
+        let out = Messages.unique(in: dir, n + ".m4a")
+        do { try FileManager.default.moveItem(at: recURL, to: out); Messages.ensureCover(); say("Saved in “\(Self.voiceFolder)” 💌") }
         catch { say("Couldn’t save it.") }
     }
 

@@ -271,6 +271,7 @@ final class RemoteServer {
             try? FileManager.default.removeItem(at: dest)
             do {
                 try FileManager.default.moveItem(at: tmp, to: dest)
+                if folder == Messages.folder { Messages.ensureCover() } // a voice message from the remote
                 sendJson(c, 200, ["ok": true, "name": name])
                 DispatchQueue.main.async { NotificationCenter.default.post(name: .libraryChanged, object: nil) }
             } catch {

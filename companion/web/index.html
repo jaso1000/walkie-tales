@@ -450,8 +450,8 @@
     <div class="card" id="setLimit"></div>
   </div>
   <div class="setpage" data-page="messages" data-title="Messages" data-words="voice record mum dad mom story microphone" hidden>
-    <div class="card"><h2>From Mum &amp; Dad</h2>
-      <div class="set"><div class="grow">Voice and typed messages<small>Hold the red button to record “Goodnight, love you!” or a whole story. It plays on the player and stays in the From Mum &amp; Dad folder.</small></div></div>
+    <div class="card"><h2>Voice messages</h2>
+      <div class="set"><div class="grow">Voice and typed messages<small>Hold the red button to record “Goodnight, love you!” or a whole story. It plays on the player and stays in its <b>Messages</b> folder.</small></div></div>
       <button class="btn wide" id="goMsg" style="margin-top:8px">Send a message</button>
     </div>
   </div>
@@ -529,7 +529,7 @@
 
   <div class="voice" id="voiceBox">
     <h3>🎤 Voice message</h3>
-    <p class="sub" style="margin:0">Record “Goodnight, love you!” or a whole bedtime story. It goes into the <b>From Mum &amp; Dad</b> folder.</p>
+    <p class="sub" style="margin:0">Record “Goodnight, love you!” or a whole bedtime story. It goes into the player’s <b>Messages</b> folder.</p>
     <div class="rec-wrap" id="recWrap">
       <button class="rec" id="recBtn" type="button" aria-label="Record">🎤</button>
       <div class="rec-time" id="recTime"></div>
@@ -860,8 +860,8 @@
   });
   // ---------------------------------------------------------------- voice messages
   // Recorded here (or picked from the phone), turned into an MP3 by the companion server, then uploaded into the
-  // "From Mum & Dad" folder on the chosen players, and played straight away if asked.
-  const VOICE_FOLDER = 'From Mum & Dad';
+  // "Messages" folder on the chosen players, and played straight away if asked.
+  const VOICE_FOLDER = 'Messages'; // the players give it its own picture (“From Mum & Dad” before 1.47)
   let recBlob = null, recMedia = null, recChunks = [], recStart = 0, recTick = null, recDown = 0, recStream = null;
   const canMic = () => window.isSecureContext && navigator.mediaDevices && window.MediaRecorder;
   function voiceSetup() {

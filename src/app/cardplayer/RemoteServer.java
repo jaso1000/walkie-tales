@@ -385,6 +385,7 @@ final class RemoteServer {
         }
         if (dest.exists()) dest.delete();
         if (!tmp.renameTo(dest)) { sendJson(out, 500, new JSONObject().put("error", "Couldn't save file")); return; }
+        if (Messages.FOLDER.equals(dir.getName())) Messages.ensureCover(dir); // a voice message from the remote
         sendJson(out, 200, new JSONObject().put("ok", true).put("folder", dir.getName()).put("name", file));
     }
 

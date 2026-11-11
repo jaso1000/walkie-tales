@@ -170,7 +170,7 @@ be reached, and hides stations while there's no internet. With several stations 
 
 - *Sleep Sounds* (rain, ocean waves, white noise, heartbeat) are made on the player the first time it starts, and loop
   until stopped. They never count towards the daily listening limit. Delete the folder and it stays deleted.
-- Voice messages, recorded on the remote or in *Grown-up settings → Messages*, are kept in the *From Mum & Dad* folder.
+- Voice messages, recorded on the remote or in *Grown-up settings → Messages*, are kept in the *Messages* folder, which gets its own envelope-and-heart picture.
 
 ---
 

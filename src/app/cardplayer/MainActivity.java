@@ -342,6 +342,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     @Override
     protected void onResume() {
         super.onResume();
+        try { Messages.ensure(); } catch (Exception ignored) { } // the voice messages folder: old name moved, its own picture
         preloadLibrary();
         SleepSounds.ensure(this, () -> h.post(() -> { libSnapshot = null; preloadLibrary(); }));
         reloadCards();

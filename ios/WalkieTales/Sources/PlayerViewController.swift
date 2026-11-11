@@ -50,6 +50,7 @@ final class PlayerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         buildUi()
+        Messages.ensure() // the voice messages folder: old name moved, its own picture
         SleepSounds.ensure { NotificationCenter.default.post(name: .libraryChanged, object: nil) }
         UIDevice.current.isBatteryMonitoringEnabled = true
         NotificationCenter.default.addObserver(self, selector: #selector(batteryChanged), name: UIDevice.batteryLevelDidChangeNotification, object: nil)

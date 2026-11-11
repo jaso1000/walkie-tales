@@ -775,7 +775,7 @@ public class SettingsActivity extends Activity {
 
     // ------------------------------------------------------------------ voice messages
 
-    static final String VOICE_FOLDER = "From Mum & Dad";
+    static final String VOICE_FOLDER = Messages.FOLDER;
     android.media.MediaRecorder rec;
     File recFile;
     long recStart;
@@ -902,8 +902,7 @@ public class SettingsActivity extends Activity {
         if (n.isEmpty()) n = "Message " + new java.text.SimpleDateFormat("d MMM h.mm a", Locale.getDefault()).format(new java.util.Date());
         File dir = new File(Store.root(), VOICE_FOLDER);
         dir.mkdirs();
-        File out = new File(dir, n + ".m4a");
-        for (int i = 2; out.exists(); i++) out = new File(dir, n + " " + i + ".m4a");
+        File out = Messages.uniqueIn(dir, n + ".m4a");
         boolean ok = recFile.renameTo(out);
         if (!ok) {
             try (java.io.InputStream in = new java.io.FileInputStream(recFile); java.io.OutputStream o = new java.io.FileOutputStream(out)) {
@@ -913,6 +912,7 @@ public class SettingsActivity extends Activity {
             } catch (Exception e) { ok = false; }
             recFile.delete();
         }
+        if (ok) Messages.ensureCover(dir);
         new AlertDialog.Builder(this, DIALOG).setMessage(ok ? "Saved in “" + VOICE_FOLDER + "” 💌" : "Couldn't save it.")
                 .setPositiveButton("OK", null).show();
     }

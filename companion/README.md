@@ -55,7 +55,7 @@ Tip: give each player a fixed IP address (a DHCP reservation in your router) so 
 - **Now playing:** cover, track, progress (drag or tap to move through the song), play/pause/next/previous (hold ⏮ to start over), stop.
 - **Volume:** tap the dots or −/+. The player's volume limit still applies.
 - **Sleep timer:** off, 15, 30, 45, 60 or 90 minutes.
-- **Message:** send a short message to the player's screen, or a **voice message** (hold to record) that plays on the player and is kept in its *From Mum & Dad* folder.
+- **Message:** send a short message to the player's screen, or a **voice message** (hold to record) that plays on the player and is kept in its *Messages* folder.
 - **All players:** tap the name at the top for every player's battery, free space, version, what's playing and when it was last seen.
 - **Library:** tap a folder to play it; upload music or `cover.jpg` to several players at once (songs already there are skipped, failures retried, names optionally tidied); see, rename and delete the songs in a folder, tidy their names, and check which players are missing songs; delete a folder.
 - **Cards:** link a card to a folder or action (then tap the card on the player), and unlink cards.
