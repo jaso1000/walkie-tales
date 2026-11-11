@@ -51,6 +51,8 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project WalkieTales.xcodeproj -scheme WalkieTales -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild             CODE_SIGNING_ALLOWED=NO build > simbuild.log 2>&1 || { grep -E "error:" -A3 simbuild.log | head -80; exit 1; }
+          # sign it locally with the app's entitlements (keychain), like the real install, so the test sees the same
+          codesign -f -s - --entitlements WalkieTales/WalkieTales.entitlements simbuild/Build/Products/Release-iphonesimulator/WalkieTales.app
 
       - name: Run in an iPhone simulator and take screenshots
         working-directory: ios

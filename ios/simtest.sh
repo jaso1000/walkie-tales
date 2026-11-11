@@ -100,4 +100,6 @@ log "--- android update refused: $(curl -s -m 10 -X PUT -H "X-Pin: $PIN" --data-
 api -X POST -d '{"headphones_button":false}' $B/api/settings > /dev/null
 shot 12-no-headphones-button 2
 api -X POST -d '{"headphones_button":true}' $B/api/settings > /dev/null
+log "--- https log: $(xcrun simctl spawn "$DEV" log show --last 10m --style compact --predicate 'eventMessage CONTAINS "WalkieTales https"' 2>/dev/null | grep -v '^Timestamp' | tail -3 | tr '
+' ' ')"
 log "--- crashes: $(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -ci walkie || echo 0)"

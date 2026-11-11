@@ -4,6 +4,11 @@
 <dict>
 	<key>application-identifier</key>
 	<string>app.cardplayer.ios</string>
+	<!-- The keychain keeps the key for the player's own https certificate (voice messages need a secure address). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>app.cardplayer.ios</string>
+	</array>
 	<key>get-task-allow</key>
 	<false/>
 	<!-- Core NFC tag reading (iPhone 7 and later). TrollStore honours these entitlements without a paid developer account. -->
