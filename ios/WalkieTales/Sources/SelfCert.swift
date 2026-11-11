@@ -42,26 +42,47 @@ enum SelfCert {
 
         // SubjectPublicKeyInfo around the PKCS#1 key
         let rsaAlg = tlv(0x30, [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01, 0x05, 0x00])
-        let spki = tlv(0x30, rsaAlg + tlv(0x03, [0x00] + [UInt8](pkcs1)))
+        let keyBits: [UInt8] = [0x00] + [UInt8](pkcs1)
+        let spki = tlv(0x30, rsaAlg + tlv(0x03, keyBits))
         let sigAlg = tlv(0x30, [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x0B, 0x05, 0x00])
-        let name = tlv(0x30, tlv(0x31, tlv(0x30, [0x06, 0x03, 0x55, 0x04, 0x03] + tlv(0x0C, Array(label.utf8)))))
+        let cnOid: [UInt8] = [0x06, 0x03, 0x55, 0x04, 0x03]
+        let name = tlv(0x30, tlv(0x31, tlv(0x30, cnOid + tlv(0x0C, Array(label.utf8)))))
         let now = Date()
-        let validity = tlv(0x30, time(now.addingTimeInterval(-86_400)) + time(now.addingTimeInterval(3650 * 86_400)))
+        let from: [UInt8] = time(now.addingTimeInterval(-86_400)), until: [UInt8] = time(now.addingTimeInterval(3650 * 86_400))
+        let validity = tlv(0x30, from + until)
         var names = tlv(0x82, Array("localhost".utf8))
         let octets = ip.split(separator: ".").compactMap { UInt8($0) }
         if octets.count == 4 { names += tlv(0x87, octets) }
-        let ext = tlv(0xA3, tlv(0x30, tlv(0x30, [0x06, 0x03, 0x55, 0x1D, 0x11] + tlv(0x04, tlv(0x30, names)))))
+        let sanOid: [UInt8] = [0x06, 0x03, 0x55, 0x1D, 0x11]
+        let ext = tlv(0xA3, tlv(0x30, tlv(0x30, sanOid + tlv(0x04, tlv(0x30, names)))))
         var serial = (0..<8).map { _ in UInt8.random(in: 0...255) }
         serial[0] &= 0x7F; serial[0] |= 0x01
-        let tbs = tlv(0x30, [0xA0, 0x03, 0x02, 0x01, 0x02] + tlv(0x02, serial) + sigAlg + name + validity + name + spki + ext)
+        var body: [UInt8] = [0xA0, 0x03, 0x02, 0x01, 0x02] // version 3
+        body += tlv(0x02, serial)
+        body += sigAlg
+        body += name
+        body += validity
+        body += name
+        body += spki
+        body += ext
+        let tbs = tlv(0x30, body)
         guard let sig = SecKeyCreateSignature(priv, .rsaSignatureMessagePKCS1v15SHA256, Data(tbs) as CFData, &err) as Data?,
-              let cert = SecCertificateCreateWithData(nil, Data(tlv(0x30, tbs + sigAlg + tlv(0x03, [0x00] + [UInt8](sig)))) as CFData) else {
+              let cert = SecCertificateCreateWithData(nil, Data(certDER(tbs, sigAlg, sig)) as CFData) else {
             NSLog("WalkieTales https cert: \(String(describing: err))"); return nil
         }
         let add: [String: Any] = [kSecClass as String: kSecClassCertificate, kSecValueRef as String: cert, kSecAttrLabel as String: label]
         let st = SecItemAdd(add as CFDictionary, nil)
         guard st == errSecSuccess || st == errSecDuplicateItem else { NSLog("WalkieTales https keychain: \(st)"); return nil }
         return find()
+    }
+
+    private static func certDER(_ tbs: [UInt8], _ alg: [UInt8], _ sig: Data) -> [UInt8] {
+        var bits: [UInt8] = [0x00]
+        bits += [UInt8](sig)
+        var all = tbs
+        all += alg
+        all += tlv(0x03, bits)
+        return tlv(0x30, all)
     }
 
     /// UTCTime (dates before 2050) or GeneralizedTime.

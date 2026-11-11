@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  */
 final class RemoteServer {
 
-    static final int PORT = 8080;
+    static final int PORT = 8480; // was 8080 before 1.45 (a port lots of other things use)
     /** The same remote over https (a home-made certificate), so the browser allows the microphone for voice messages. */
     static final int HTTPS_PORT = 8490;
     static final long MAX_UPLOAD = 1024L * 1024 * 1024; // 1 GB per file
@@ -76,7 +76,7 @@ final class RemoteServer {
         return pin;
     }
 
-    /** e.g. "http://192.168.1.23:8080", or null when not on a network. */
+    /** e.g. "http://192.168.1.23:8480", or null when not on a network. */
     static String address() {
         String ip = ip();
         return ip == null ? null : "http://" + ip + ":" + PORT;

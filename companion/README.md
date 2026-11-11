@@ -6,7 +6,7 @@ A web remote for the WalkieTales kids' music player. Use it from any phone or co
 
 **1. Straight from the player (nothing to install).**
 On the player, press and hold ⋮ → answer the sum → **Remote control**. Open the address shown
-(for example `http://192.168.1.50:8080`) in your phone's browser and enter the PIN.
+(for example `http://192.168.1.50:8480`) in your phone's browser and enter the PIN.
 Then use *Add to Home Screen* so it opens like an app.
 
 **2. As a Docker container on your home server.**
@@ -25,13 +25,13 @@ Or without compose:
 
 ```bash
 docker run -d --name walkie-tales-remote --restart unless-stopped \
-  -p 8090:8090 -p 8490:8490 \
+  -p 8480:8480 -p 8490:8490 \
   -v walkie-tales-data:/data \
   -e HTTPS_HOSTS=192.168.1.50 \
   ghcr.io/jaso1000/walkie-tales-remote:latest
 ```
 
-Then open `http://<server>:8090` and tap the name at the top to add your players (or **Find players on the Wi-Fi**).
+Then open `http://<server>:8480` and tap the name at the top to add your players (or **Find players on the Wi-Fi**).
 To record voice messages, use `https://<server>:8490` instead and accept the certificate warning once: browsers only
 allow the microphone on a secure address.
 
@@ -44,10 +44,10 @@ Tip: give each player a fixed IP address (a DHCP reservation in your router) so 
 | Variable       | Meaning                                                                                       |
 |----------------|-----------------------------------------------------------------------------------------------|
 | `HTTPS_HOSTS`  | This server's address(es), comma-separated, written into the https certificate when it's made |
-| `PLAYERS`      | Optional starting players, e.g. `Ruby=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080`    |
+| `PLAYERS`      | Optional starting players, e.g. `Ruby=http://192.168.1.50:8480,Sam=http://192.168.1.51:8480`    |
 | `SCAN_SUBNETS` | Extra networks for *Find players*, e.g. `192.168.2,10.0.0`                                    |
 | `UPDATE_REPO`  | Where player updates come from (default `jaso1000/walkie-tales`)                              |
-| `PORT`, `HTTPS_PORT` | Ports inside the container (defaults `8090` and `8490`)                                 |
+| `PORT`, `HTTPS_PORT` | Ports inside the container (defaults `8480` and `8490`)                                 |
 | `PLAYER_URL`, `PLAYER_PIN` | Older one-player setup: a starting player, and optionally its PIN kept on the server (then anyone who can reach the container can control it) |
 
 ## What it can do
@@ -65,9 +65,9 @@ Tip: give each player a fixed IP address (a DHCP reservation in your router) so 
 ## Several players
 
 The Docker companion can look after any number of players. Tap the player's name at the top of the page to switch,
-add one by its address, or press **Find players on the Wi-Fi** (it checks port 8080 on the players' own network,
+add one by its address, or press **Find players on the Wi-Fi** (it checks ports 8480 and 8080 on the players' own network,
 plus any `SCAN_SUBNETS`). Each device remembers each player's PIN separately. With more than one player, **Library → Add music** has an *Upload to* choice, and *Add a radio station* has an *Add to* choice, so the same files or station go to several players in one go (a player shows up there once this device knows its PIN). The list is kept in the
-`walkie-tales-data` volume, and `PLAYERS="Ruby=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"` can pre-fill it.
+`walkie-tales-data` volume, and `PLAYERS="Ruby=http://192.168.1.50:8480,Sam=http://192.168.1.51:8480"` can pre-fill it.
 Only addresses on the home network (10.x, 172.16-31.x, 192.168.x or local host names) are accepted.
 
 ## Update players over the network
@@ -88,4 +88,7 @@ Icons are drawn by `tools/make-web-icons.py companion/web`.
 ## Security
 
 The player only accepts commands that carry its 6-digit PIN. You can change the PIN on the player.
-It's designed for a home network. Don't expose port 8080 (player), 8090 or 8490 (container) to the internet.
+It's designed for a home network. Don't expose ports 8480 and 8490 (players and container) to the internet.
+
+Ports: players and the container answer on **8480** (http) and **8490** (https). Players before 1.45 used 8080 and the
+container 8090; saved players are moved to the new port automatically once they're updated.

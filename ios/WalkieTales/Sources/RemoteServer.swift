@@ -2,10 +2,10 @@ import Foundation
 import Network
 import UIKit
 
-/// Tiny HTTP server on port 8080 for the remote (same API and PIN rules as the Android player).
+/// Tiny HTTP server on port 8480 for the remote (same API and PIN rules as the Android player).
 /// Every /api/ request needs the PIN, as an "X-Pin" header or "?pin=" query parameter.
 final class RemoteServer {
-    static let port: UInt16 = 8080
+    static let port: UInt16 = 8480 // was 8080 before 1.45 (a port lots of other things use)
     /// The same remote over https (a home-made certificate), so the browser allows the microphone for voice messages.
     static let httpsPort: UInt16 = 8490
     static let maxUpload = 2_000_000_000
@@ -41,7 +41,7 @@ final class RemoteServer {
         return p
     }
 
-    /// The phone's Wi-Fi address, e.g. http://192.168.1.50:8080
+    /// The phone's Wi-Fi address, e.g. http://192.168.1.50:8480
     static var address: String? { ip.map { "http://\($0):\(port)" } }
 
     /// The phone's Wi-Fi address, e.g. 192.168.1.50

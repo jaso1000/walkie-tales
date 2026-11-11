@@ -504,7 +504,7 @@
       <input type="text" id="plName" maxlength="40" placeholder="Name (e.g. Ruby's player)">
     </div>
     <div class="row">
-      <input type="text" id="plUrl" inputmode="url" placeholder="Address, e.g. 192.168.1.50:8080">
+      <input type="text" id="plUrl" inputmode="url" placeholder="Address, e.g. 192.168.1.50:8480">
       <button class="btn" id="plAdd" style="flex:none">Add</button>
     </div>
     <div class="hint" style="text-align:left">The address is on the player in <b>Grown-up settings → Remote control</b>.</div>
@@ -2004,7 +2004,7 @@
   buildMenu();
 
   // ---------------------------------------------------------------- players
-  const short = (u) => u.replace(/^https?:\/\//, '').replace(/:8080$/, '');
+  const short = (u) => u.replace(/^https?:\/\//, '').replace(/:(8480|8080)$/, '');
   const label = (p) => p.name || (p === cur && st && st.name ? st.name + '’s player' : 'Player at ' + short(p.url));
   function showWho() {
     $('#whoName').textContent = cur ? label(cur) : 'WalkieTales';

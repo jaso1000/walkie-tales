@@ -176,12 +176,12 @@ be reached, and hides stations while there's no internet. With several stations 
 
 ## The remote
 
-Each player serves its own remote on port **8080** (*Grown-up settings → Remote control* shows the address and PIN).
+Each player serves its own remote on port **8480** (https on **8490**) (*Grown-up settings → Remote control* shows the address and PIN).
 The Docker version looks after several players at once and adds uploads to all players, the all-players page, voice
 message conversion, iPhone audio conversion and network updates. See [companion/README.md](../companion/README.md).
 
 Security: every command needs the player's 6-digit PIN (you can make a new one on the player), and repeated wrong PINs
-lock that address out for a while. It's built for a home network: don't expose ports 8080, 8090 or 8490 to the internet.
+lock that address out for a while. It's built for a home network: don't expose ports 8480 or 8490 to the internet.
 
 ---
 

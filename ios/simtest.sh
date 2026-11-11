@@ -38,7 +38,7 @@ printf '#EXTM3U\n#EXTINF:-1,Groove Salad\nhttps://ice1.somafm.com/groovesalad-12
 
 PIN=424242
 log "pin read: ${PIN:+yes}"
-B=http://127.0.0.1:8080
+B=http://127.0.0.1:8480
 api() { curl -s -m 10 -H "X-Pin: $PIN" -H "Content-Type: application/json" "$@"; }
 shot() { sleep "${2:-2}"; xcrun simctl io "$DEV" screenshot "shots/$1.png" > /dev/null 2>&1; log "shot: $1"; }
 

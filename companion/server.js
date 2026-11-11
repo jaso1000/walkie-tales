@@ -1,12 +1,12 @@
 // WalkieTales companion: serves the remote-control page (installable as an app) and forwards
 // /p/<player id>/api/* to that player. Several players can be added, found on the Wi-Fi, renamed and removed.
 // No dependencies. Configure with environment variables (all optional):
-//   PLAYERS       starting list, e.g. "Ruby=http://192.168.1.50:8080,Sam=http://192.168.1.51:8080"
+//   PLAYERS       starting list, e.g. "Ruby=http://192.168.1.50:8480,Sam=http://192.168.1.51:8480"
 //   PLAYER_URL    a single starting player (older setups)
 //   PLAYER_PIN    PIN for the PLAYER_URL player (if set, the page won't ask for it)
 //   SCAN_SUBNETS  extra /24 networks to search, e.g. "192.168.1,10.0.0" (the players' own networks are always searched)
 //   DATA_DIR      where the player list is saved (default /data, falls back to ./data)
-//   PORT          port to listen on (default 8090)
+//   PORT          port to listen on (default 8480)
 'use strict';
 const http = require('http');
 const https = require('https');
@@ -14,7 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const PORT = Number(process.env.PORT || 8090);
+const PORT = Number(process.env.PORT || 8480);
+// Players answer on 8480 from version 1.45; older ones on 8080. A saved player that has moved is followed automatically.
+const PLAYER_PORT = '8480', OLD_PLAYER_PORT = '8080';
 const WEB = path.join(__dirname, 'web');
 const STATIC = {
   '/manifest.json': 'application/manifest+json',
@@ -46,7 +48,7 @@ function cleanUrl(u) {
   const priv = ip ? (+ip[1] === 10 || (+ip[1] === 172 && +ip[2] >= 16 && +ip[2] <= 31) || (+ip[1] === 192 && +ip[2] === 168))
     : (!h.includes('.') || /\.(local|lan|home|internal|home\.arpa)$/i.test(h));
   if (!priv) return null;
-  if (!x.port) x.port = '8080';
+  if (!x.port) x.port = PLAYER_PORT;
   return x.protocol + '//' + x.host;
 }
 
@@ -62,7 +64,7 @@ function load() {
   for (const s of seed) {
     const url = cleanUrl(s.url);
     if (!url) { console.log('Ignoring player address (not on the home network):', s.url); continue; }
-    const have = players.find(p => p.url === url);
+    const have = players.find(p => p.url === url || sameHost(p.url, url)); // same phone, maybe on its new port
     if (have) { if (s.pin) have.pin = s.pin; continue; }
     players.push({ id: newId(), name: s.name || '', url, pin: s.pin || '' });
   }
@@ -71,6 +73,17 @@ function load() {
 function save() {
   if (!LIST) return;
   try { fs.writeFileSync(LIST + '.tmp', JSON.stringify(players, null, 2)); fs.renameSync(LIST + '.tmp', LIST); } catch (e) { console.log('Could not save players:', e.message); }
+}
+function sameHost(a, b) { try { return new URL(a).hostname === new URL(b).hostname; } catch (e) { return false; } }
+/** A player saved on the old port that now answers on the new one (it was updated): follow it. */
+async function followMove(p) {
+  let u; try { u = new URL(p.url); } catch (e) { return false; }
+  if (u.port !== OLD_PLAYER_PORT) return false;
+  const moved = u.protocol + '//' + u.hostname + ':' + PLAYER_PORT;
+  if (!(await looksLikePlayer(moved, 4000))) return false;
+  console.log('Player ' + (p.name || p.url) + ' moved to ' + moved);
+  p.url = moved; save();
+  return true;
 }
 function newId() { return crypto.randomBytes(4).toString('hex'); }
 // When each player was last heard from (kept in memory; the all-players page shows "Seen 5 min ago").
@@ -97,7 +110,7 @@ async function scan() {
   for (const p of players) { const m = p.url.match(/\/\/(\d+\.\d+\.\d+)\.\d+/); if (m) nets.add(m[1]); }
   if (!nets.size) nets.add('192.168.1');
   const urls = [];
-  for (const n of nets) for (let i = 1; i < 255; i++) urls.push('http://' + n + '.' + i + ':8080');
+  for (const n of nets) for (let i = 1; i < 255; i++) for (const port of [PLAYER_PORT, OLD_PLAYER_PORT]) urls.push('http://' + n + '.' + i + ':' + port);
   const found = [];
   let next = 0;
   await Promise.all(Array.from({ length: 64 }, async () => {
@@ -109,6 +122,9 @@ async function scan() {
   const added = [];
   for (const u of found) {
     if (players.some(p => p.url === u)) continue;
+    const same = players.find(p => sameHost(p.url, u)); // a saved player that has moved to the new port
+    if (same) { if (u.endsWith(':' + PLAYER_PORT)) { same.url = u; save(); } continue; }
+    if (found.some(o => o !== u && sameHost(o, u) && o.endsWith(':' + PLAYER_PORT))) continue; // answers on both: keep the new one
     const p = { id: newId(), name: '', url: u, pin: '' };
     players.push(p);
     added.push(pub(p));
@@ -369,7 +385,7 @@ const handler = async (req, res) => {
     if (req.method === 'POST') {
       const b = await readJson(req);
       const u = cleanUrl(String(b.url || '').trim());
-      if (!u) return json(res, 400, { error: 'Use the address shown on the player, like 192.168.1.50:8080' });
+      if (!u) return json(res, 400, { error: 'Use the address shown on the player, like 192.168.1.50:8480' });
       if (players.some(p => p.url === u)) return json(res, 409, { error: 'That player is already in the list' });
       const p = { id: newId(), name: String(b.name || '').trim().slice(0, 40), url: u, pin: '' };
       players.push(p); save();
@@ -390,7 +406,7 @@ const handler = async (req, res) => {
       if (typeof b.name === 'string') players[i].name = b.name.trim().slice(0, 40);
       if (typeof b.url === 'string') {
         const u = cleanUrl(b.url.trim());
-        if (!u) return json(res, 400, { error: 'Use the address shown on the player, like 192.168.1.50:8080' });
+        if (!u) return json(res, 400, { error: 'Use the address shown on the player, like 192.168.1.50:8480' });
         players[i].url = u;
       }
       save();
@@ -454,10 +470,13 @@ const handler = async (req, res) => {
 const server = http.createServer(handler);
 
 // Check on every player once a minute (its PIN-free front page), so "last seen" stays right even when nobody has the remote open.
-setInterval(() => {
-  for (const p of players) looksLikePlayer(p.url, 5000).then(ok => { if (ok) seen[p.id] = Date.now(); });
-}, 60000).unref();
-setTimeout(() => { for (const p of players) looksLikePlayer(p.url, 5000).then(ok => { if (ok) seen[p.id] = Date.now(); }); }, 2000);
+function checkAll() {
+  for (const p of players) looksLikePlayer(p.url, 5000).then(async ok => {
+    if (ok || await followMove(p)) seen[p.id] = Date.now();
+  });
+}
+setInterval(checkAll, 60000).unref();
+setTimeout(checkAll, 2000);
 
 // The same remote over https (a home-made certificate, made once and kept in the data folder): browsers only allow the
 // microphone, for voice messages, on a secure address. The first visit shows a warning to accept once.

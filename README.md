@@ -87,15 +87,15 @@ curl -O https://raw.githubusercontent.com/jaso1000/walkie-tales/main/companion/d
 docker compose up -d
 ```
 
-Open `http://<your server>:8090`, tap the name at the top and add your players (or let it find them on your Wi-Fi).
+Open `http://<your server>:8480`, tap the name at the top and add your players (or let it find them on your Wi-Fi).
 The image is `ghcr.io/jaso1000/walkie-tales-remote`, for normal servers and Raspberry Pi. Keep it up to date with
 `docker compose pull && docker compose up -d`. More in the [remote's guide](companion/README.md).
 
 ## Good to know
 
 - **Private by design.** No accounts and no tracking. The only things that go online are cover-art searches (only
-  folder names are sent), internet radio if you add it, and the Docker remote checking GitHub for updates. The remote needs the player's PIN, and too many wrong PINs locks it out for a while. Keep ports 8080, 8090
-  and 8490 off the internet.
+  folder names are sent), internet radio if you add it, and the Docker remote checking GitHub for updates. The remote needs the player's PIN, and too many wrong PINs locks it out for a while. Keep ports 8480 and
+  8490 off the internet.
 - **Plays almost anything:** MP3, M4A/M4B audiobooks, AAC, FLAC, Ogg, Opus and WAV, plus internet radio.
 - **Small and light.** The Android app is about 300 KB and runs on phones from 2013 onwards.
 
