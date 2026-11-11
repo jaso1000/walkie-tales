@@ -558,8 +558,9 @@
       <div class="hint" id="recHint" style="margin:0">Hold to record, or tap to start and tap again to stop</div>
     </div>
     <div id="recInsecure" hidden>
-      <div class="hint" style="text-align:left">The microphone only works on the secure address. <a id="recSecure" href="#">Open it here</a> and accept the warning once (it’s your own server).</div>
-      <span class="label">Or choose a recording from this phone</span>
+      <a class="btn wide" id="recSecure" href="#" style="display:block;text-align:center;text-decoration:none;margin-top:12px">🎤 Record a voice message</a>
+      <div class="hint" style="text-align:left">Phones only allow the microphone on the secure page, so this opens it straight into the recorder. The first time, accept the warning and enter the PIN there.</div>
+      <span class="label">Or send a recording from this phone</span>
       <input type="file" id="recFile" accept="audio/*" capture>
     </div>
     <audio id="recPlay" controls hidden></audio>
@@ -907,7 +908,8 @@
     $('#voiceBox').hidden = false; // the companion server converts to MP3; straight from a player, it's recorded in a format players play
     $('#recWrap').hidden = !canMic();
     $('#recInsecure').hidden = !!canMic();
-    $('#recSecure').href = 'https://' + location.hostname + ':8490' + location.pathname;
+    // the secure page is a separate site to the browser: tell it which player (never the PIN) and to open the recorder
+    $('#recSecure').href = 'https://' + location.hostname + ':8490' + location.pathname + '#record' + (cur ? '-' + cur.id : '');
   }
   function recShow(blob) {
     recBlob = blob;
@@ -2194,10 +2196,23 @@
     if (await loadPlayers()) {
       const legacy = store.get('cp_pin');
       if (legacy && players.length && !store.get(pinKey(players[0].id))) { store.set(pinKey(players[0].id), legacy); store.del('cp_pin'); }
-      const last = players.find(p => p.id === store.get('cp_player')) || players[0];
+      const want = (location.hash.match(/^#record-([0-9a-f]{8})$/) || [])[1]; // opened from "Record a voice message"
+      const last = players.find(p => p.id === want) || players.find(p => p.id === store.get('cp_player')) || players[0];
       if (last) choose(last); else { showWho(); openPlayers(); }
     } else {
       showWho(); refreshAll();
+    }
+    // Opened from the http page's "Record a voice message": go straight to the recorder once the player answers.
+    if (/^#record/.test(location.hash) && canMic()) {
+      const started = Date.now();
+      const t = setInterval(() => {
+        if (Date.now() - started > 120000) return clearInterval(t);
+        if (!st || $('#pin').classList.contains('on')) return; // still connecting, or waiting for the PIN
+        clearInterval(t);
+        history.replaceState(null, '', location.pathname + location.search);
+        $('#qaMsg').click();
+        setTimeout(() => $('#voiceBox').scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+      }, 400);
     }
   })();
 })();
