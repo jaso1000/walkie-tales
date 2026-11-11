@@ -471,10 +471,16 @@
   <div class="setpage" data-page="safety" data-title="Safety" data-words="pin password lock kiosk sum check" hidden>
     <div class="card" id="setSafety"></div>
   </div>
-  <div class="setpage" data-page="remote" data-title="Remote control" data-words="wifi pin address app forget" hidden>
+  <div class="setpage" data-page="remote" data-title="Remote control" data-words="wifi pin address app forget certificate trust https secure warning" hidden>
     <div class="card"><h2>Connect</h2>
       <div class="set"><div class="grow">Address<small id="remoteAddr"></small></div></div>
       <button class="btn ghost wide" id="forget" style="margin-top:8px">Forget PIN on this device</button>
+    </div>
+    <div class="card" id="trustCard" hidden><h2>Trust this server</h2>
+      <div class="set"><div class="grow">No more certificate warning<small>Install this server's home certificate once on each phone. The secure address then just works, voice messages included, and an iPhone shows the WalkieTales icon on its home screen. It only covers addresses on your home network.</small></div></div>
+      <a class="btn wide" id="trustGet" href="/walkietales-home.crt" download style="display:block;text-align:center;margin-top:8px;text-decoration:none">Download the certificate</a>
+      <div class="hint" style="text-align:left;margin-top:10px"><b>iPhone:</b> open this page in Safari and tap Download, then Allow. Go to Settings → Profile Downloaded → Install. Then Settings → General → About → Certificate Trust Settings and turn on <b>WalkieTales home remote</b>. Remove the old home-screen icon and add the secure address again.</div>
+      <div class="hint" style="text-align:left;margin-top:8px"><b>Android:</b> tap Download, then Settings → Security → Encryption and credentials → Install a certificate → CA certificate, and choose walkietales-home.crt.</div>
     </div>
   </div>
   <div class="setpage" data-page="about" data-title="About" data-words="version update free space storage" hidden>
@@ -1841,6 +1847,7 @@
     $('#setNoHits').textContent = 'Nothing called “' + q + '”. Try a word like volume, PIN, night or limit.';
   }
   function showSetPage(id) {
+    if (id === 'remote') $('#trustCard').hidden = !players; // the home certificate lives on the companion server
     if ($('#setQuery').value) { $('#setQuery').value = ''; setSearch(''); }
     $('#setMenu').hidden = id !== 'menu';
     document.querySelectorAll('.setpage').forEach(p => p.hidden = p.dataset.page !== id);

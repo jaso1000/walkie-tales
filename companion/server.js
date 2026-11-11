@@ -378,6 +378,14 @@ const handler = async (req, res) => {
     } catch (e) { return json(res, 404, { error: 'Not found' }); }
   }
   if (pathname === '/healthz') return json(res, 200, { ok: true, players: players.length });
+  if (pathname === '/walkietales-home.crt' && req.method === 'GET') { // the home authority, to trust on a phone
+    try {
+      const der = caDer();
+      res.writeHead(200, { 'Content-Type': 'application/x-x509-ca-cert', 'Content-Length': der.length,
+        'Content-Disposition': 'attachment; filename="walkietales-home.crt"', 'Cache-Control': 'no-store' });
+      return res.end(der);
+    } catch (e) { return json(res, 404, { error: 'No https certificate on this server' }); }
+  }
 
   // ---- the player list
   if (pathname === '/players') {
@@ -481,20 +489,71 @@ setTimeout(checkAll, 2000);
 // The same remote over https (a home-made certificate, made once and kept in the data folder): browsers only allow the
 // microphone, for voice messages, on a secure address. The first visit shows a warning to accept once.
 const HTTPS_PORT = Number(process.env.HTTPS_PORT || 0);
+// The certificate comes from a small "home" certificate authority made on first start (kept in /data/tls). Installing
+// and trusting that authority on a phone (Settings → Remote control → Trust this server) makes the https address fully
+// trusted there: no warning, and an iPhone can fetch the home-screen icon. Apple only accepts such a certificate if it
+// lasts at most 825 days and says it's for a web server, so the server certificate is renewed automatically. The
+// authority is limited to home-network addresses, so even if its key leaked it couldn't vouch for a real website.
+const TLS = DATA ? path.join(DATA, 'tls') : null;
+const CA_CERT = TLS && path.join(TLS, 'ca.pem');
+function tlsHosts() {
+  return (process.env.HTTPS_HOSTS || '').split(',').map(h => h.trim()).filter(Boolean);
+}
+function ssl(args, opts) { return require('child_process').execFileSync('openssl', args, Object.assign({ stdio: 'pipe' }, opts || {})); }
+function makeCa() {
+  const permitted = ['IP:192.168.0.0/255.255.0.0', 'IP:10.0.0.0/255.0.0.0', 'IP:172.16.0.0/255.240.0.0', 'IP:127.0.0.0/255.0.0.0',
+    'DNS:localhost', 'DNS:.local', 'DNS:.lan', 'DNS:.home', 'DNS:.internal', 'DNS:.home.arpa']
+    .concat(tlsHosts().filter(h => !/^[0-9.]+$/.test(h)).map(h => 'DNS:' + h));
+  ssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '3650', '-sha256', '-subj', '/CN=WalkieTales home remote',
+    '-addext', 'basicConstraints=critical,CA:TRUE,pathlen:0', '-addext', 'keyUsage=critical,keyCertSign,cRLSign',
+    '-addext', 'nameConstraints=critical,' + permitted.map(x => 'permitted;' + x).join(','),
+    '-keyout', path.join(TLS, 'ca-key.pem'), '-out', CA_CERT]);
+}
+function makeServerCert() {
+  const san = ['DNS:localhost', 'IP:127.0.0.1'].concat(tlsHosts().map(h => (/^[0-9.]+$/.test(h) ? 'IP:' : 'DNS:') + h)).join(',');
+  const ext = path.join(TLS, 'server.ext'), csr = path.join(TLS, 'server.csr');
+  fs.writeFileSync(ext, 'basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n' +
+    'extendedKeyUsage=serverAuth\nsubjectAltName=' + san + '\n');
+  ssl(['req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=WalkieTales remote', '-keyout', path.join(TLS, 'key.pem'), '-out', csr]);
+  ssl(['x509', '-req', '-in', csr, '-CA', CA_CERT, '-CAkey', path.join(TLS, 'ca-key.pem'), '-CAcreateserial', '-days', '825',
+    '-sha256', '-extfile', ext, '-out', path.join(TLS, 'cert.pem')]);
+  fs.writeFileSync(path.join(TLS, 'hosts.txt'), tlsHosts().join(','));
+  console.log('https certificate made for ' + san);
+}
+/** Make (or renew) what's missing or out of date. Returns true if the server certificate changed. */
+function ensureTls() {
+  fs.mkdirSync(TLS, { recursive: true });
+  let fresh = false;
+  if (!fs.existsSync(CA_CERT)) { makeCa(); fresh = true; } // first start, or upgrading from the old one-off certificate
+  const cert = path.join(TLS, 'cert.pem');
+  let renew = fresh || !fs.existsSync(cert);
+  if (!renew) {
+    try { ssl(['x509', '-checkend', String(30 * 86400), '-noout', '-in', cert]); } catch (e) { renew = true; } // expires within 30 days
+    const was = fs.existsSync(path.join(TLS, 'hosts.txt')) ? fs.readFileSync(path.join(TLS, 'hosts.txt'), 'utf8') : null;
+    if (was !== tlsHosts().join(',')) renew = true; // HTTPS_HOSTS changed
+  }
+  if (renew) makeServerCert();
+  return renew;
+}
+function tlsOptions() {
+  return { key: fs.readFileSync(path.join(TLS, 'key.pem')),
+    cert: Buffer.concat([fs.readFileSync(path.join(TLS, 'cert.pem')), fs.readFileSync(CA_CERT)]) };
+}
+/** The authority's certificate, for phones to install (DER, which iPhones and Android both accept). */
+function caDer() {
+  const pem = fs.readFileSync(CA_CERT, 'utf8');
+  return Buffer.from(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, ''), 'base64');
+}
 function startHttps() {
-  if (!HTTPS_PORT || !DATA) return;
+  if (!HTTPS_PORT || !TLS) return;
   try {
-    const dir = path.join(DATA, 'tls'), key = path.join(dir, 'key.pem'), cert = path.join(dir, 'cert.pem');
-    if (!fs.existsSync(key) || !fs.existsSync(cert)) {
-      fs.mkdirSync(dir, { recursive: true });
-      const san = ['DNS:localhost', 'IP:127.0.0.1'].concat((process.env.HTTPS_HOSTS || '').split(',').map(h => h.trim()).filter(Boolean)
-        .map(h => (/^[0-9.]+$/.test(h) ? 'IP:' : 'DNS:') + h)).join(',');
-      require('child_process').execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '3650',
-        '-subj', '/CN=WalkieTales remote', '-addext', 'subjectAltName=' + san, '-keyout', key, '-out', cert], { stdio: 'ignore' });
-    }
-    const s = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) }, handler);
+    ensureTls();
+    const s = https.createServer(tlsOptions(), handler);
     s.requestTimeout = 0;
     s.listen(HTTPS_PORT, () => console.log('WalkieTales companion https on :' + HTTPS_PORT));
+    setInterval(() => { // renew the server certificate before it runs out (it lasts 825 days)
+      try { if (ensureTls()) s.setSecureContext(tlsOptions()); } catch (e) { console.log('https renew failed: ' + e.message); }
+    }, 24 * 3600 * 1000).unref();
   } catch (e) { console.log('https not started: ' + e.message); }
 }
 startHttps();

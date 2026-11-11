@@ -32,8 +32,13 @@ docker run -d --name walkie-tales-remote --restart unless-stopped \
 ```
 
 Then open `http://<server>:8480` and tap the name at the top to add your players (or **Find players on the Wi-Fi**).
-To record voice messages, use `https://<server>:8490` instead and accept the certificate warning once: browsers only
-allow the microphone on a secure address.
+To record voice messages, use `https://<server>:8490` instead: browsers only allow the microphone on a secure address.
+The server makes its own small certificate authority on first start. Either accept the warning once, or better,
+**trust it on each phone** from *Settings → Remote control → Trust this server* (it downloads `walkietales-home.crt` and
+shows the steps). Once trusted there's no warning, and an iPhone can show the WalkieTales icon when you add the secure
+address to its home screen. The authority only covers home-network addresses (192.168.x, 10.x, 172.16-31.x, .local and
+the like), so it can't vouch for any real website; its key stays in the data volume (`/data/tls`). The server's own
+certificate lasts 825 days (Apple's limit) and is renewed automatically.
 
 **Update:** `docker compose pull && docker compose up -d`. Each release also has its own tag (e.g. `:1.44`).
 
