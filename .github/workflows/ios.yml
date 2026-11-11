@@ -18,6 +18,7 @@ jobs:
         run: |
           mkdir -p ios/WalkieTales/Resources/web
           cp companion/web/index.html ios/WalkieTales/Resources/web/index.html
+          cp companion/web/manifest.json companion/web/*.png ios/WalkieTales/Resources/web/
 
       - name: Generate the Xcode project
         working-directory: ios

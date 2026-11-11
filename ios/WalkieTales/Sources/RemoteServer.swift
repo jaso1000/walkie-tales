@@ -163,6 +163,15 @@ final class RemoteServer {
             send(c, page == nil ? 404 : 200, "text/html; charset=utf-8", page ?? Data("Not found".utf8))
             return
         }
+        let icons = ["/manifest.json": "application/manifest+json", "/favicon.png": "image/png", "/apple-touch-icon.png": "image/png",
+                     "/icon-192.png": "image/png", "/icon-512.png": "image/png", "/icon-maskable-512.png": "image/png"]
+        if method == "GET", let type = icons[path] { // home-screen icons and the app manifest, from the app bundle
+            let file = (path as NSString).lastPathComponent, name = (file as NSString).deletingPathExtension, ext = (file as NSString).pathExtension
+            let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "web") ?? Bundle.main.url(forResource: name, withExtension: ext)
+            if let d = url.flatMap({ try? Data(contentsOf: $0) }) { send(c, 200, type, d, cache: "public, max-age=86400") }
+            else { send(c, 404, "text/plain", Data("Not found".utf8)) }
+            return
+        }
         guard path.hasPrefix("/api/") else { send(c, 404, "text/plain", Data("Not found".utf8)); return }
         let given = headers["x-pin"] ?? query["pin"] ?? ""
         let who: String = { if case let .hostPort(h, _) = c.endpoint { return "\(h)" }; return "?" }()

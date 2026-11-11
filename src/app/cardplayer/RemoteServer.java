@@ -44,6 +44,13 @@ final class RemoteServer {
     /** The same remote over https (a home-made certificate), so the browser allows the microphone for voice messages. */
     static final int HTTPS_PORT = 8490;
     static final long MAX_UPLOAD = 1024L * 1024 * 1024; // 1 GB per file
+    /** Files the page links to for its home-screen icon (served from the APK's web folder). */
+    static final Map<String, String> ICONS = new HashMap<>();
+    static {
+        ICONS.put("/manifest.json", "application/manifest+json");
+        for (String n : new String[]{"/favicon.png", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"})
+            ICONS.put(n, "image/png");
+    }
 
     interface Api {
         JSONObject call(String method, String path, Map<String, String> query, JSONObject body) throws Exception;
@@ -225,6 +232,14 @@ final class RemoteServer {
             // The control page itself (no PIN needed to load the page).
             if (method.equals("GET") && (path.equals("/") || path.equals("/index.html"))) {
                 send(out, 200, "text/html; charset=utf-8", readAll(ctx.getAssets().open("web/index.html")));
+                return;
+            }
+            String icon = ICONS.get(path);
+            if (method.equals("GET") && icon != null) { // home-screen icons and the app manifest, from the APK
+                byte[] b;
+                try { b = readAll(ctx.getAssets().open("web" + path)); } catch (IOException e) { b = null; }
+                if (b == null) send(out, 404, "text/plain", bytes("Not found"));
+                else send(out, 200, icon, b, "public, max-age=86400");
                 return;
             }
             if (!path.startsWith("/api/")) { send(out, 404, "text/plain", bytes("Not found")); return; }
