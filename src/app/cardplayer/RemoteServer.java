@@ -41,6 +41,8 @@ import java.util.concurrent.TimeUnit;
 final class RemoteServer {
 
     static final int PORT = 8080;
+    /** The same remote over https (a home-made certificate), so the browser allows the microphone for voice messages. */
+    static final int HTTPS_PORT = 8490;
     static final long MAX_UPLOAD = 1024L * 1024 * 1024; // 1 GB per file
 
     interface Api {
@@ -51,7 +53,7 @@ final class RemoteServer {
     private final Api api;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
-    private volatile ServerSocket socket;
+    private volatile ServerSocket socket, secure;
     private volatile boolean running;
 
     RemoteServer(Context ctx, Api api) {
@@ -76,13 +78,17 @@ final class RemoteServer {
 
     /** e.g. "http://192.168.1.23:8080", or null when not on a network. */
     static String address() {
+        String ip = ip();
+        return ip == null ? null : "http://" + ip + ":" + PORT;
+    }
+
+    /** The player's home-network address, e.g. "192.168.1.23". */
+    static String ip() {
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
-                    if (a.isSiteLocalAddress() && a.getAddress().length == 4) {
-                        return "http://" + a.getHostAddress() + ":" + PORT;
-                    }
+                    if (a.isSiteLocalAddress() && a.getAddress().length == 4) return a.getHostAddress();
                 }
             }
         } catch (Exception ignored) { }
@@ -128,12 +134,47 @@ final class RemoteServer {
         }, "remote-server");
         t.setDaemon(true);
         t.start();
+        startSecure();
+    }
+
+    /** The https listener: the certificate is made (once, in the background) before it starts. */
+    private void startSecure() {
+        Thread t = new Thread(() -> {
+            ServerSocket bound = null;
+            for (int attempt = 0; attempt < 40 && running && bound == null; attempt++) {
+                try {
+                    javax.net.ssl.SSLServerSocket s = (javax.net.ssl.SSLServerSocket)
+                            SelfCert.context(ctx, ip()).getServerSocketFactory().createServerSocket();
+                    s.setReuseAddress(true);
+                    s.bind(new java.net.InetSocketAddress(HTTPS_PORT));
+                    bound = s;
+                } catch (Exception e) {
+                    android.util.Log.w("WalkieTales", "https not ready: " + e);
+                    try { Thread.sleep(1500); } catch (InterruptedException ie) { break; }
+                }
+            }
+            if (bound == null) return;
+            try (ServerSocket ss = bound) {
+                secure = ss;
+                android.util.Log.i("WalkieTales", "Remote server (https) listening on " + HTTPS_PORT);
+                while (running) {
+                    Socket s = ss.accept();
+                    pool.execute(() -> handle(s));
+                }
+            } catch (Exception e) {
+                if (running) android.util.Log.w("WalkieTales", "https server stopped: " + e);
+            }
+        }, "remote-server-https");
+        t.setDaemon(true);
+        t.start();
     }
 
     synchronized void stop() {
         running = false;
         try { if (socket != null) socket.close(); } catch (IOException ignored) { }
+        try { if (secure != null) secure.close(); } catch (IOException ignored) { }
         socket = null;
+        secure = null;
     }
 
     boolean isRunning() {
@@ -202,7 +243,7 @@ final class RemoteServer {
             Guard.ok(who);
 
             if (method.equals("GET") && path.equals("/api/cover")) {
-                serveCover(out, query.get("folder"), query.containsKey("now"));
+                serveCover(out, query.get("folder"), query.containsKey("now"), query.get("w"), query.get("v"));
                 return;
             }
             if (method.equals("GET") && path.equals("/api/file")) { // download one file (copy between players, fix formats)
@@ -285,18 +326,39 @@ final class RemoteServer {
     }
 
     /** A folder's picture; with "now", the picture built into the track playing now (if it has one). */
-    private void serveCover(OutputStream out, String folder, boolean now) throws Exception {
+    /** Library tiles ask for a small copy (w=360) with the folder's stamp (v): kept here and in the browser for a week. */
+    private static final android.util.LruCache<String, byte[]> THUMBS = new android.util.LruCache<String, byte[]>(6 * 1024 * 1024) {
+        @Override protected int sizeOf(String k, byte[] b) { return b.length; }
+    };
+
+    private void serveCover(OutputStream out, String folder, boolean now, String w, String v) throws Exception {
         File dir = safeFolder(folder);
+        int size = 0;
+        try { size = Math.max(96, Math.min(800, Integer.parseInt(w))); } catch (Exception ignored) { }
+        String key = size > 0 && v != null && !now ? folder + "|" + v + "|" + size : null;
+        String cache = key != null ? "private, max-age=604800, immutable" : "no-store";
+        byte[] kept = key != null ? THUMBS.get(key) : null;
+        if (kept != null) { send(out, kept.length == 0 ? 404 : 200, kept.length == 0 ? "text/plain" : "image/jpeg", kept, cache); return; }
         Bitmap b = null;
         if (now) {
             String src = MainActivity.nowSource;
             if (src != null && dir != null && src.startsWith(dir.getAbsolutePath() + File.separator)) b = Ui.embeddedArt(new File(src));
         }
-        if (b == null) b = dir != null && dir.isDirectory() ? Ui.loadCover(dir) : null;
-        if (b == null) { send(out, 404, "text/plain", bytes("No cover")); return; }
+        if (b == null) b = dir != null && dir.isDirectory() ? (size > 0 ? Ui.loadCover(dir, size) : Ui.loadCover(dir)) : null;
+        if (b == null) {
+            if (key != null) THUMBS.put(key, new byte[0]);
+            send(out, 404, "text/plain", new byte[0], cache);
+            return;
+        }
+        if (size > 0 && Math.max(b.getWidth(), b.getHeight()) > size) { // keep the shorter side at least `size` for the square tile
+            float k = (float) size / Math.min(b.getWidth(), b.getHeight());
+            if (k < 1) b = Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * k), Math.round(b.getHeight() * k), true);
+        }
         ByteArrayOutputStream bo = new ByteArrayOutputStream();
-        b.compress(Bitmap.CompressFormat.JPEG, 85, bo);
-        send(out, 200, "image/jpeg", bo.toByteArray());
+        b.compress(Bitmap.CompressFormat.JPEG, size > 0 ? 80 : 85, bo);
+        byte[] jpg = bo.toByteArray();
+        if (key != null) THUMBS.put(key, jpg);
+        send(out, 200, "image/jpeg", jpg, cache);
     }
 
     private void upload(InputStream in, OutputStream out, String folder, String name, long len) throws Exception {
@@ -382,10 +444,14 @@ final class RemoteServer {
     }
 
     private static void send(OutputStream out, int code, String type, byte[] body) throws IOException {
+        send(out, code, type, body, "no-store");
+    }
+
+    private static void send(OutputStream out, int code, String type, byte[] body, String cache) throws IOException {
         String head = "HTTP/1.1 " + code + " " + reason(code) + "\r\n"
                 + "Content-Type: " + type + "\r\n"
                 + "Content-Length: " + body.length + "\r\n"
-                + "Cache-Control: no-store\r\n"
+                + "Cache-Control: " + cache + "\r\n"
                 + "X-Content-Type-Options: nosniff\r\n"
                 + "X-Frame-Options: DENY\r\n"
                 + "Referrer-Policy: no-referrer\r\n"

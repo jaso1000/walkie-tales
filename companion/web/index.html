@@ -659,7 +659,8 @@
   function setConn(ok, text) { $('#dot').classList.toggle('on', ok); $('#connText').textContent = ok ? 'Connected' : (text || 'Offline'); }
   const coverUrl = (f) => base + '/api/cover?folder=' + encodeURIComponent(f) + (pin ? '&pin=' + encodeURIComponent(pin) : '');
   // Library tiles: a small copy the companion server keeps (and the browser keeps for a week, until the folder changes).
-  const thumbUrl = (f) => !players || !cur ? coverUrl(f.name)
+  // Straight from a player: it makes the small copy itself (w=360) and the browser keeps it until the folder changes (v).
+  const thumbUrl = (f) => !players || !cur ? coverUrl(f.name) + '&w=360' + (f.coverStamp ? '&v=' + f.coverStamp : '')
     : '/p/' + cur.id + '/thumb?folder=' + encodeURIComponent(f.name) + (f.coverStamp ? '&v=' + f.coverStamp : '') + (pin ? '&pin=' + encodeURIComponent(pin) : '');
   const fmt = (ms) => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
     return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
@@ -864,7 +865,7 @@
   let recBlob = null, recMedia = null, recChunks = [], recStart = 0, recTick = null, recDown = 0, recStream = null;
   const canMic = () => window.isSecureContext && navigator.mediaDevices && window.MediaRecorder;
   function voiceSetup() {
-    $('#voiceBox').hidden = !players; // needs the companion server to convert the recording
+    $('#voiceBox').hidden = false; // the companion server converts to MP3; straight from a player, it's recorded in a format players play
     $('#recWrap').hidden = !canMic();
     $('#recInsecure').hidden = !!canMic();
     $('#recSecure').href = 'https://' + location.hostname + ':8490' + location.pathname;
@@ -881,7 +882,10 @@
     try { recStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
     catch (e) { return toast('The microphone isn’t allowed (' + e.name + ')'); }
     recChunks = [];
-    recMedia = new MediaRecorder(recStream);
+    // MP4/AAC plays on every player (Android and iPhone) with no converting; Safari and newer Chrome can record it.
+    const type = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+      .find(t => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    recMedia = type ? new MediaRecorder(recStream, { mimeType: type }) : new MediaRecorder(recStream);
     recMedia.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
     recMedia.onstop = () => {
       recStream.getTracks().forEach(t => t.stop());
@@ -919,28 +923,40 @@
     let name = ($('#recName').value.trim() || 'Message ' + when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' '
       + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).replace(/[\/\\:*?"<>|]+/g, ' ').replace(/^\.+/, '').trim();
     const btn = $('#recSend'); btn.disabled = true; btn.textContent = 'Getting it ready…';
-    let mp3;
-    try {
-      const r = await fetch('/convert-audio', { method: 'POST', body: recBlob });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
-      mp3 = await r.blob();
-    } catch (e) { btn.disabled = false; btn.textContent = 'Send voice message'; return toast('Couldn’t get it ready: ' + e.message); }
+    // Through the companion server it becomes an MP3. Straight from a player it's sent as recorded (MP4/AAC from Safari
+    // and newer Chrome, which every player plays; WebM from older Chrome, which Android players play).
+    let mp3 = recBlob, ext = '.mp3';
+    if (players) {
+      try {
+        const r = await fetch('/convert-audio', { method: 'POST', body: recBlob });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+        mp3 = await r.blob();
+      } catch (e) { btn.disabled = false; btn.textContent = 'Send voice message'; return toast('Couldn’t get it ready: ' + e.message); }
+    } else {
+      const t = (recBlob.type || '').toLowerCase(), fn = (recBlob.name || '').toLowerCase();
+      const m = fn.match(/\.(mp3|m4a|aac|wav|ogg|opus|webm)$/);
+      ext = m ? '.' + m[1] : /mp4|aac|m4a/.test(t) ? '.m4a' : /webm/.test(t) ? '.webm' : /ogg/.test(t) ? '.ogg' : /mpeg|mp3/.test(t) ? '.mp3' : /wav/.test(t) ? '.wav' : '.m4a';
+      if (ext === '.webm' && st && /iOS/.test(st.version || '')) {
+        btn.disabled = false; btn.textContent = 'Send voice message';
+        return toast('iPhones can’t play this browser’s recordings. Record in Safari, or use the home-server remote.');
+      }
+    }
     btn.textContent = 'Sending…';
     const playNow = $('#recNow').checked;
     const res = await Promise.all(targets.map(async t => {
       try {
         // Don't replace an older message with the same name.
-        let file = name + '.mp3';
+        let file = name + ext;
         try {
           const have = new Set((await tapi(t, '/api/folder?name=' + encodeURIComponent(VOICE_FOLDER))).files.map(f => f.name.normalize('NFC')));
-          for (let i = 2; have.has(file.normalize('NFC')); i++) file = name + ' ' + i + '.mp3';
+          for (let i = 2; have.has(file.normalize('NFC')); i++) file = name + ' ' + i + ext;
         } catch (e) { /* new folder */ }
         await upload(VOICE_FOLDER, mp3, () => {}, t, file);
         if (playNow) {
           await sleep(800); // let the player see the new file
           await tapi(t, '/api/play', { folder: VOICE_FOLDER });
           const s = await tapi(t, '/api/status');
-          const base = file.replace(/\.mp3$/i, '').normalize('NFC');
+          const base = file.replace(/\.[^.]+$/, '').normalize('NFC');
           const i = (s.tracks || []).findIndex(n => { n = String(n).normalize('NFC').replace(/\.[^.]+$/, ''); return n === base || n.endsWith(base); });
           if (i >= 0 && i !== s.trackIndex) await tapi(t, '/api/track', { index: i });
         }

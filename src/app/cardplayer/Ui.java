@@ -121,6 +121,11 @@ final class Ui {
         return loadCover(dir, 800, null);
     }
 
+    /** The same, decoded at about {@code maxSize} (for the remote's small Library pictures). */
+    static Bitmap loadCover(File dir, int maxSize) {
+        return loadCover(dir, maxSize, null);
+    }
+
     // ---- small copies of the covers for the Library, kept so it opens instantly
 
     private static final Bitmap NO_COVER = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8);

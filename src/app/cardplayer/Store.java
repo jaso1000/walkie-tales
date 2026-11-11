@@ -25,7 +25,7 @@ import java.util.TreeMap;
 final class Store {
     private Store() { }
 
-    static final String[] AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav"};
+    static final String[] AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav", ".webm"};
 
     static boolean isAudio(File f) {
         String n = f.getName().toLowerCase(Locale.ROOT);

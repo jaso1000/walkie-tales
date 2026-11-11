@@ -475,6 +475,8 @@ public class SettingsActivity extends Activity {
         panel("Connect");
         String addr = RemoteServer.address();
         row("Address", addr != null ? addr : "Not on Wi-Fi", null);
+        if (RemoteServer.ip() != null) row("Secure address", "https://" + RemoteServer.ip() + ":" + RemoteServer.HTTPS_PORT
+                + "  ·  for voice messages (accept the warning once)", null);
         row("PIN", RemoteServer.pin(this), null);
         link("Change PIN", null, v -> confirm("Make a new PIN?",
                 "Remote controls will need the new PIN.", () -> {

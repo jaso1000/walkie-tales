@@ -245,6 +245,7 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
                 (nil, [.toggle("Remote control", nil, "remote")]),
                 ("Connect", [
                     .info("Address", RemoteServer.address ?? "Not on Wi-Fi"),
+                    .info("Secure address", RemoteServer.ip.map { "https://\($0):\(RemoteServer.httpsPort)  ·  for voice messages (accept the warning once)" } ?? "Not on Wi-Fi"),
                     .info("PIN", RemoteServer.pin),
                     .value("Change PIN", { "" }, { [weak self] in
                         self?.confirm("Make a new PIN?", "Remote controls will need the new PIN.") { RemoteServer.newPin(); self?.reload() }

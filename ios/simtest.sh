@@ -44,6 +44,9 @@ shot() { sleep "${2:-2}"; xcrun simctl io "$DEV" screenshot "shots/$1.png" > /de
 
 log "--- remote page served: $(curl -s -m 5 -o /dev/null -w '%{http_code}' $B/)"
 log "--- no PIN gives: $(curl -s -m 5 -o /dev/null -w '%{http_code}' $B/api/status)"
+sleep 3 # the https certificate is made in the background
+log "--- https page: $(curl -sk -m 10 -o /dev/null -w '%{http_code}' https://127.0.0.1:8490/)"
+log "--- https api: $(curl -sk -m 10 -o /dev/null -w '%{http_code}' -H "X-Pin: $PIN" https://127.0.0.1:8490/api/status)"
 log "--- status: $(api $B/api/status | head -c 400)"
 log "--- library: $(api $B/api/library | head -c 600)"
 api -X POST -d '{"kid_name":"Riv"}' $B/api/settings > /dev/null
@@ -88,6 +91,7 @@ log "--- delete folder: $(api -X POST -d '{"folder":"Delete Me"}' $B/api/folder/
 log "--- library after delete: $(api $B/api/library | python3 -c 'import json,sys; n=[f["name"] for f in json.load(sys.stdin)["folders"]]; print("Delete Me gone" if "Delete Me" not in n else "STILL THERE", n)')"
 log "--- delete missing folder: $(api -X POST -d '{"folder":"Nope"}' $B/api/folder/delete)"
 log "--- cover endpoint: $(curl -s -m 10 -o /tmp/cv.jpg -w '%{http_code} %{content_type}' -H "X-Pin: $PIN" "$B/api/cover?folder=Dinosaur%20Songs")"
+log "--- small cover: $(curl -s -m 10 -D - -o /tmp/cvs.jpg -H "X-Pin: $PIN" "$B/api/cover?folder=Dinosaur%20Songs&w=360&v=1" | grep -i cache-control | tr -d '\r') $(wc -c < /tmp/cvs.jpg) bytes"
 log "--- headphones fields: $(api $B/api/status | python3 -c 'import json,sys; s=json.load(sys.stdin); print("bluetooth",s.get("bluetooth"),"headphones",s.get("headphones"),"finding",s.get("finding"))')"
 log "--- ring: $(api -X POST -d '{"on":true}' $B/api/find | python3 -c 'import json,sys; s=json.load(sys.stdin); print("finding",s["finding"],"msg",s["message"])')"
 shot 11-ringing 2
