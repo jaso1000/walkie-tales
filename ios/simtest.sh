@@ -104,5 +104,19 @@ log "--- https log: $(xcrun simctl spawn "$DEV" log show --last 10m --style comp
 ' ' ')"
 log "--- crashes: $(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -ci walkie || echo 0)"
 for f in $(ls -t ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i walkie | head -1); do
-  log "--- crash report $f:"; head -c 2500 ~/Library/Logs/DiagnosticReports/"$f" | grep -E '"exception"|"termination"|"indicator"|"namespace"|"signal"|"type"|symbol|Crashed|Exception|Termination' | head -15 >> "$R"
+  log "--- crash report $f:"
+  python3 - ~/Library/Logs/DiagnosticReports/"$f" >> "$R" <<'PY'
+import json, sys
+raw = open(sys.argv[1]).read()
+body = json.loads(raw[raw.index("
+") + 1:])  # .ips: a header line, then the report
+print("  exception:", json.dumps(body.get("exception")), "| termination:", json.dumps(body.get("termination", {}).get("indicator") or body.get("termination")))
+print("  asi:", json.dumps(body.get("asi"))[:400])
+images = body.get("usedImages", [])
+for t in body.get("threads", []):
+    if t.get("triggered"):
+        for fr in t.get("frames", [])[:14]:
+            img = images[fr["imageIndex"]].get("name", "?") if fr.get("imageIndex", -1) < len(images) else "?"
+            print("   ", img, fr.get("symbol", "?"), fr.get("sourceFile", ""), fr.get("sourceLine", ""))
+PY
 done
