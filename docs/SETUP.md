@@ -60,9 +60,16 @@ lock and locks again when you come back.
 
 ### Updates
 
-The [Docker remote](../companion/README.md) sends new releases to every player over Wi-Fi (*Settings → About →
-Update players*). The player must be a device-owner kiosk on 1.20 or newer, and it only accepts a newer version signed
-with the same key.
+Updates come from this project's [GitHub releases](https://github.com/jaso1000/walkie-tales/releases), in two ways:
+
+- **On the player:** *Grown-up settings → About → Check for updates*. It asks GitHub for the newest release, shows what's
+  new, and installs it if you tap *Install*. Works on any Wi-Fi with internet, so a player away from home can update too.
+  It only checks when you tap it.
+- **From the Docker remote:** *Settings → About → Update players* sends the newest release to every player on your Wi-Fi.
+
+Either way the player only installs it if it's WalkieTales, newer than what it has, and signed with the same key, so a
+fake or tampered file is refused. The player must be a device-owner kiosk on 1.20 or newer (1.48 or newer for the
+button).
 
 ---
 

@@ -266,7 +266,10 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
         case "about":
             return [
                 (nil, [.info("WalkieTales " + Self.version + " for iPhone", Self.freeSpace())]),
-                ("Updates", [.info("New versions", "Install them with TrollStore. Android players update from the remote.")]),
+                ("Updates", [
+                    .info("Where updates come from", "github.com/jaso1000/walkie-tales/releases"),
+                    .info("Installing on iPhone", "Put the new WalkieTales.ipa on the phone and open it with TrollStore (the setup guide on GitHub shows how). Android players can update themselves from Settings → About."),
+                ]),
             ]
         default: return menuSections()
         }

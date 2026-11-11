@@ -43,7 +43,7 @@ no web browser, no app store and no way out. All that's left is the music and st
 3. To lock the phone to WalkieTales, connect it to a computer and run the few commands in the
    [setup guide](docs/SETUP.md#android). Works on Android 8 or newer, with or without Google.
 
-After that, the [Docker remote](#one-remote-for-all-your-players-docker) can update every player over Wi-Fi.
+After that, updates are one tap: *Grown-up settings → About → Check for updates* gets the newest release from GitHub on any Wi-Fi, or the [Docker remote](#one-remote-for-all-your-players-docker) updates every player at once.
 
 ### iPhone
 
@@ -94,7 +94,7 @@ The image is `ghcr.io/jaso1000/walkie-tales-remote`, for normal servers and Rasp
 ## Good to know
 
 - **Private by design.** No accounts and no tracking. The only things that go online are cover-art searches (only
-  folder names are sent), internet radio if you add it, and the Docker remote checking GitHub for updates. The remote needs the player's PIN, and too many wrong PINs locks it out for a while. Keep ports 8480 and
+  folder names are sent), internet radio if you add it, and checking GitHub for updates (only when you tap *Check for updates*, or from the Docker remote). The remote needs the player's PIN, and too many wrong PINs locks it out for a while. Keep ports 8480 and
   8490 off the internet.
 - **Plays almost anything:** MP3, M4A/M4B audiobooks, AAC, FLAC, Ogg, Opus and WAV, plus internet radio.
 - **Small and light.** The Android app is about 300 KB and runs on phones from 2013 onwards.

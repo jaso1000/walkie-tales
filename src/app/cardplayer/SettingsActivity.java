@@ -503,6 +503,9 @@ public class SettingsActivity extends Activity {
         long free = Store.root().getParentFile() != null ? Store.root().getParentFile().getUsableSpace() : 0;
         panel(null);
         row("WalkieTales " + version(), String.format(Locale.ROOT, "%.1f GB free", free / 1e9), null);
+        panel("Updates");
+        link("Check for updates", "From WalkieTales on GitHub (needs internet)", v -> checkForUpdates());
+        link("Where updates come from", "github.com/" + UPDATE_REPO + "/releases", v -> openWeb(RELEASES_URL));
         if (Kiosk.isOwner(this)) {
             panel(null);
             LinearLayout r = link("Release kiosk control", "Only before uninstalling or reusing the phone",
@@ -684,6 +687,153 @@ public class SettingsActivity extends Activity {
                 .putExtra("folder", target)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
         finish();
+    }
+
+    // ------------------------------------------------------------------ updates from GitHub (only when asked)
+
+    static final String UPDATE_REPO = "jaso1000/walkie-tales";
+    static final String RELEASES_URL = "https://github.com/" + UPDATE_REPO + "/releases";
+
+    /** The release page in a browser, stepping out of the kiosk like Android settings (it locks again on return). */
+    void openWeb(String url) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            if (i.resolveActivity(getPackageManager()) == null) throw new Exception("no browser");
+            if (Kiosk.isLocked(this)) { Kiosk.steppedOut = true; Kiosk.unlock(this); }
+            startActivity(i);
+        } catch (Exception e) {
+            new AlertDialog.Builder(this, DIALOG).setTitle("Where updates come from")
+                    .setMessage("New versions are published at\n\n" + url + "\n\nThere's no web browser on this player to open it, "
+                            + "but you can visit it on any phone or computer.")
+                    .setPositiveButton("OK", null).show();
+        }
+    }
+
+    /** Asks GitHub for the newest release; offers to install it if it's newer. Nothing is checked unless a grown-up taps. */
+    void checkForUpdates() {
+        if (!Kiosk.isOwner(this)) {
+            say("Only a player set up as a kiosk can install updates by itself. Download the newest WalkieTales.apk from "
+                    + RELEASES_URL);
+            return;
+        }
+        AlertDialog wait = new AlertDialog.Builder(this, DIALOG).setMessage("Checking GitHub for a new version…").setCancelable(false).show();
+        new Thread(() -> {
+            String err = null, ver = null, url = null, notes = "";
+            try {
+                org.json.JSONObject rel = new org.json.JSONObject(new String(get("https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest", null), "UTF-8"));
+                ver = rel.optString("tag_name", "").replaceFirst("^[vV]", "");
+                notes = rel.optString("body", "");
+                org.json.JSONArray assets = rel.optJSONArray("assets");
+                for (int i = 0; assets != null && i < assets.length(); i++) {
+                    org.json.JSONObject a = assets.getJSONObject(i);
+                    if (a.optString("name").toLowerCase(Locale.ROOT).endsWith(".apk")) url = a.optString("browser_download_url");
+                }
+                if (!ver.matches("[0-9][0-9.]*") || url == null || !url.startsWith("https://github.com/")) err = "The newest release doesn't have an app file.";
+            } catch (Exception e) {
+                err = "Couldn't reach GitHub. Check this player is on Wi-Fi with internet.";
+            }
+            final String fErr = err, fVer = ver, fUrl = url, fNotes = notes;
+            runOnUiThread(() -> {
+                wait.dismiss();
+                if (fErr != null) { say(fErr); return; }
+                if (!newer(fVer, version())) { say("WalkieTales " + version() + " is the newest version."); return; }
+                new AlertDialog.Builder(this, DIALOG).setTitle("WalkieTales " + fVer + " is available")
+                        .setMessage(shortNotes(fNotes) + "\n\nThe player restarts on the new version in about a minute.")
+                        .setPositiveButton("Install", (d, w) -> downloadAndInstall(fVer, fUrl))
+                        .setNegativeButton("Not now", null).show();
+            });
+        }, "check-updates").start();
+    }
+
+    void downloadAndInstall(String ver, String url) {
+        TextView msg = Ui.text(this, "Downloading WalkieTales " + ver + "…", 17, 0xFFFFFFFF, false);
+        msg.setPadding(dp(24), dp(20), dp(24), dp(8));
+        AlertDialog wait = new AlertDialog.Builder(this, DIALOG).setView(msg).setCancelable(false).show();
+        new Thread(() -> {
+            String problem;
+            File apk = new File(getCacheDir(), "update.apk");
+            try {
+                apk.delete();
+                try (java.io.FileOutputStream out = new java.io.FileOutputStream(apk)) {
+                    get(url, (done, total) -> runOnUiThread(() -> msg.setText("Downloading WalkieTales " + ver + "…  "
+                            + (total > 0 ? done * 100 / total + "%" : done / 1024 + " KB"))), out);
+                }
+                problem = SelfUpdate.problem(this, apk); // the same checks as an update sent from the remote
+            } catch (Exception e) {
+                problem = "The download didn't finish. Try again on Wi-Fi with internet.";
+            }
+            final String fProblem = problem;
+            runOnUiThread(() -> {
+                wait.dismiss();
+                if (fProblem != null) { say(fProblem); apk.delete(); return; }
+                say("Installing WalkieTales " + ver + ". The player restarts in a moment.");
+                try { SelfUpdate.install(this, apk); } catch (Exception e) { say("Android didn't allow the update (" + e.getMessage() + ")."); }
+            });
+        }, "download-update").start();
+    }
+
+    interface Progress { void at(long done, long total); }
+
+    /** GET over https (following GitHub's redirect to its file server); returns the body, or streams it to {@code out}. */
+    static byte[] get(String url, Progress progress, java.io.OutputStream... out) throws Exception {
+        for (int hop = 0; hop < 5; hop++) {
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            c.setConnectTimeout(15_000);
+            c.setReadTimeout(60_000);
+            c.setInstanceFollowRedirects(false);
+            c.setRequestProperty("User-Agent", "WalkieTales-player");
+            c.setRequestProperty("Accept", url.contains("api.github.com") ? "application/vnd.github+json" : "application/octet-stream");
+            int code = c.getResponseCode();
+            if (code / 100 == 3) {
+                String next = c.getHeaderField("Location");
+                c.disconnect();
+                if (next == null || !next.startsWith("https://")) throw new Exception("bad redirect");
+                url = next;
+                continue;
+            }
+            if (code != 200) throw new Exception("HTTP " + code);
+            long total = c.getContentLengthLong(), done = 0;
+            java.io.OutputStream o = out.length > 0 ? out[0] : new java.io.ByteArrayOutputStream();
+            try (java.io.InputStream in = c.getInputStream()) {
+                byte[] buf = new byte[64 * 1024];
+                long last = 0;
+                for (int n; (n = in.read(buf)) > 0; ) {
+                    o.write(buf, 0, n);
+                    done += n;
+                    if (progress != null && System.currentTimeMillis() - last > 300) { last = System.currentTimeMillis(); progress.at(done, total); }
+                }
+            } finally { c.disconnect(); }
+            return o instanceof java.io.ByteArrayOutputStream ? ((java.io.ByteArrayOutputStream) o).toByteArray() : null;
+        }
+        throw new Exception("too many redirects");
+    }
+
+    /** "1.10" is newer than "1.9". */
+    static boolean newer(String a, String b) {
+        String[] x = a.split("\\."), y = b.split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int p = i < x.length ? parse(x[i]) : 0, q = i < y.length ? parse(y[i]) : 0;
+            if (p != q) return p > q;
+        }
+        return false;
+    }
+
+    private static int parse(String s) { try { return Integer.parseInt(s.replaceAll("[^0-9]", "")); } catch (Exception e) { return 0; } }
+
+    /** The release notes' first few lines, without markdown stars and the remote line. */
+    static String shortNotes(String body) {
+        StringBuilder sb = new StringBuilder();
+        for (String l : body.split("\n")) {
+            l = l.replace("**", "").replace("`", "").replaceFirst("^-\\s*", "• ").trim();
+            if (l.isEmpty() || l.startsWith("Players on")) continue;
+            if (sb.length() + l.length() > 600) { sb.append("\n…"); break; }
+            sb.append(sb.length() > 0 ? "\n" : "").append(l);
+        }
+        return sb.length() > 0 ? sb.toString() : "A new version of WalkieTales.";
+    }
+
+    void say(String s) {
+        new AlertDialog.Builder(this, DIALOG).setMessage(s).setPositiveButton("OK", null).show();
     }
 
     void openAction(String action) {
