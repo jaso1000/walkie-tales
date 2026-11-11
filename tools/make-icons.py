@@ -7,6 +7,8 @@ Writes docs/icon/walkietales-icon.svg (the master), the logo (docs/icon/walkieta
 docs/images/logo-light.png / logo-dark.png), the iPhone app icon, the remote's web/home-screen icons and
 docs/images/icon.png. The Android launcher icon is a vector drawing of the same shapes in res/drawable/ic_launcher_fg.xml
 (edit both together). PNGs are rendered with Playwright + Microsoft Edge (pip install playwright).
+After changing the icon, bump the "?v=" on the icon links in companion/web/index.html and manifest.json, so phones
+fetch the new picture instead of one they kept (Safari keeps a home-screen icon for a long time).
 """
 import os
 
