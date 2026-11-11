@@ -103,3 +103,6 @@ api -X POST -d '{"headphones_button":true}' $B/api/settings > /dev/null
 log "--- https log: $(xcrun simctl spawn "$DEV" log show --last 10m --style compact --predicate 'eventMessage CONTAINS "WalkieTales https"' 2>/dev/null | grep -v '^Timestamp' | tail -3 | tr '
 ' ' ')"
 log "--- crashes: $(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -ci walkie || echo 0)"
+for f in $(ls -t ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i walkie | head -1); do
+  log "--- crash report $f:"; head -c 2500 ~/Library/Logs/DiagnosticReports/"$f" | grep -E '"exception"|"termination"|"indicator"|"namespace"|"signal"|"type"|symbol|Crashed|Exception|Termination' | head -15 >> "$R"
+done
