@@ -50,9 +50,8 @@ jobs:
         working-directory: ios
         run: |
           set -o pipefail
-          xcodebuild -project WalkieTales.xcodeproj -scheme WalkieTales -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild             CODE_SIGNING_ALLOWED=NO build > simbuild.log 2>&1 || { grep -E "error:" -A3 simbuild.log | head -80; exit 1; }
-          # sign it locally with the app's entitlements (keychain), like the real install, so the test sees the same
-          codesign -f -s - --entitlements WalkieTales/Simulator.entitlements simbuild/Build/Products/Release-iphonesimulator/WalkieTales.app
+          xcodebuild -project WalkieTales.xcodeproj -scheme WalkieTales -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_ENTITLEMENTS=WalkieTales/Simulator.entitlements             build > simbuild.log 2>&1 || { grep -E "error:" -A3 simbuild.log | head -80; exit 1; }
+          # (signed "to run locally" with keychain access, so the test can make the https certificate like a real phone)
 
       - name: Run in an iPhone simulator and take screenshots
         working-directory: ios
