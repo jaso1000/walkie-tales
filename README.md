@@ -11,7 +11,8 @@
   <a href="https://github.com/jaso1000/walkie-tales/releases/latest"><b>Download for Android</b></a> ·
   <a href="#iphone">iPhone</a> ·
   <a href="#the-remote">The remote</a> ·
-  <a href="docs/SETUP.md">Full setup guide</a>
+  <a href="docs/SETUP.md">Full setup guide</a> ·
+  <a href="docs/manual/WalkieTales-quick-guide.pdf">Printable quick guide</a>
 </p>
 
 ---
@@ -92,6 +93,14 @@ docker compose up -d
 Open `http://<your server>:8480`, tap the name at the top and add your players (or let it find them on your Wi-Fi).
 The image is `ghcr.io/jaso1000/walkie-tales-remote`, for normal servers and Raspberry Pi. Keep it up to date with
 `docker compose pull && docker compose up -d`. More in the [remote's guide](companion/README.md).
+
+## A quick guide to print
+
+<a href="docs/manual/WalkieTales-quick-guide.pdf"><img src="docs/manual/quick-guide-sheet.jpg" alt="The WalkieTales quick guide: eight little pages on one A4 sheet" width="100%"></a>
+
+[Download the quick guide (PDF)](docs/manual/WalkieTales-quick-guide.pdf): eight little pages on playing, the Library,
+bedtime, grown-up settings, the remote and messages. Print page 1 on one side of an A4 sheet at **actual size**, make
+one cut, and it folds into a 7.4 × 10.5 cm booklet that fits in the phone's box. Page 2 shows how to fold it.
 
 ## Good to know
 
