@@ -187,12 +187,20 @@ extension PlayerViewController {
         return statusJson()
     }
 
+    static let machine: String = {
+        var u = utsname(); uname(&u)
+        return withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self) }
+    }()
+
     func statusJson() -> [String: Any] {
         var s: [String: Any] = [:]
         s["version"] = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") + " (iOS)"
         if let v = try? Store.root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
            let c = v.volumeAvailableCapacityForImportantUsage { s["freeBytes"] = c } // for the remote's all-players page
         s["name"] = Store.string("kid_name")
+        s["maker"] = "Apple" // the remote turns the hardware id (iPhone9,3) into "iPhone 7"
+        s["model"] = Self.machine
+        s["os"] = "iOS " + UIDevice.current.systemVersion
         s["bluetooth"] = HeadphonesButton.bluetooth
         s["headphones"] = HeadphonesButton.output() ?? NSNull()
         s["finding"] = Finder.shared.ringing

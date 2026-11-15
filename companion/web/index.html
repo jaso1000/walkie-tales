@@ -1952,7 +1952,7 @@
     };
     for (const [k, v] of Object.entries(text)) { const e = document.getElementById('m_' + k); if (e) e.textContent = v; }
     $('#about').textContent = text.about;
-    $('#aboutFree').textContent = freeBytes ? (freeBytes / 1e9).toFixed(1) + ' GB free' : '';
+    $('#aboutFree').textContent = [st && deviceName(st), st && st.os, freeBytes ? (freeBytes / 1e9).toFixed(1) + ' GB free' : ''].filter(Boolean).join('  ·  ');
     $('#remoteAddr').textContent = cur ? cur.url : location.host;
   }
 
@@ -2099,6 +2099,26 @@
     return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
   const verNum = (v) => { const m = String(v || '').match(/(\d+)\.(\d+)/); return m ? +m[1] * 1000 + +m[2] : 0; };
   function stat(box, text, cls) { box.appendChild(el('span', cls || '', text)); }
+  // A friendly name for the phone a player runs on, from what it reports (Build.MODEL on Android, the hardware id on iPhone).
+  const SAMSUNG = { G900: 'Galaxy S5', G920: 'Galaxy S6', G925: 'Galaxy S6 edge', G930: 'Galaxy S7', G935: 'Galaxy S7 edge',
+    G950: 'Galaxy S8', G955: 'Galaxy S8+', G960: 'Galaxy S9', G965: 'Galaxy S9+', G970: 'Galaxy S10e', G973: 'Galaxy S10',
+    G975: 'Galaxy S10+', G977: 'Galaxy S10 5G', G980: 'Galaxy S20', G981: 'Galaxy S20', G985: 'Galaxy S20+', G986: 'Galaxy S20+',
+    G991: 'Galaxy S21', G996: 'Galaxy S21+', N900: 'Galaxy Note 3', N910: 'Galaxy Note 4', N920: 'Galaxy Note 5', N950: 'Galaxy Note 8',
+    N960: 'Galaxy Note 9', N970: 'Galaxy Note 10', N975: 'Galaxy Note 10+', T290: 'Galaxy Tab A 8.0', T510: 'Galaxy Tab A 10.1' };
+  const IPHONE = { '7,2': 'iPhone 6', '7,1': 'iPhone 6 Plus', '8,1': 'iPhone 6s', '8,2': 'iPhone 6s Plus', '8,4': 'iPhone SE',
+    '9,1': 'iPhone 7', '9,3': 'iPhone 7', '9,2': 'iPhone 7 Plus', '9,4': 'iPhone 7 Plus', '10,1': 'iPhone 8', '10,4': 'iPhone 8',
+    '10,2': 'iPhone 8 Plus', '10,5': 'iPhone 8 Plus', '10,3': 'iPhone X', '10,6': 'iPhone X', '11,8': 'iPhone XR', '11,2': 'iPhone XS',
+    '12,1': 'iPhone 11', '12,8': 'iPhone SE (2nd gen)', '14,6': 'iPhone SE (3rd gen)' };
+  function deviceName(s) {
+    const model = String(s.model || '').trim(), maker = String(s.maker || '').trim();
+    if (!model) return '';
+    let m = model.match(/^iPhone(\d+,\d+)$/);
+    if (m) return IPHONE[m[1]] || model;
+    m = model.toUpperCase().match(/^SM-([A-Z]\d{3})/);
+    if (m) return SAMSUNG[m[1]] || 'Samsung ' + model;
+    // Other phones usually report a readable model already ("Nexus 5", "Pixel 3a").
+    return /^(lge|lg|google|unknown)$/i.test(maker) || model.toLowerCase().startsWith(maker.toLowerCase()) ? model : maker + ' ' + model;
+  }
   let pollAllT = null;
   async function pollAll() {
     clearTimeout(pollAllT);
@@ -2116,6 +2136,7 @@
         if (!r.ok) throw new Error(s.error);
         if (s.name) syncName(p, s.name);
         sm.textContent = (s.playing ? '▶ ' + (s.title || '') : s.title ? 'Paused · ' + s.title : 'Nothing playing');
+        const dev = deviceName(s); if (dev) stat(box, '📱 ' + dev, 'dev');
         if (s.battery >= 0) stat(box, (s.charging ? '⚡' : '🔋') + s.battery + '%', s.battery <= 15 && !s.charging ? 'bad' : '');
         if (s.freeBytes) stat(box, (s.freeBytes / 1e9).toFixed(1) + ' GB free', s.freeBytes < 1e9 ? 'warn' : '');
         if (s.version) { const v = el('span', 'ver', 'v' + s.version); box.appendChild(v); const os = /iOS/.test(s.version) ? 'i' : 'a';
