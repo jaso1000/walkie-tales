@@ -210,7 +210,10 @@
   /* player switcher */
   header { padding-top: calc(14px + env(safe-area-inset-top)); }
   #who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; text-align: left; cursor: default; }
+  #who .whoText { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+  #who .whoText small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
   #who h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: initial; }
+  #who img { width: 34px; height: 34px; border-radius: 9px; flex: none; margin-right: 4px; }
   #who .caret { display: none; width: 22px; height: 22px; fill: var(--muted); flex: none; }
   #who.multi { cursor: pointer; }
   #who.multi .caret { display: block; }
@@ -340,7 +343,7 @@
 <body>
 
 <header>
-  <button id="who" type="button" title="Switch player"><h1 id="whoName">WalkieTales</h1>
+  <button id="who" type="button" title="Switch player"><img id="whoIcon" src="/icon-192.png?v=2" alt=""><span class="whoText"><small id="whoSub" hidden>WalkieTales</small><h1 id="whoName">WalkieTales</h1></span>
     <svg class="caret" viewBox="0 0 24 24"><path d="M7,10l5,5 5,-5z"/></svg></button>
   <span class="pill" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting…</span></span>
   <span class="pill" id="batt" hidden></span>
@@ -2049,7 +2052,10 @@
   const short = (u) => u.replace(/^https?:\/\//, '').replace(/:(8480|8080)$/, '');
   const label = (p) => p.name || (p === cur && st && st.name ? st.name + '’s player' : 'Player at ' + short(p.url));
   function showWho() {
-    $('#whoName').textContent = cur ? label(cur) : 'WalkieTales';
+    // The child's (or player's) name under a small "WalkieTales", once we know it.
+    const name = cur ? label(cur) : st && st.name ? st.name : '';
+    $('#whoName').textContent = name || 'WalkieTales'; $('#whoSub').hidden = !name;
+    document.title = name ? name + ' · WalkieTales' : 'WalkieTales';
     $('#who').classList.toggle('multi', !!players);
   }
   function choose(p) {
