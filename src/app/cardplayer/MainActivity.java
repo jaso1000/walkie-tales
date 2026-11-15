@@ -137,6 +137,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     int themeToken;
 
     FrameLayout rootView, browser;
+    LinearLayout playerCol, browserCol; // moved in from a camera hole by fitCutout()
+    View topLeftBox, topRightBox, browserClose; // slid sideways past a camera hole by fitCutout()
     LinearLayout grid;
     EditText libSearch;          // Library: search box
     LinearLayout libChips;       // Library: All / Music / Podcasts / Audiobooks / Radio
@@ -181,6 +183,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
         buildUi();
         setContentView(rootView);
+        rootView.setOnApplyWindowInsetsListener((v, in) -> { fitCutout(in); return in; });
         hideSystemBars();
 
         if (Build.VERSION.SDK_INT >= 33) {
@@ -1760,7 +1763,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        col.setPadding(dp(22), dp(10), dp(22), dp(18));
+        col.setPadding(dp(22), dp(10), dp(22), dp(18)); // plus any camera hole: see fitCutout()
+        playerCol = col;
         col.setClipToPadding(false); // the scrub dot reaches into the side margins at the start/end of a track
         col.setClipChildren(false);
         rootView.addView(col, new FrameLayout.LayoutParams(-1, -1));
@@ -1786,7 +1790,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         moon = Ui.roundButton(this, R.drawable.ic_moon, 0x26FFFFFF, 9);
         moon.setElevation(0);
         moon.setContentDescription("Sleep timer");
-        moon.setOnClickListener(v -> cycleSleep());
+        moon.setOnClickListener(v -> { hap(Haptic.TICK); cycleSleep(); });
         moonBox.addView(moon, new FrameLayout.LayoutParams(-1, -1));
         sleepText = Ui.text(this, "", 14, 0xFFFFD54F, true); // minutes left, drawn over the moon (taps go through)
         sleepText.setGravity(Gravity.CENTER);
@@ -1794,22 +1798,25 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         moonBox.addView(sleepText, new FrameLayout.LayoutParams(-1, -1));
         topLeft.addView(moonBox, new LinearLayout.LayoutParams(dp(38), dp(38)));
         top.addView(topLeft, new FrameLayout.LayoutParams(-2, -1, Gravity.START | Gravity.CENTER_VERTICAL));
+        topLeftBox = topLeft;
         LinearLayout topRight = new LinearLayout(this);
         topRight.setGravity(Gravity.CENTER_VERTICAL);
         phones = Ui.roundButton(this, R.drawable.ic_headphones, 0x26FFFFFF, 9);
         phones.setElevation(0);
         phones.setContentDescription("Headphones");
-        phones.setOnClickListener(v -> toggleHeadphones());
+        phones.setOnClickListener(v -> { hap(Haptic.TICK); toggleHeadphones(); });
         topRight.addView(phones, new LinearLayout.LayoutParams(dp(38), dp(38)));
         ImageButton cog = Ui.roundButton(this, R.drawable.ic_settings, 0x26FFFFFF, 9);
         cog.setElevation(0);
         cog.setContentDescription("Grown-up settings (press and hold)");
         cog.setOnClickListener(v -> flash("Grown-ups: press and hold ⚙", 2000));
-        cog.setOnLongClickListener(v -> { openSettings(); return true; });
+        cog.setHapticFeedbackEnabled(false); // our own buzz instead: some phones can't play Android's heavy click
+        cog.setOnLongClickListener(v -> { hap(Haptic.HEAVY); openSettings(); return true; });
         LinearLayout.LayoutParams cogLp = new LinearLayout.LayoutParams(dp(38), dp(38));
         cogLp.leftMargin = dp(10);
         topRight.addView(cog, cogLp);
         top.addView(topRight, new FrameLayout.LayoutParams(-2, -1, Gravity.END | Gravity.CENTER_VERTICAL));
+        topRightBox = topRight;
         col.addView(top, new LinearLayout.LayoutParams(-1, dp(46)));
 
         // ---- artwork: lives in a box that takes all leftover height, and stays square inside it,
@@ -1842,6 +1849,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         final GestureDetector gd = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent e) { return true; }
             @Override public boolean onSingleTapUp(MotionEvent e) {
+                hap(Haptic.CLICK);
                 togglePlay();
                 return true;
             }
@@ -1850,6 +1858,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 float dx = b.getX() - a.getX(), dy = b.getY() - a.getY();
                 if (mp != null && Math.abs(dx) > dp(50) && Math.abs(vx) > Math.abs(vy)) {
                     nudge(dx < 0);
+                    hap(Haptic.TICK);
                     if (dx < 0) next(); else prev();
                     return true;
                 }
@@ -1975,10 +1984,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         prevBtn.setContentDescription("Previous track");
         playBtn.setContentDescription("Play or pause");
         nextBtn.setContentDescription("Next track");
-        prevBtn.setOnClickListener(v -> prev());
-        prevBtn.setOnLongClickListener(v -> { restartFolder(); return true; });
-        playBtn.setOnClickListener(v -> togglePlay());
-        nextBtn.setOnClickListener(v -> next());
+        prevBtn.setOnClickListener(v -> { hap(Haptic.TICK); prev(); });
+        prevBtn.setHapticFeedbackEnabled(false);
+        prevBtn.setOnLongClickListener(v -> { hap(Haptic.HEAVY); restartFolder(); return true; });
+        playBtn.setOnClickListener(v -> { hap(Haptic.CLICK); togglePlay(); });
+        nextBtn.setOnClickListener(v -> { hap(Haptic.TICK); next(); });
         controls.addView(prevBtn, sized(68, 0));
         controls.addView(playBtn, sized(92, 30));
         controls.addView(nextBtn, sized(68, 0));
@@ -1995,8 +2005,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         up.setElevation(0);
         down.setContentDescription("Quieter");
         up.setContentDescription("Louder");
-        down.setOnClickListener(v -> changeVolume(-1));
-        up.setOnClickListener(v -> changeVolume(1));
+        down.setOnClickListener(v -> { hap(Haptic.TICK); changeVolume(-1); });
+        up.setOnClickListener(v -> { hap(Haptic.TICK); changeVolume(1); });
         dots = new LinearLayout(this);
         dots.setGravity(Gravity.CENTER);
         vr.addView(down, sized(48, 0));
@@ -2012,10 +2022,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         // ---- two big buttons: pick something else / see every track
         LinearLayout chips = new LinearLayout(this);
         browseBtn = chip(R.drawable.ic_grid, "Library", null);
-        browseBtn.setOnClickListener(v -> openBrowser());
+        browseBtn.setOnClickListener(v -> { hap(Haptic.TICK); openBrowser(); });
         tracksText = Ui.text(this, "Tracks", 17, Color.WHITE, true);
         tracksBtn = chip(R.drawable.ic_queue, null, tracksText);
-        tracksBtn.setOnClickListener(v -> showTrackList());
+        tracksBtn.setOnClickListener(v -> { hap(Haptic.TICK); showTrackList(); });
         LinearLayout.LayoutParams c1 = new LinearLayout.LayoutParams(0, dp(54), 1f);
         LinearLayout.LayoutParams c2 = new LinearLayout.LayoutParams(0, dp(54), 1f);
         c2.leftMargin = dp(12);
@@ -2034,6 +2044,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         LinearLayout bcol = new LinearLayout(this);
         bcol.setOrientation(LinearLayout.VERTICAL);
         bcol.setPadding(dp(20), dp(16), dp(20), 0);
+        browserCol = bcol;
         LinearLayout bhead = new LinearLayout(this);
         bhead.setGravity(Gravity.CENTER_VERTICAL);
         TextView btitle = Ui.text(this, "Pick something", 26, Color.WHITE, true);
@@ -2042,6 +2053,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         close.setElevation(0);
         close.setOnClickListener(v -> closeBrowser());
         bhead.addView(close, sized(48, 0));
+        browserClose = close;
         bcol.addView(bhead, new LinearLayout.LayoutParams(-1, dp(56)));
         libSearch = new EditText(this);
         libSearch.setSingleLine(true);
@@ -2315,6 +2327,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             info.setPadding(dp(4), dp(2), dp(4), 0);
             cell.addView(info, new LinearLayout.LayoutParams(tile, -2));
             cell.setOnClickListener(v -> {
+                hap(Haptic.CLICK);
                 closeBrowser();
                 if (hit != null) { // the search found a song in this folder: play that song
                     savePosition();
@@ -2380,6 +2393,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             final String key = c[0];
             card.setOnClickListener(v -> {
                 if (key.equals(libCat)) return;
+                hap(Haptic.TICK);
                 libCat = key;
                 pop();
                 if (libSnapshot != null) renderBrowser(libSnapshot, browseBuild);
@@ -2626,6 +2640,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 row.addView(len);
             }
             row.setOnClickListener(v -> {
+                hap(Haptic.CLICK);
                 closeTrackList();
                 if (w == index && mp != null) { if (preparing || !mp.isPlaying()) play(); }
                 else startTrack(w, 0, true, 0);
@@ -2853,6 +2868,35 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         h.removeCallbacks(clearStatus);
         h.postDelayed(clearStatus, ms);
     }
+
+    /** Keep buttons out from under a camera hole (the S10's sits over the settings cog). A hole near a corner slides
+     *  the buttons on that side over so they sit beside it, keeping the top bar at the top; only a hole in the
+     *  middle moves the top bar down. Phones without a hole are unchanged. The backdrop, night light and blackout
+     *  still cover the whole screen. */
+    void fitCutout(WindowInsets in) {
+        int l = 0, t = 0, r = 0, b = 0, pushL = 0, pushR = 0;
+        if (Build.VERSION.SDK_INT >= 28 && in.getDisplayCutout() != null) {
+            android.view.DisplayCutout c = in.getDisplayCutout();
+            l = c.getSafeInsetLeft(); r = c.getSafeInsetRight(); b = c.getSafeInsetBottom();
+            int w = rootView.getWidth() > 0 ? rootView.getWidth() : getResources().getDisplayMetrics().widthPixels;
+            for (android.graphics.Rect h : c.getBoundingRects()) {
+                if (h.top > dp(60)) continue; // not up by the top bar
+                if (h.right < w * 0.35f) pushL = Math.max(pushL, h.right + dp(8) - dp(22));
+                else if (h.left > w * 0.65f) pushR = Math.max(pushR, w - dp(22) - h.left + dp(8));
+                else t = Math.max(t, h.bottom); // in the middle, over the clock: move the bar down
+            }
+        }
+        playerCol.setPadding(dp(22) + l, dp(10) + t, dp(22) + r, dp(18) + b);
+        browserCol.setPadding(dp(20) + l, dp(16) + t, dp(20) + r, b);
+        ((FrameLayout.LayoutParams) topLeftBox.getLayoutParams()).leftMargin = Math.max(0, pushL);
+        ((FrameLayout.LayoutParams) topRightBox.getLayoutParams()).rightMargin = Math.max(0, pushR);
+        ((LinearLayout.LayoutParams) browserClose.getLayoutParams()).rightMargin = Math.max(0, pushR - dp(2));
+        topLeftBox.requestLayout();
+        topRightBox.requestLayout();
+        browserClose.requestLayout();
+    }
+
+    void hap(int kind) { Haptic.play(this, kind); }
 
     void hideSystemBars() {
         if (Build.VERSION.SDK_INT >= 30) {
