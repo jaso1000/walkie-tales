@@ -563,26 +563,27 @@ final class PlayerViewController: UIViewController {
 
     // MARK: actions
 
-    @objc func playTapped() { if p.folder == nil { if canBrowse { openLibrary() } } else { p.toggle() } }
-    @objc func prevTapped() { p.prev() }
-    @objc func nextTapped() { p.next() }
-    @objc func prevHeld(_ g: UILongPressGestureRecognizer) { if g.state == .began { p.restart() } }
+    @objc func playTapped() { Haptic.play(.click); if p.folder == nil { if canBrowse { openLibrary() } } else { p.toggle() } }
+    @objc func prevTapped() { Haptic.play(.tick); p.prev() }
+    @objc func nextTapped() { Haptic.play(.tick); p.next() }
+    @objc func prevHeld(_ g: UILongPressGestureRecognizer) { if g.state == .began { Haptic.play(.heavy); p.restart() } }
     @objc func artTapped() { pop(); playTapped() }
-    @objc func volDownTapped() { if let m = Volume.shared.change(-1) { flash(m, 1.5) }; renderVolume() }
-    @objc func volUpTapped() { if let m = Volume.shared.change(1) { flash(m, 1.5) }; renderVolume() }
+    @objc func volDownTapped() { Haptic.play(.tick); if let m = Volume.shared.change(-1) { flash(m, 1.5) }; renderVolume() }
+    @objc func volUpTapped() { Haptic.play(.tick); if let m = Volume.shared.change(1) { flash(m, 1.5) }; renderVolume() }
     @objc func cogTapped() { flash("Grown-ups: press and hold ⚙", 2) }
-    @objc func cogHeld(_ g: UILongPressGestureRecognizer) { if g.state == .began { openSettings() } }
+    @objc func cogHeld(_ g: UILongPressGestureRecognizer) { if g.state == .began { Haptic.play(.heavy); openSettings() } }
 
     @objc func artSwiped(_ g: UISwipeGestureRecognizer) {
         switch g.direction {
-        case .left: nudge(-36); p.next()
-        case .right: nudge(36); p.prev()
+        case .left: Haptic.play(.tick); nudge(-36); p.next()
+        case .right: Haptic.play(.tick); nudge(36); p.prev()
         case .up: openTracks()
         default: break
         }
     }
 
     @objc func cycleSleep() {
+        Haptic.play(.tick)
         sleepIdx = (sleepIdx + 1) % Self.sleepMinutes.count
         p.setSleep(minutes: Self.sleepMinutes[sleepIdx])
         renderSleep()
@@ -597,6 +598,7 @@ final class PlayerViewController: UIViewController {
 
     @objc func openLibrary() {
         guard canBrowse else { return }
+        Haptic.play(.tick)
         let l = LibraryViewController()
         l.onPickTrack = { [weak self] f, source in
             guard let self = self else { return }
@@ -615,6 +617,7 @@ final class PlayerViewController: UIViewController {
 
     @objc func openTracks() {
         guard Store.bool("track_list"), p.folder != nil, !p.tracks.isEmpty else { return }
+        Haptic.play(.tick)
         let t = TracksViewController(accent: accent, art: art.image)
         t.onPick = { [weak self] i in
             guard let self = self else { return }

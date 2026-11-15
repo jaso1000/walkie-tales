@@ -188,7 +188,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             card.addAction(UIAction { [weak self] _ in
                 guard let self = self, self.cat != key else { return }
                 self.cat = key
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Haptic.play(.tick)
                 self.applyFilter()
             }, for: .touchUpInside)
             chips.addArrangedSubview(card)
@@ -258,6 +258,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
     func collectionView(_ c: UICollectionView, didSelectItemAt ip: IndexPath) {
         let f = items[ip.item]
+        Haptic.play(.click)
         view.endEditing(true)
         if let hit = hits[f] { dismiss(animated: true) { self.onPickTrack?(f, hit.source) } }
         else { dismiss(animated: true) { self.onPick?(f) } }
@@ -402,6 +403,7 @@ final class TracksViewController: UITableViewController {
     }
 
     override func tableView(_ t: UITableView, didSelectRowAt ip: IndexPath) {
+        Haptic.play(.click)
         dismiss(animated: true) { self.onPick?(ip.row) }
     }
 }

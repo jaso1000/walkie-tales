@@ -78,7 +78,7 @@ final class BatteryView: UIView {
 /// The headphones button. iPhones don't let apps switch Bluetooth on and off, so instead this opens Apple's
 /// audio-output picker (the AirPlay sheet): tap it to send the sound to paired headphones or back to the speaker.
 /// Green while headphones (Bluetooth, wired or AirPlay) are playing the sound.
-final class HeadphonesButton: UIView {
+final class HeadphonesButton: UIView, AVRoutePickerViewDelegate {
     static let size: CGFloat = 38
     private let picker = AVRoutePickerView()
     private let icon = UIImageView()
@@ -98,6 +98,7 @@ final class HeadphonesButton: UIView {
         picker.tintColor = .clear
         picker.activeTintColor = .clear
         picker.prioritizesVideoDevices = false
+        picker.delegate = self
         picker.accessibilityLabel = "Headphones"
         picker.translatesAutoresizingMaskIntoConstraints = false
         addSubview(picker)
@@ -115,6 +116,8 @@ final class HeadphonesButton: UIView {
         lastName = Self.output()
         update()
     }
+
+    func routePickerViewWillBeginPresentingRoutes(_ routePickerView: AVRoutePickerView) { Haptic.play(.tick) }
 
     required init?(coder: NSCoder) { fatalError() }
 
