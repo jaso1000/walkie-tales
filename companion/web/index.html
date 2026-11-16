@@ -338,6 +338,62 @@
   .warn { color: var(--warn); font-size: 13px; padding: 4px 0 8px; }
   .res { padding: 6px 0; font-size: 14px; } .res.ok { color: var(--good); } .res.bad { color: var(--bad); }
   input[type=file].hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  /* ---- computers and tablets in landscape: a side rail instead of the bottom tabs, and the space used ---- */
+  @media (min-width: 1000px) {
+    body { padding: 0 0 32px 232px; }
+    nav { top: 0; right: auto; width: 232px; flex-direction: column; justify-content: flex-start; gap: 2px; padding: 22px 12px;
+      border-top: 0; border-right: 1px solid var(--line); background: var(--panel); }
+    nav::before { content: ""; display: block; height: 40px; margin: 0 8px 22px;
+      background: url("/icon-192.png?v=2") no-repeat left center / 36px 36px; }
+    nav::after { content: "WalkieTales"; position: absolute; top: 30px; left: 70px; font-weight: 800; font-size: 18px; letter-spacing: .2px; }
+    nav button { flex: none; max-width: none; flex-direction: row; justify-content: flex-start; gap: 14px; padding: 11px 14px;
+      font-size: 15px; font-weight: 600; border-radius: 12px; }
+    nav button:hover { background: var(--panel2); color: var(--text); }
+    nav button.on { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+    nav button svg { width: 22px; height: 22px; }
+    header { max-width: 1240px; padding: 22px 36px 6px; }
+    header h1 { font-size: 22px; }
+    #who img { display: none; } /* the rail shows the icon */
+    .wrap { max-width: 1240px; padding: 16px 36px; }
+    .toast { bottom: 32px; left: calc(50% + 116px); }
+
+    /* Playing: the player on the left, quick actions and what's next on the right */
+    #tab-now .wrap { display: grid; grid-template-columns: minmax(360px, 440px) minmax(0, 1fr); grid-template-rows: auto 1fr;
+      column-gap: 28px; align-items: start; }
+    #tab-now .np { grid-row: 1 / span 2; position: sticky; top: 20px; margin: 0; }
+    #tab-now .quick { grid-column: 2; }
+    #tab-now .wrap > .card:not(.np) { grid-column: 2; }
+    .cover { width: min(100%, 300px); }
+    .qa { padding: 16px 6px 14px; }
+    .qa:hover { background: var(--panel2); }
+
+    /* Library: room for more covers */
+    .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 22px 18px; }
+    .lib-tools { flex-direction: row; align-items: center; }
+    .lib-tools input { max-width: 340px; }
+    #libCats { flex: 1; }
+    .tile:hover .art { transform: translateY(-2px); transition: transform .15s; }
+
+    /* Cards and Settings: two columns of cards */
+    #tab-cards .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; align-items: start; }
+    #tab-cards .banner { grid-column: 1 / -1; }
+    .set-search { max-width: 520px; }
+    #setMenu { columns: 2; column-gap: 20px; }
+    #setMenu .menu-head { break-after: avoid; margin-top: 0; padding-top: 18px; }
+    #setMenu .menu-group { break-inside: avoid; }
+    .menu-row:hover { background: var(--panel2); }
+    .setpage { columns: 2; column-gap: 20px; }
+    .setpage > .page-head { column-span: all; }
+    .setpage > .card { break-inside: avoid; display: inline-block; width: 100%; }
+    #tab-set.searching .setpage { columns: 1; }
+
+    /* pop-ups open as dialogs in the middle, not sheets from the bottom */
+    .overlay, #players, #songs { align-items: center; padding: 24px 24px 24px 256px; }
+    .overlay .sheet, #players .sheet, #songs .sheet { max-width: 620px; border-radius: 22px; max-height: 86vh; padding: 22px 22px 24px; }
+    #pin { padding-left: 256px; }
+  }
+  @media (min-width: 1500px) { #setMenu { columns: 3; } }
 </style>
 </head>
 <body>
