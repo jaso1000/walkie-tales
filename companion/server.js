@@ -475,16 +475,25 @@ const handler = async (req, res) => {
   }
   return json(res, 404, { error: 'Not found' });
 };
-const server = http.createServer(handler);
+// Players are only contacted while someone is using the remote: the page polls the one being shown, and the server
+// checks the rest once a minute (their PIN-free front page) for "last seen". Nothing talks to the players when nobody
+// has the remote open, to spare their batteries.
+const IN_USE_MS = 3 * 60 * 1000;
+let lastVisit = 0;
+function visited() {
+  const idle = Date.now() - lastVisit > IN_USE_MS;
+  lastVisit = Date.now();
+  if (idle) setImmediate(checkAll); // opened after a quiet spell: check everyone straight away
+}
+const server = http.createServer((req, res) => { visited(); handler(req, res); });
 
-// Check on every player once a minute (its PIN-free front page), so "last seen" stays right even when nobody has the remote open.
 function checkAll() {
+  if (Date.now() - lastVisit > IN_USE_MS) return;
   for (const p of players) looksLikePlayer(p.url, 5000).then(async ok => {
     if (ok || await followMove(p)) seen[p.id] = Date.now();
   });
 }
 setInterval(checkAll, 60000).unref();
-setTimeout(checkAll, 2000);
 
 // The same remote over https (a home-made certificate, made once and kept in the data folder): browsers only allow the
 // microphone, for voice messages, on a secure address. The first visit shows a warning to accept once.
@@ -548,7 +557,7 @@ function startHttps() {
   if (!HTTPS_PORT || !TLS) return;
   try {
     ensureTls();
-    const s = https.createServer(tlsOptions(), handler);
+    const s = https.createServer(tlsOptions(), (req, res) => { visited(); handler(req, res); });
     s.requestTimeout = 0;
     s.listen(HTTPS_PORT, () => console.log('WalkieTales companion https on :' + HTTPS_PORT));
     setInterval(() => { // renew the server certificate before it runs out (it lasts 825 days)
