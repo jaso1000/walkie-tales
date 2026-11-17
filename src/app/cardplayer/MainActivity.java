@@ -2430,7 +2430,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             TextView label = Ui.text(this, c[1], 12, on ? Color.WHITE : 0xBFFFFFFF, on);
             label.setGravity(Gravity.CENTER);
             label.setSingleLine(true);
-            card.addView(label, new LinearLayout.LayoutParams(-2, -2));
+            label.setMaxLines(1);
+            // "Favourites" shrinks to fit a narrow button instead of being cut off
+            label.setAutoSizeTextTypeUniformWithConfiguration(8, 12, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+            label.setPadding(dp(2), 0, dp(2), 0);
+            card.addView(label, new LinearLayout.LayoutParams(-1, dp(18)));
             final String key = c[0];
             card.setOnClickListener(v -> {
                 if (key.equals(libCat)) return;

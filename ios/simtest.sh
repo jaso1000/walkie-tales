@@ -66,6 +66,10 @@ shot 4b-battery-low 1
 api -X POST -d '{"battery":"64"}' $B/api/ui > /dev/null
 api -X POST -d '{"show":"tracks"}' $B/api/ui > /dev/null
 shot 5-tracks 2
+# every kind of tab plus Favourites: six buttons, the narrowest the bar gets (the labels must fit)
+mkdir -p "$CARDS/Story Podcast" && cp "$CARDS/Dinosaur Songs/Stomping Dinos.m4a" "$CARDS/Story Podcast/Episode 1.m4a"
+api -X POST -d '{"folder":"Story Podcast","category":"podcast"}' $B/api/folder/category > /dev/null
+log "--- favourite: $(api -X POST -d '{"folder":"Dinosaur Songs","on":true}' $B/api/folder/favourite | head -c 120)"
 api -X POST -d '{"show":"library"}' $B/api/ui > /dev/null
 shot 6-library 3
 api -X POST -d '{"show":"settings"}' $B/api/ui > /dev/null

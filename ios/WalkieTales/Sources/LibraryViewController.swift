@@ -202,11 +202,13 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             let p = UILabel(); p.text = pic; p.font = .systemFont(ofSize: 28); p.textAlignment = .center; p.alpha = on ? 1 : 0.75
             let l = UILabel(); l.text = label; l.font = .systemFont(ofSize: 12, weight: on ? .bold : .medium)
             l.textColor = on ? .white : UIColor(white: 1, alpha: 0.75); l.textAlignment = .center
+            l.adjustsFontSizeToFitWidth = true; l.minimumScaleFactor = 0.6 // "Favourites" shrinks to fit a narrow button
             let s = UIStackView(arrangedSubviews: [p, l]); s.axis = .vertical; s.alignment = .center; s.spacing = 1
             s.isUserInteractionEnabled = false
             s.translatesAutoresizingMaskIntoConstraints = false
             card.addSubview(s)
-            NSLayoutConstraint.activate([s.centerXAnchor.constraint(equalTo: card.centerXAnchor), s.centerYAnchor.constraint(equalTo: card.centerYAnchor)])
+            NSLayoutConstraint.activate([s.centerXAnchor.constraint(equalTo: card.centerXAnchor), s.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+                                         s.widthAnchor.constraint(lessThanOrEqualTo: card.widthAnchor, constant: -4)])
             card.addAction(UIAction { [weak self] _ in
                 guard let self = self, self.cat != key else { return }
                 self.cat = key
