@@ -492,7 +492,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
                 if (f.equals(folder)) stopAll();
                 if (!Store.deleteTree(dir)) throw new IllegalStateException("Couldn't delete everything in " + f);
-                prefs.edit().remove("cat:" + f).apply();
+                prefs.edit().remove("cat:" + f).remove("fav:" + f).apply();
                 if (cards.values().removeIf(f::equals)) { Store.saveCards(cards); cardsStamp = Store.cardsFile().lastModified(); }
                 flash("Deleted “" + f + "”", 3000);
                 if (browsing) openBrowser();
@@ -527,6 +527,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 folderRenamed(f, to);
                 flash("Renamed to “" + to + "”", 3000);
                 if (browsing) openBrowser();
+                break;
+            }
+            case "/api/folder/favourite": { // remote → folder menu → Favourite: shown first, with a heart, in the Library
+                String f = b.getString("folder");
+                File dir = RemoteServer.safeFolder(f);
+                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
+                setFavourite(f, b.optBoolean("on", true));
                 break;
             }
             case "/api/folder/category": { // remote → folder menu → Type: auto, music, podcast, audiobook or radio
@@ -635,7 +642,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     void folderRenamed(String from, String to) {
         SharedPreferences.Editor e = prefs.edit();
         Map<String, ?> all = prefs.getAll();
-        for (String k : new String[]{"art:", "cat:", "pos:", "repeat:", "resume:", "shuffle:"}) {
+        for (String k : new String[]{"art:", "cat:", "fav:", "pos:", "repeat:", "resume:", "shuffle:"}) {
             Object v = all.get(k + from);
             if (v == null) continue;
             if (v instanceof Boolean) e.putBoolean(k + to, (Boolean) v);
@@ -745,6 +752,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             o.put("autoCategory", i.autoCategory);
             o.put("shuffle", prefs.getBoolean("shuffle:" + f, false));
             o.put("repeat", prefs.getBoolean("repeat:" + f, false));
+            o.put("favourite", isFavourite(f));
             arr.put(o);
         }
         JSONArray acts = new JSONArray();
@@ -2186,6 +2194,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!canBrowse()) return;
         final int build = ++browseBuild;
         final List<Store.FolderInfo> shown = libSnapshot;
+        if (!browsing) {
+            favAtOpen = new java.util.HashSet<>();
+            for (Map.Entry<String, ?> e : prefs.getAll().entrySet()) if (e.getKey().startsWith("fav:")) favAtOpen.add(e.getKey().substring(4));
+        }
         // Show it straight away from what's remembered, then check for changes in the background.
         if (shown != null) renderBrowser(shown, build);
         else grid.removeAllViews();
@@ -2230,8 +2242,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             if (i.tracks == 0) continue;
             if (!online && i.live) continue; // no internet: radio stations can't play, so don't offer them
             String cat = Store.category(prefs, i);
+            boolean fav = isFavourite(i.name);
             present.add(cat);
-            if (!libCat.equals("all") && !libCat.equals(cat)) continue;
+            if (fav) present.add("fav");
+            if (libCat.equals("fav") ? !fav : !libCat.equals("all") && !libCat.equals(cat)) continue;
             if (!q.isEmpty() && !i.name.toLowerCase(Locale.ROOT).contains(q)) {
                 Track hit = null;
                 for (Track t : i.trackList) if (t.name.toLowerCase(Locale.ROOT).contains(q)) { hit = t; break; }
@@ -2243,6 +2257,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         renderLibChips(present);
         if (q.isEmpty() && !libCat.equals("music") && !libCat.equals("radio")) // keep listening: recent books first
             Collections.sort(items, (x, y) -> Long.compare(recentKey(y), recentKey(x)));
+        if (q.isEmpty()) // favourites first (the sort keeps the order otherwise)
+            Collections.sort(items, (x, y) -> Boolean.compare(favFirst(y.name), favFirst(x.name)));
         boolean withAll = items.size() > 1 && libCat.equals("all") && q.isEmpty();
 
         if (items.isEmpty() && (!q.isEmpty() || !libCat.equals("all"))) {
@@ -2298,7 +2314,23 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             });
             img.setClipToOutline(true);
             img.setElevation(dp(8));
-            cell.addView(img, new LinearLayout.LayoutParams(tile, tile));
+            FrameLayout cover = new FrameLayout(this);
+            cover.setClipChildren(false);
+            cover.addView(img, new FrameLayout.LayoutParams(tile, tile));
+            if (fi != null && isFavourite(f)) { // a heart in the corner
+                TextView heart = Ui.text(this, "♥", 22, 0xFFFF4F7B, true);
+                heart.setGravity(Gravity.CENTER);
+                GradientDrawable hb = new GradientDrawable();
+                hb.setShape(GradientDrawable.OVAL);
+                hb.setColor(Color.WHITE);
+                heart.setBackground(hb);
+                heart.setPadding(0, dp(1), 0, 0);
+                heart.setElevation(dp(10));
+                FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(dp(36), dp(36), Gravity.TOP | Gravity.END);
+                hl.topMargin = hl.rightMargin = dp(8);
+                cover.addView(heart, hl);
+            }
+            cell.addView(cover, new LinearLayout.LayoutParams(tile, tile));
             float prog = progressOf(fi);
             if (prog > 0) { // how far through the book or podcast
                 FrameLayout track = new FrameLayout(this);
@@ -2346,6 +2378,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
                 }
                 pop();
             });
+            if (fi != null) cell.setOnLongClickListener(v -> { // press and hold: make it a favourite (or not)
+                hap(Haptic.HEAVY);
+                setFavourite(f, !isFavourite(f));
+                return true;
+            });
             LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(tile, -2);
             if (i % 2 == 0) cl.rightMargin = gap;
             row.addView(cell, cl);
@@ -2363,7 +2400,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     /** Library types, with a picture and colour each so children can tell them apart without reading. */
     static final String[][] LIB_CATS = {
-            {"all", "All", "🌈", "#6C4CF1"}, {"music", "Music", "🎵", "#E0559A"}, {"podcast", "Podcasts", "🎙️", "#F2994A"},
+            {"all", "All", "🌈", "#6C4CF1"}, {"fav", "Favourites", "❤️", "#E5484D"}, {"music", "Music", "🎵", "#E0559A"}, {"podcast", "Podcasts", "🎙️", "#F2994A"},
             {"audiobook", "Books", "📖", "#27AE60"}, {"radio", "Radio", "📻", "#2D9CDB"}};
 
     /** Big picture buttons: All, plus one for each kind the player actually has. */
@@ -2371,8 +2408,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!libCat.equals("all") && !present.contains(libCat)) libCat = "all";
         libChips.removeAllViews();
         int kinds = 0;
-        for (String[] c : LIB_CATS) if (!c[0].equals("all") && present.contains(c[0])) kinds++;
-        libChips.setVisibility(kinds > 1 ? View.VISIBLE : View.GONE); // one kind only: nothing to choose between
+        for (String[] c : LIB_CATS) if (!c[0].equals("all") && !c[0].equals("fav") && present.contains(c[0])) kinds++;
+        // one kind only and no favourites: nothing to choose between
+        libChips.setVisibility(kinds > 1 || present.contains("fav") ? View.VISIBLE : View.GONE);
         for (String[] c : LIB_CATS) {
             if (!c[0].equals("all") && !present.contains(c[0])) continue;
             boolean on = c[0].equals(libCat);
@@ -2450,6 +2488,19 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         if (!cat.equals("audiobook") && !cat.equals("podcast")) return 0;
         long t = prefs.getLong("played:" + fi.name, 0);
         return System.currentTimeMillis() - t < 30L * 24 * 3600_000 ? t : 0;
+    }
+
+    boolean isFavourite(String f) { return prefs.getBoolean("fav:" + f, false); }
+
+    /** The favourites as they were when the Library opened: a tile made a favourite just now stays where it is. */
+    java.util.Set<String> favAtOpen;
+    boolean favFirst(String f) { return favAtOpen != null ? favAtOpen.contains(f) : isFavourite(f); }
+
+    /** Favourites come first in the Library, with a heart, and have their own tab. */
+    void setFavourite(String f, boolean on) {
+        if (on) prefs.edit().putBoolean("fav:" + f, true).apply();
+        else prefs.edit().remove("fav:" + f).apply();
+        h.post(() -> { if (browsing && libSnapshot != null) renderBrowser(libSnapshot, browseBuild); });
     }
 
     void closeBrowser() {

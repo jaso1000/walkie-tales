@@ -16,10 +16,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     private let empty = UILabel()
     private var chipHeight: NSLayoutConstraint!
     /// Library types, with a picture and colour each so children can tell them apart without reading (same as Android).
-    private static let cats = [("all", "All", "🌈", "#6C4CF1"), ("music", "Music", "🎵", "#E0559A"), ("podcast", "Podcasts", "🎙️", "#F2994A"),
+    private static let cats = [("all", "All", "🌈", "#6C4CF1"), ("fav", "Favourites", "❤️", "#E5484D"), ("music", "Music", "🎵", "#E0559A"), ("podcast", "Podcasts", "🎙️", "#F2994A"),
                                ("audiobook", "Books", "📖", "#27AE60"), ("radio", "Radio", "📻", "#2D9CDB")]
     private var collection: UICollectionView!
     private var covers: [String: UIImage] = [:]
+    /// The favourites as they were when the Library opened: a tile made a favourite just now stays where it is.
+    private let favAtOpen = Set(Store.ud.dictionaryRepresentation().keys.filter { $0.hasPrefix("fav:") }.map { String($0.dropFirst(4)) })
 
     override var prefersStatusBarHidden: Bool { true }
 
@@ -80,6 +82,9 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         collection.dataSource = self
         collection.delegate = self
         collection.register(TileCell.self, forCellWithReuseIdentifier: "t")
+        let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:))) // press and hold: a favourite (or not)
+        hold.minimumPressDuration = 0.5
+        collection.addGestureRecognizer(hold)
         collection.translatesAutoresizingMaskIntoConstraints = false
         collection.contentInset = UIEdgeInsets(top: 8, left: 0, bottom: 24, right: 0)
         view.addSubview(collection)
@@ -112,6 +117,15 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         reload()
     }
 
+    @objc private func held(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began, let ip = collection.indexPathForItem(at: g.location(in: collection)) else { return }
+        let f = items[ip.item]
+        guard f != Store.ALL else { return }
+        Haptic.play(.heavy)
+        Store.setFavourite(f, !Store.isFavourite(f))
+        if cat == "fav" { applyFilter() } else { collection.reloadItems(at: [ip]) }
+    }
+
     @objc private func closeTapped() { view.endEditing(true); dismiss(animated: true) }
     @objc private func searchChanged() { query = (search.text ?? "").trimmingCharacters(in: .whitespaces); applyFilter() }
     func textFieldShouldReturn(_ t: UITextField) -> Bool { t.resignFirstResponder(); return true }
@@ -129,13 +143,14 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     /// The category buttons and the search box decide which folders show.
     private func applyFilter() {
         let cats = Dictionary(uniqueKeysWithValues: all.map { ($0, Store.category($0)) })
-        let present = Set(cats.values)
+        var present = Set(cats.values)
+        if all.contains(where: Store.isFavourite) { present.insert("fav") }
         if cat != "all" && !present.contains(cat) { cat = "all" }
         renderChips(present)
         let q = query.lowercased()
         hits = [:]
         items = all.filter { f in
-            if cat != "all" && cats[f] != cat { return false }
+            if cat == "fav" ? !Store.isFavourite(f) : cat != "all" && cats[f] != cat { return false }
             if q.isEmpty || f.lowercased().contains(q) { return true }
             if let t = Store.listTracks(f).first(where: { $0.name.lowercased().contains(q) }) { hits[f] = t; return true }
             return false
@@ -145,6 +160,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
             items = items.enumerated().sorted { a, b in
                 let ka = keys[a.element] ?? 0, kb = keys[b.element] ?? 0
                 return ka != kb ? ka > kb : a.offset < b.offset // stable: others keep their order
+            }.map { $0.element }
+        }
+        if q.isEmpty { // favourites first; the others keep their order
+            items = items.enumerated().sorted { a, b in
+                let fa = favAtOpen.contains(a.element), fb = favAtOpen.contains(b.element)
+                return fa != fb ? fa : a.offset < b.offset
             }.map { $0.element }
         }
         if items.count > 1 && cat == "all" && q.isEmpty { items.append(Store.ALL) }
@@ -167,9 +188,10 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
     private func renderChips(_ present: Set<String>) {
         chips.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let kinds = Self.cats.filter { $0.0 != "all" && present.contains($0.0) }.count
-        chipScroll.isHidden = kinds < 2 // one kind only: nothing to choose between
-        chipHeight?.constant = kinds < 2 ? 0 : 70
+        let kinds = Self.cats.filter { $0.0 != "all" && $0.0 != "fav" && present.contains($0.0) }.count
+        let hide = kinds < 2 && !present.contains("fav") // one kind only and no favourites: nothing to choose between
+        chipScroll.isHidden = hide
+        chipHeight?.constant = hide ? 0 : 70
         for (key, label, pic, hex) in Self.cats where key == "all" || present.contains(key) {
             let on = key == cat
             let color = Art.color(hex)
@@ -241,6 +263,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         cell.name.text = all ? "Everything" : f
         cell.name.textColor = f == Player.shared.folder ? Art.tint(color, 0.35) : .white
         cell.setProgress(f == Store.ALL ? 0 : Self.progress(f), color: Art.tint(color, 0.25))
+        cell.heart.isHidden = all || !Store.isFavourite(f)
         if let hit = hits[f] {
             cell.info.text = "♪ " + hit.name
             cell.info.textColor = UIColor(white: 1, alpha: 0.9)
@@ -267,6 +290,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
 final class TileCell: UICollectionViewCell {
     let image = UIImageView(), name = UILabel(), info = UILabel()
+    let heart = UILabel() // a favourite: a heart in the cover's corner
     private let bar = UIView(), fill = UIView()
     private var fillWidth: NSLayoutConstraint?
 
@@ -311,6 +335,21 @@ final class TileCell: UICollectionViewCell {
             s.leadingAnchor.constraint(equalTo: contentView.leadingAnchor), s.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             s.topAnchor.constraint(equalTo: contentView.topAnchor),
             image.heightAnchor.constraint(equalTo: image.widthAnchor),
+        ])
+        heart.text = "♥"
+        heart.font = .systemFont(ofSize: 20, weight: .bold)
+        heart.textColor = UIColor(red: 1, green: 0.31, blue: 0.48, alpha: 1)
+        heart.textAlignment = .center
+        heart.backgroundColor = .white
+        heart.layer.cornerRadius = 18
+        heart.clipsToBounds = true
+        heart.isHidden = true
+        heart.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(heart)
+        NSLayoutConstraint.activate([
+            heart.widthAnchor.constraint(equalToConstant: 36), heart.heightAnchor.constraint(equalToConstant: 36),
+            heart.topAnchor.constraint(equalTo: image.topAnchor, constant: 8),
+            heart.trailingAnchor.constraint(equalTo: image.trailingAnchor, constant: -8),
         ])
     }
 

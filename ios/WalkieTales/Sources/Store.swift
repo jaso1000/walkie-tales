@@ -206,6 +206,12 @@ enum Store {
         return autoCategory(folder)
     }
 
+    /// Favourites come first in the Library, with a heart, and have their own tab.
+    static func isFavourite(_ folder: String) -> Bool { ud.bool(forKey: "fav:" + folder) }
+    static func setFavourite(_ folder: String, _ on: Bool) {
+        if on { ud.set(true, forKey: "fav:" + folder) } else { ud.removeObject(forKey: "fav:" + folder) }
+    }
+
     static func setCategory(_ folder: String, _ c: String?) {
         if let c = c { ud.set(c, forKey: "cat:" + folder) } else { ud.removeObject(forKey: "cat:" + folder) }
     }

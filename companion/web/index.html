@@ -288,6 +288,8 @@
     background: rgba(0,0,0,.6); display: grid; place-items: center; cursor: pointer; }
   .tile .more svg { width: 20px; height: 20px; fill: #fff; }
   .tile.now .art { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .tile .fav-heart { position: absolute; top: 8px; left: 8px; z-index: 2; width: 32px; height: 32px; border-radius: 50%;
+    background: #fff; color: #ff4f7b; display: grid; place-items: center; font-size: 18px; line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
   .tile .badge-now { position: absolute; left: 8px; bottom: 8px; z-index: 2; background: var(--accent); color: #fff; font-size: 12px;
     font-weight: 700; padding: 3px 9px; border-radius: 99px; }
   .up-pill { width: 100%; display: flex; align-items: center; gap: 10px; background: var(--panel2); border: 1px solid var(--line);
@@ -1101,11 +1103,13 @@
     const dl = $('#folderNames'); dl.textContent = '';
     if (!lib.folders.length) g.appendChild(el('div', 'hint', 'No music yet. Tap ＋ Music to add some.'));
     const cats = new Set(lib.folders.map(f => f.category).filter(Boolean));
+    if (lib.folders.some(f => f.favourite)) cats.add('fav');
     $('#libTools').hidden = lib.folders.length < 5 && cats.size < 2;
     if (libCat !== 'all' && !cats.has(libCat)) libCat = 'all';
     renderLibCats(cats);
     const q = $('#libSearch').value.trim().toLowerCase();
-    const items = lib.folders.filter(f => (libCat === 'all' || f.category === libCat) && (!q || f.name.toLowerCase().includes(q)));
+    const items = lib.folders.filter(f => (libCat === 'all' || (libCat === 'fav' ? f.favourite : f.category === libCat)) && (!q || f.name.toLowerCase().includes(q)));
+    if (!q) items.sort((a, b) => !!b.favourite - !!a.favourite); // favourites first, as on the player
     if (items.length > 1 && libCat === 'all' && !q) items.push({ name: '@all', info: 'Shuffle it all', color: '#E0559A' });
     if (!items.length && lib.folders.length) g.appendChild(el('div', 'hint', q ? 'Nothing called “' + $('#libSearch').value.trim() + '”' : 'Nothing here yet'));
     items.forEach(f => {
@@ -1113,6 +1117,7 @@
       const a = el('div', 'art', f.name === '@all' ? '★' : f.name.charAt(0).toUpperCase());
       a.style.background = 'linear-gradient(135deg, ' + f.color + ', color-mix(in srgb, ' + f.color + ' 45%, #000))';
       if (f.name !== '@all') { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.onerror = () => img.remove(); img.src = thumbUrl(f); a.appendChild(img); }
+      if (f.favourite) { const hrt = el('span', 'fav-heart', '♥'); hrt.title = 'Favourite'; a.appendChild(hrt); }
       t.appendChild(a); t.appendChild(el('b', '', f.name === '@all' ? 'Everything' : f.name));
       t.appendChild(el('small', '', f.info + (f.cards ? ' · ' + f.cards + (f.cards === 1 ? ' card' : ' cards') : '')));
       if (f.name !== '@all') {
@@ -1135,10 +1140,10 @@
   }
 
   let lastLibFolder, libCat = 'all';
-  const CATS = [['all', 'All'], ['music', 'Music'], ['podcast', 'Podcasts'], ['audiobook', 'Books'], ['radio', 'Radio']];
+  const CATS = [['all', 'All'], ['fav', 'Favourites'], ['music', 'Music'], ['podcast', 'Podcasts'], ['audiobook', 'Books'], ['radio', 'Radio']];
   const CAT_ONE = { music: 'Music', podcast: 'Podcast', audiobook: 'Audiobook', radio: 'Radio' };
   // A picture and colour for each type, so children can tell them apart without reading (same as the players).
-  const CAT_PIC = { all: ['🌈', '#6C4CF1'], auto: ['✨', '#7A7A92'], music: ['🎵', '#E0559A'], podcast: ['🎙️', '#F2994A'],
+  const CAT_PIC = { all: ['🌈', '#6C4CF1'], fav: ['❤️', '#E5484D'], auto: ['✨', '#7A7A92'], music: ['🎵', '#E0559A'], podcast: ['🎙️', '#F2994A'],
     audiobook: ['📖', '#27AE60'], radio: ['📻', '#2D9CDB'] };
   function catButtons(box, list, selected, onPick) {
     box.textContent = '';
@@ -1175,6 +1180,7 @@
     pic: '<svg viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>',
     phone: '<svg viewBox="0 0 24 24"><path d="M15.5,1h-8C6.12,1 5,2.12 5,3.5v17C5,21.88 6.12,23 7.5,23h8c1.38,0 2.5,-1.12 2.5,-2.5v-17C18,2.12 16.88,1 15.5,1zM11.5,22c-0.83,0 -1.5,-0.67 -1.5,-1.5s0.67,-1.5 1.5,-1.5 1.5,0.67 1.5,1.5 -0.67,1.5 -1.5,1.5zM16,18H7V4h9v14z"/></svg>',
     find: '<svg viewBox="0 0 24 24"><path d="M15.5,14h-0.79l-0.28,-0.27A6.47,6.47 0 0,0 16,9.5 6.5,6.5 0 1,0 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z"/></svg>',
+    heart: '<svg viewBox="0 0 24 24"><path d="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"/></svg>',
     del: '<svg viewBox="0 0 24 24"><path d="M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"/></svg>',
   };
   function folderMenu(f) {
@@ -1196,6 +1202,12 @@
     const box = $('#fdActions'); box.textContent = '';
     const add = (cls, icon, text, fn) => { const b = el('button', 'btn ' + cls); b.innerHTML = ICON[icon]; b.appendChild(el('span', '', text)); b.onclick = () => { closeSheet('sheetFolder'); fn(); }; box.appendChild(b); };
     add('', 'play', 'Play', () => playFolder(f.name));
+    if ('favourite' in f) add('ghost', 'heart', f.favourite ? 'Remove from favourites' : 'Make it a favourite', async () => { // older players don't know favourites
+      const targets = sgTargets(); let done = 0;
+      for (const t of targets) { try { await tapi(t, '/api/folder/favourite', { folder: f.name, on: !f.favourite }); done++; } catch (e) { /* that player doesn't have this folder */ } }
+      toast(f.name + (f.favourite ? ' is no longer a favourite' : ' is a favourite ♥') + (targets.length > 1 ? ' on ' + done + ' players' : ''));
+      loadLibrary();
+    });
     if (!f.live) add('ghost', 'find', 'Find the right names & cover', () => openFind(f.name));
     if (!f.live) add('ghost', 'songs', 'Songs: rename, tidy, check players', () => openSongs(f.name));
     if (!f.live && players) add('ghost', 'phone', 'Make it play on iPhone', async () => {

@@ -95,6 +95,7 @@ extension PlayerViewController {
             if p.folder == f { p.stop() }
             do { try FileManager.default.removeItem(at: Store.dir(f)) } catch { throw RemoteError("Couldn't delete \(f)") }
             Store.setCategory(f, nil)
+            Store.setFavourite(f, false)
             flash("Deleted “\(f)”", 3)
             libraryChanged()
         case "/api/folder/rename": // remote → "Find names": give the folder the real album or book name
@@ -111,7 +112,7 @@ extension PlayerViewController {
                         try fm.moveItem(at: Store.dir(f), to: tmp); try fm.moveItem(at: tmp, to: Store.dir(to))
                     } else { try fm.moveItem(at: Store.dir(f), to: Store.dir(to)) }
                 } catch { throw RemoteError("Couldn't rename \(f)") }
-                for k in ["art:", "autocat:", "cat:", "pos:", "shuffle:", "repeat:", "resume:"] {
+                for k in ["art:", "autocat:", "cat:", "fav:", "pos:", "shuffle:", "repeat:", "resume:"] {
                     if let v = Store.ud.object(forKey: k + f) { Store.ud.set(v, forKey: k + to); Store.ud.removeObject(forKey: k + f) }
                 }
                 if Store.ud.string(forKey: "last") == f { Store.set("last", to) }
@@ -121,6 +122,11 @@ extension PlayerViewController {
         case "/api/limit": // remote: {add: minutes} for today, or {off: true} for no limit today
             if (b["off"] as? Bool) == true { Limit.offToday() } else { Limit.add(max(0, min(600, (b["add"] as? NSNumber)?.intValue ?? 30))) }
             flash("More music time today ★", 4)
+        case "/api/folder/favourite": // remote → folder menu → Favourite
+            let f = b["folder"] as? String ?? ""
+            guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
+            Store.setFavourite(f, (b["on"] as? Bool) ?? true)
+            (presentedViewController as? LibraryViewController)?.reload()
         case "/api/folder/category": // remote → folder menu → Type: auto, music, podcast, audiobook or radio
             let f = b["folder"] as? String ?? ""
             guard Store.safeName(f) != nil, Store.folders().contains(f) else { throw RemoteError("No folder called \(f)") }
@@ -252,6 +258,7 @@ extension PlayerViewController {
                 "progress": LibraryViewController.progress(f), "played": Store.ud.double(forKey: "played:" + f) * 1000,
                 "shuffle": Store.flag("shuffle", f, false), "repeat": Store.flag("repeat", f, false),
                 "category": Store.category(f), "autoCategory": Store.autoCategory(f),
+                "favourite": Store.isFavourite(f),
             ])
         }
         var free: Int64 = 0
