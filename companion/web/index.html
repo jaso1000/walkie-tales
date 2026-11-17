@@ -801,10 +801,13 @@
     document.documentElement.style.setProperty('--accent', s.folder ? s.accent : '#6c4cf1');
     const b = $('#batt');
     if (s.battery >= 0) { b.hidden = false; b.textContent = (s.charging ? '⚡ ' : '') + s.battery + '%'; b.style.color = s.battery <= 15 && !s.charging ? 'var(--bad)' : ''; }
-    $('#title').textContent = s.title || (s.name ? 'Hi, ' + s.name + '!' : 'Nothing playing');
+    // like the player itself: the song big, the album (folder) small underneath; a station keeps its name on top
+    const song = s.folder && !s.live && s.track && s.track !== s.title;
+    $('#title').textContent = song ? s.track : s.title || (s.name ? 'Hi, ' + s.name + '!' : 'Nothing playing');
     $('#sub').textContent = !s.folder ? 'Tap a card on the player, or pick something in the Library'
       : s.live ? (s.trackCount > 1 ? 'Station ' + (s.trackIndex + 1) + ' of ' + s.trackCount : 'Live radio') + ' · ' + s.track
-      : 'Track ' + (s.trackIndex + 1) + ' of ' + s.trackCount + ' · ' + s.track;
+      : song ? s.title + (s.trackCount > 1 ? ' · ' + (s.trackIndex + 1) + ' of ' + s.trackCount : '')
+      : 'Track ' + (s.trackIndex + 1) + ' of ' + s.trackCount;
     const artKey = s.folder + '|' + (s.live ? '' : s.track); // each track can have its own picture
     if (coverFor !== artKey) {
       const sameFolder = coverFor && coverFor.split('|')[0] === s.folder;
