@@ -515,10 +515,17 @@ final class PlayerViewController: UIViewController {
         updateKeepOn()
     }
 
+    /// Files were added, renamed or deleted. A copy of hundreds of files sends this for each one, so wait until
+    /// they've stopped for a moment, then reload the Library and look for covers once.
     @objc func libraryChanged() {
-        if presentedViewController is LibraryViewController { (presentedViewController as? LibraryViewController)?.reload() }
-        findCovers(force: false)
+        libraryTimer?.invalidate()
+        libraryTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            if self.presentedViewController is LibraryViewController { (self.presentedViewController as? LibraryViewController)?.reload() }
+            self.findCovers(force: false)
+        }
     }
+    private var libraryTimer: Timer?
 
     func findCovers(force: Bool) {
         ArtFinder.run(force: force) { [weak self] in

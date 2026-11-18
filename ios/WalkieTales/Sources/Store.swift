@@ -368,4 +368,40 @@ enum Store {
         let k = key + ":" + folder
         return ud.object(forKey: k) == nil ? def : ud.bool(forKey: k)
     }
+
+    /// Book headings for a track list. When the names start with the same book over runs of tracks ("Age of Ultron -
+    /// Chapter 1", "Age of Ultron - Chapter 2", "Civil War - Prologue"…), returns for each track (book, rest of the
+    /// name); book is nil for a track that isn't in one. Nil when the folder isn't made of books: fewer than two, a
+    /// book that comes back later (songs by the same singer here and there), or most tracks outside a run of two.
+    /// Same as the Android player (Store.books).
+    static func books(_ names: [String]) -> [(book: String?, rest: String)]? {
+        let n = names.count
+        if n < 4 { return nil }
+        for d in 1...3 {
+            let book: [String?] = names.map { name in
+                let seg = name.components(separatedBy: " - ")
+                guard seg.count > d else { return nil }
+                let b = seg[0..<d].joined(separator: " - ")
+                return b.range(of: #"^(\d+|(chapter|part|track|disc|cd)\s*\d+)$"#, options: [.regularExpression, .caseInsensitive]) == nil ? b : nil // "01 - …", "Chapter 1 - …"
+            }
+            var seen: [String] = [], covered = 0, i = 0
+            while i < n {
+                var j = i
+                while j < n && book[j] == book[i] { j += 1 }
+                if let b = book[i] {
+                    if seen.contains(b) { return nil }
+                    seen.append(b)
+                    if j - i >= 2 { covered += j - i }
+                }
+                i = j
+            }
+            if seen.count == 1 && covered == n { continue } // all one book: look one level deeper
+            if seen.count < 2 || Double(covered) < 0.7 * Double(n) { return nil }
+            return names.enumerated().map { k, name in
+                guard let b = book[k] else { return (nil, name) }
+                return (b, String(name.dropFirst(b.count + 3)))
+            }
+        }
+        return nil
+    }
 }

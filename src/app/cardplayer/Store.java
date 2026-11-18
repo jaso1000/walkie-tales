@@ -140,10 +140,34 @@ final class Store {
             String rootPath = root().getCanonicalPath() + File.separator;
             if (!f.getCanonicalPath().startsWith(rootPath)) return false;
         } catch (IOException e) { return false; }
+        return deleteAll(f);
+    }
+
+    /** Checked once above: asking every file for its real path is slow on a phone's shared storage. */
+    private static boolean deleteAll(File f) {
         File[] kids = f.isDirectory() ? f.listFiles() : null;
         boolean ok = true;
-        if (kids != null) for (File k : kids) ok &= deleteTree(k);
+        if (kids != null) for (File k : kids) ok &= deleteAll(k);
         return f.delete() && ok;
+    }
+
+    private static final String TRASH = ".deleting-";
+
+    /**
+     * Deleting a big folder takes a while on a phone (a quarter of a second a file): move it out of sight at once
+     * (hidden folders aren't in the Library) and delete it in the background. Returns false if it couldn't be moved.
+     */
+    static boolean trash(File dir) {
+        File to = new File(root(), TRASH + System.currentTimeMillis() + "-" + Math.abs(dir.getName().hashCode()));
+        if (!dir.renameTo(to)) return false;
+        new Thread(() -> deleteTree(to), "delete-folder").start();
+        return true;
+    }
+
+    /** On start: finish deleting anything trash() left when the app was closed half way. */
+    static void purgeTrash() {
+        File[] dirs = root().listFiles();
+        if (dirs != null) for (File d : dirs) if (d.isDirectory() && d.getName().startsWith(TRASH)) deleteTree(d);
     }
 
     /** Card links live next to the music so they survive reinstalling the app. */
@@ -554,5 +578,47 @@ final class Store {
             }
         }
         return (a.length() - i) - (b.length() - j);
+    }
+
+    /**
+     * Book headings for a track list. When the names start with the same book over runs of tracks ("Age of Ultron -
+     * Chapter 1", "Age of Ultron - Chapter 2", "Civil War - Prologue"…), returns for each track {book, rest of the
+     * name}; book is null for a track that isn't in one. Null when the folder isn't made of books: fewer than two, a
+     * book that comes back later (songs by the same singer here and there), or most tracks outside a run of two.
+     * Same as the iPhone player (Store.books).
+     */
+    private static final java.util.regex.Pattern NOT_A_BOOK =
+            java.util.regex.Pattern.compile("\\d+|(chapter|part|track|disc|cd)\\s*\\d+", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    static String[][] books(List<String> names) {
+        int n = names.size();
+        if (n < 4) return null;
+        for (int d = 1; d <= 3; d++) {
+            String[] book = new String[n];
+            for (int i = 0; i < n; i++) {
+                String[] seg = names.get(i).split(" - ", -1);
+                if (seg.length > d) book[i] = String.join(" - ", java.util.Arrays.copyOfRange(seg, 0, d));
+                if (book[i] != null && NOT_A_BOOK.matcher(book[i]).matches()) book[i] = null; // "01 - …", "Chapter 1 - …"
+            }
+            List<String> seen = new ArrayList<>();
+            int covered = 0;
+            for (int i = 0; i < n; ) {
+                int j = i;
+                while (j < n && java.util.Objects.equals(book[j], book[i])) j++;
+                if (book[i] != null) {
+                    if (seen.contains(book[i])) return null;
+                    seen.add(book[i]);
+                    if (j - i >= 2) covered += j - i;
+                }
+                i = j;
+            }
+            if (seen.size() == 1 && covered == n) continue; // all one book: look one level deeper
+            if (seen.size() < 2 || covered < 0.7 * n) return null;
+            String[][] out = new String[n][];
+            for (int i = 0; i < n; i++)
+                out[i] = book[i] == null ? new String[]{null, names.get(i)} : new String[]{book[i], names.get(i).substring(book[i].length() + 3)};
+            return out;
+        }
+        return null;
     }
 }

@@ -1,5 +1,6 @@
 package app.cardplayer;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;
@@ -21,7 +22,7 @@ final class Messages {
     private static final String OLD = "From Mum & Dad";
 
     /** On start: rename the old folder and make sure the folder (if there is one) has its picture. */
-    static void ensure() {
+    static void ensure(Context c) {
         File root = Store.root();
         File old = new File(root, OLD), dir = new File(root, FOLDER);
         if (old.isDirectory() && !dir.exists()) old.renameTo(dir);
@@ -29,15 +30,19 @@ final class Messages {
             File[] fs = old.listFiles();
             if (fs != null) for (File f : fs) if (Store.isAudio(f)) f.renameTo(uniqueIn(dir, f.getName()));
         }
-        if (dir.isDirectory()) ensureCover(dir);
+        if (dir.isDirectory()) ensureCover(c, dir);
     }
 
-    /** After a message is saved into the folder. */
-    static void ensureCover(File dir) {
+    /** After a message is saved into the folder. The first time (no picture yet) it also becomes a favourite, so the
+     *  messages sit at the front of the Library; if a grown-up turns that off later, it stays off. */
+    static void ensureCover(Context c, File dir) {
         try {
             new File(dir, ArtFinder.AUTO_COVER).delete(); // a cover the online search guessed for this folder
             File f = new File(dir, "cover.png");
-            if (!f.isFile()) draw(f);
+            if (!f.isFile()) {
+                draw(f);
+                Store.prefs(c).edit().putBoolean("fav:" + FOLDER, true).apply();
+            }
         } catch (Exception ignored) { }
     }
 

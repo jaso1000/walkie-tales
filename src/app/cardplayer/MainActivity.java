@@ -196,7 +196,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         showIdle();
         restoreLast();
         handleIntent(getIntent());
-        server = new RemoteServer(this, this::remote);
+        server = new RemoteServer(this, new RemoteServer.Api() {
+            @Override public JSONObject call(String m, String p, Map<String, String> q, JSONObject b) throws Exception { return remote(m, p, q, b); }
+            @Override public JSONObject offMain(String m, String p, Map<String, String> q, JSONObject b) throws Exception { return remoteOffMain(m, p, q, b); }
+        });
+        server.warmSoon(); // read the Library in the background now, so the remote's first look at it is quick
         syncRemote();
         initMediaSession();
         watchNetwork();
@@ -345,7 +349,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     @Override
     protected void onResume() {
         super.onResume();
-        try { Messages.ensure(); } catch (Exception ignored) { } // the voice messages folder: old name moved, its own picture
+        try { Messages.ensure(this); } catch (Exception ignored) { }
+        new Thread(() -> { try { Store.purgeTrash(); } catch (Exception ignored) { } }, "purge-trash").start(); // the voice messages folder: old name moved, its own picture
         preloadLibrary();
         SleepSounds.ensure(this, () -> h.post(() -> { libSnapshot = null; preloadLibrary(); }));
         reloadCards();
@@ -379,28 +384,56 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     // ================================================================ remote control API (see RemoteServer)
 
+    /** The files in one folder, for the remote's song list and "skip what's already there". Only reads files. */
+    static JSONObject folderJson(Map<String, String> q) throws Exception {
+        File dir = RemoteServer.safeFolder(q.get("name"));
+        if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + q.get("name"));
+        org.json.JSONArray files = new org.json.JSONArray();
+        File[] all = dir.listFiles();
+        if (all != null) {
+            java.util.Arrays.sort(all, (x, y) -> Store.natCmp(x.getName(), y.getName()));
+            boolean tags = "1".equals(q.get("tags"));
+            int read = 0;
+            for (File f : all) if (f.isFile() && !f.getName().startsWith(".")) {
+                JSONObject o = new JSONObject().put("name", f.getName()).put("size", f.length());
+                if (tags && read < 200 && Store.isAudio(f)) { read++; putTags(o, f); }
+                files.put(o);
+            }
+        }
+        return new JSONObject().put("name", dir.getName()).put("files", files);
+    }
+
+    /** Folders deleted on the server's thread (see remoteOffMain), so the main thread only tidies up after them. */
+    final java.util.Set<String> deletedOffMain = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /**
+     * The remote requests that only read or delete files run here, on the server's thread, so they never wait for
+     * a busy screen (after copying hundreds of folders the first Library read re-reads them all). Returns the
+     * answer, or null to go on to remote() on the main thread.
+     */
+    JSONObject remoteOffMain(String method, String path, Map<String, String> q, JSONObject b) throws Exception {
+        switch (path) {
+            case "/api/library": Store.library(); return null; // re-read changed folders here: the list itself is then quick
+            case "/api/folder": return folderJson(q);
+            case "/api/folder/delete": { // the slow part of deleting a big folder, unless it's playing right now
+                String f = b.optString("folder");
+                File dir = RemoteServer.safeFolder(f);
+                if (dir != null && dir.isDirectory() && !f.equals(folder)) {
+                    if (!Store.trash(dir) && !Store.deleteTree(dir)) throw new IllegalStateException("Couldn't delete everything in " + f);
+                    deletedOffMain.add(f);
+                }
+                return null;
+            }
+            default: return null;
+        }
+    }
+
     JSONObject remote(String method, String path, Map<String, String> q, JSONObject b) throws Exception {
         boolean post = method.equals("POST");
         switch (path) {
             case "/api/status": return status();
             case "/api/library": return library();
-            case "/api/folder": { // the files in one folder, for the remote's song list and "skip what's already there"
-                File dir = RemoteServer.safeFolder(q.get("name"));
-                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + q.get("name"));
-                org.json.JSONArray files = new org.json.JSONArray();
-                File[] all = dir.listFiles();
-                if (all != null) {
-                    java.util.Arrays.sort(all, (x, y) -> Store.natCmp(x.getName(), y.getName()));
-                    boolean tags = "1".equals(q.get("tags"));
-                    int read = 0;
-                    for (File f : all) if (f.isFile() && !f.getName().startsWith(".")) {
-                        JSONObject o = new JSONObject().put("name", f.getName()).put("size", f.length());
-                        if (tags && read < 200 && Store.isAudio(f)) { read++; putTags(o, f); }
-                        files.put(o);
-                    }
-                }
-                return new JSONObject().put("name", dir.getName()).put("files", files);
-            }
+            case "/api/folder": return folderJson(q); // the files in one folder, for the remote's song list
             case "/api/cards": return cardsJson();
             case "/api/settings":
                 if (post) {
@@ -489,9 +522,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             case "/api/folder/delete": { // remote → Library → "Delete": remove a folder and everything in it
                 String f = b.getString("folder");
                 File dir = RemoteServer.safeFolder(f);
-                if (dir == null || !dir.isDirectory()) throw new IllegalArgumentException("No folder called " + f);
+                boolean gone = deletedOffMain.remove(f); // already deleted on the server's thread
+                if (dir == null || (!gone && !dir.isDirectory())) throw new IllegalArgumentException("No folder called " + f);
                 if (f.equals(folder)) stopAll();
-                if (!Store.deleteTree(dir)) throw new IllegalStateException("Couldn't delete everything in " + f);
+                if (!gone && !Store.deleteTree(dir)) throw new IllegalStateException("Couldn't delete everything in " + f);
                 prefs.edit().remove("cat:" + f).remove("fav:" + f).apply();
                 if (cards.values().removeIf(f::equals)) { Store.saveCards(cards); cardsStamp = Store.cardsFile().lastModified(); }
                 flash("Deleted “" + f + "”", 3000);
@@ -669,8 +703,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             break; // a deleted track that's playing now finishes, then the queue moves on
         }
         if (folder != null && !tracks.isEmpty()) updateUi();
-        if (browsing) openBrowser();
+        if (browsing) { h.removeCallbacks(reopenBrowser); h.postDelayed(reopenBrowser, 800); } // once, after a burst of renames
+        if (server != null) server.warmSoon();
     }
+
+    private final Runnable reopenBrowser = () -> { if (browsing) openBrowser(); };
 
     JSONObject status() throws Exception {
         JSONObject s = new JSONObject();
@@ -2636,12 +2673,32 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         rows.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(rows);
         final TextView[] lengths = new TextView[n];
+        final View[] rowOf = new View[n];
         boolean playing = ready() && mp.isPlaying();
         int hi = Ui.tint(accent, 0.45f);
+        // a folder of books (a Marvel pack, a series): a heading for each book, the tracks without its name
+        String[][] books = null;
+        if (!all && !liveOnly && !"music".equals(Store.category(prefs, Store.info(folder)))) {
+            List<String> nm = new ArrayList<>();
+            for (Track t : list) nm.add(t.name);
+            books = Store.books(nm);
+        }
+        int headings = 0;
         for (int i = 0; i < n; i++) {
             final int w = i;
             Track t = list.get(i);
             boolean cur = i == index;
+            String book = books != null ? books[i][0] : null, prev = books != null && i > 0 ? books[i - 1][0] : null;
+            if (books != null && !java.util.Objects.equals(book, prev) && (book != null || prev != null)) {
+                TextView hd = Ui.text(this, book != null ? book : "", 13, Ui.tint(accent, 0.55f), true);
+                hd.setAllCaps(true);
+                hd.setLetterSpacing(0.06f);
+                hd.setMaxLines(2);
+                hd.setEllipsize(TextUtils.TruncateAt.END);
+                hd.setPadding(dp(10), i == 0 ? dp(2) : dp(14), dp(10), dp(6));
+                rows.addView(hd, new LinearLayout.LayoutParams(-1, -2));
+                headings++;
+            }
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(10), dp(10), dp(12), dp(10));
@@ -2677,7 +2734,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             LinearLayout texts = new LinearLayout(this);
             texts.setOrientation(LinearLayout.VERTICAL);
             texts.setPadding(dp(14), 0, dp(8), 0);
-            TextView name = Ui.text(this, t.name, 17, cur ? hi : Color.WHITE, cur);
+            TextView name = Ui.text(this, books != null && book != null ? books[i][1] : t.name, 17, cur ? hi : Color.WHITE, cur);
             name.setMaxLines(2);
             name.setEllipsize(TextUtils.TruncateAt.END);
             texts.addView(name);
@@ -2706,10 +2763,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
             rl.bottomMargin = dp(4);
             rows.addView(row, rl);
+            rowOf[i] = row;
         }
         int maxH = Math.round(getResources().getDisplayMetrics().heightPixels * 0.62f);
         panel.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
-        scroll.getLayoutParams().height = Math.min(maxH, n * dp(66) + dp(8));
+        scroll.getLayoutParams().height = Math.min(maxH, n * dp(66) + headings * dp(40) + dp(8));
 
         sheet.addView(panel, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         int at = rootView.indexOfChild(nightView);
@@ -2723,7 +2781,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         panel.animate().translationY(0).setDuration(260).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
         final int cur = index;
         scroll.post(() -> {
-            View row = rows.getChildAt(cur);
+            View row = cur >= 0 && cur < n ? rowOf[cur] : null;
             if (row != null) scroll.scrollTo(0, Math.max(0, row.getTop() - dp(66)));
         });
 

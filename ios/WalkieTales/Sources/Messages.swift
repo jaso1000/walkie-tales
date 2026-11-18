@@ -24,12 +24,16 @@ enum Messages {
         if fm.fileExists(atPath: dir.path) { ensureCover() }
     }
 
-    /// After a message is saved into the folder.
+    /// After a message is saved into the folder. The first time (no picture yet) it also becomes a favourite, so the
+    /// messages sit at the front of the Library; if a grown-up turns that off later, it stays off.
     static func ensureCover() {
         let dir = Store.dir(folder)
         try? FileManager.default.removeItem(at: dir.appendingPathComponent(Art.autoCover)) // a cover the online search guessed
         let f = dir.appendingPathComponent("cover.jpg")
-        if !FileManager.default.fileExists(atPath: f.path) { try? draw().write(to: f) }
+        if !FileManager.default.fileExists(atPath: f.path) {
+            try? draw().write(to: f)
+            Store.setFavourite(folder, true)
+        }
     }
 
     static func unique(in dir: URL, _ name: String) -> URL {

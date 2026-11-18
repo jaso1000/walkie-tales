@@ -366,6 +366,10 @@ final class TracksViewController: UITableViewController {
     let accent: UIColor
     let thumb: UIImage?
     private var lengths: [Int: String] = [:]
+    /// One section per book in a folder of books (a Marvel pack, a series), else one section of every track.
+    private var sections: [(title: String?, rows: [Int])] = []
+    private var rest: [Int: String] = [:]       // a track's name without its book's
+    private var pathOf: [Int: IndexPath] = [:]
 
     init(accent: UIColor, art: UIImage?) {
         self.accent = accent
@@ -395,6 +399,15 @@ final class TracksViewController: UITableViewController {
         t.textColor = .white
         let c = UILabel()
         let liveOnly = p.tracks.allSatisfy { $0.live }
+        if let f = p.folder, !liveOnly, Store.category(f) != "music", let b = Store.books(p.tracks.map { $0.name }) {
+            for (i, x) in b.enumerated() {
+                if x.book != nil { rest[i] = x.rest }
+                if i == 0 || b[i - 1].book != x.book { sections.append((x.book, [i])) } else { sections[sections.count - 1].rows.append(i) }
+            }
+        } else {
+            sections = [(nil, Array(p.tracks.indices))]
+        }
+        for (s, sec) in sections.enumerated() { for (r, i) in sec.rows.enumerated() { pathOf[i] = IndexPath(row: r, section: s) } }
         c.text = "\(p.tracks.count) " + (liveOnly ? (p.tracks.count == 1 ? "station" : "stations") : (p.tracks.count == 1 ? "track" : "tracks"))
         c.font = .systemFont(ofSize: 14)
         c.textColor = UIColor(white: 1, alpha: 0.65)
@@ -419,7 +432,7 @@ final class TracksViewController: UITableViewController {
                 guard d.isFinite, d > 0 else { continue }
                 DispatchQueue.main.async {
                     self.lengths[i] = PlayerViewController.fmt(d)
-                    if let cell = self.tableView.cellForRow(at: IndexPath(row: i, section: 0)) as? TrackCell { cell.length.text = self.lengths[i] }
+                    if let ip = self.pathOf[i], let cell = self.tableView.cellForRow(at: ip) as? TrackCell { cell.length.text = self.lengths[i] }
                 }
             }
         }
@@ -428,24 +441,50 @@ final class TracksViewController: UITableViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         let i = Player.shared.index
-        if Player.shared.tracks.indices.contains(i) { tableView.scrollToRow(at: IndexPath(row: i, section: 0), at: .middle, animated: false) }
+        if let ip = pathOf[i] { tableView.scrollToRow(at: ip, at: .middle, animated: false) }
     }
 
-    override func tableView(_ t: UITableView, numberOfRowsInSection s: Int) -> Int { Player.shared.tracks.count }
+    override func numberOfSections(in t: UITableView) -> Int { sections.count }
+    override func tableView(_ t: UITableView, numberOfRowsInSection s: Int) -> Int { sections[s].rows.count }
+
+    override func tableView(_ t: UITableView, heightForHeaderInSection s: Int) -> CGFloat {
+        sections[s].title != nil ? 40 : (s == 0 ? 0 : 14) // a little gap after a book, before tracks that aren't in one
+    }
+
+    override func tableView(_ t: UITableView, viewForHeaderInSection s: Int) -> UIView? {
+        guard let title = sections[s].title else { return nil }
+        let v = UIView()
+        v.backgroundColor = tableView.backgroundColor
+        let l = UILabel()
+        l.text = title.uppercased()
+        l.font = .systemFont(ofSize: 13, weight: .bold)
+        l.textColor = accent.withAlphaComponent(0.95)
+        l.numberOfLines = 1
+        l.lineBreakMode = .byTruncatingTail
+        l.translatesAutoresizingMaskIntoConstraints = false
+        v.addSubview(l)
+        NSLayoutConstraint.activate([
+            l.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 22), l.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -18),
+            l.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -6),
+        ])
+        return v
+    }
 
     override func tableView(_ t: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
         let cell = t.dequeueReusableCell(withIdentifier: "r", for: ip) as! TrackCell
         let p = Player.shared
-        let tr = p.tracks[ip.row]
-        let cur = ip.row == p.index
-        cell.configure(number: ip.row + 1, name: tr.name, current: cur, playing: cur && p.isPlaying, live: tr.live, accent: accent)
-        cell.length.text = tr.live ? "LIVE" : lengths[ip.row]
+        let i = sections[ip.section].rows[ip.row]
+        let tr = p.tracks[i]
+        let cur = i == p.index
+        cell.configure(number: i + 1, name: rest[i] ?? tr.name, current: cur, playing: cur && p.isPlaying, live: tr.live, accent: accent)
+        cell.length.text = tr.live ? "LIVE" : lengths[i]
         return cell
     }
 
     override func tableView(_ t: UITableView, didSelectRowAt ip: IndexPath) {
         Haptic.play(.click)
-        dismiss(animated: true) { self.onPick?(ip.row) }
+        let i = sections[ip.section].rows[ip.row]
+        dismiss(animated: true) { self.onPick?(i) }
     }
 }
 

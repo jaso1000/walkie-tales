@@ -1062,7 +1062,7 @@ public class SettingsActivity extends Activity {
             } catch (Exception e) { ok = false; }
             recFile.delete();
         }
-        if (ok) Messages.ensureCover(dir);
+        if (ok) Messages.ensureCover(this, dir);
         new AlertDialog.Builder(this, DIALOG).setMessage(ok ? "Saved in “" + VOICE_FOLDER + "” 💌" : "Couldn't save it.")
                 .setPositiveButton("OK", null).show();
     }

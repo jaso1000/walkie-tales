@@ -30,6 +30,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -54,12 +57,31 @@ final class RemoteServer {
 
     interface Api {
         JSONObject call(String method, String path, Map<String, String> query, JSONObject body) throws Exception;
+
+        /**
+         * Work that only touches files, done on the server's own thread before {@link #call} runs on the main thread,
+         * so a busy screen never makes it time out. Returns the answer itself, or null to go on to {@link #call}.
+         */
+        default JSONObject offMain(String method, String path, Map<String, String> query, JSONObject body) throws Exception {
+            return null;
+        }
     }
 
     private final Context ctx;
     private final Api api;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
+    private final ScheduledExecutorService warmer = Executors.newSingleThreadScheduledExecutor();
+    private ScheduledFuture<?> warmJob;
+
+    /**
+     * Files were added or renamed: re-read the changed folders in the background a moment after the last change, so
+     * the next Library request (or the kid opening the Library) finds them ready instead of reading hundreds at once.
+     */
+    synchronized void warmSoon() {
+        if (warmJob != null) warmJob.cancel(false);
+        warmJob = warmer.schedule(() -> { try { Store.library(); } catch (Throwable ignored) { } }, 3, TimeUnit.SECONDS);
+    }
     private volatile ServerSocket socket, secure;
     private volatile boolean running;
 
@@ -293,11 +315,21 @@ final class RemoteServer {
             }
             final String m = method, p = path;
             final JSONObject b = body;
+            try {
+                JSONObject direct = api.offMain(m, p, query, b);
+                if (direct != null) { sendJson(out, 200, direct); return; }
+            } catch (Exception e) {
+                sendJson(out, 400, new JSONObject().put("error", String.valueOf(e.getMessage())));
+                return;
+            }
             FutureTask<JSONObject> task = new FutureTask<>(() -> api.call(m, p, query, b));
             main.post(task);
             JSONObject result;
             try {
                 result = task.get(8, TimeUnit.SECONDS);
+            } catch (TimeoutException e) { // the screen is busy; the request still runs when it's free
+                sendJson(out, 503, new JSONObject().put("error", "The player is busy. Try again in a moment.").put("busy", true));
+                return;
             } catch (Exception e) {
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
                 sendJson(out, 400, new JSONObject().put("error", String.valueOf(cause.getMessage())));
@@ -400,7 +432,8 @@ final class RemoteServer {
         }
         if (dest.exists()) dest.delete();
         if (!tmp.renameTo(dest)) { sendJson(out, 500, new JSONObject().put("error", "Couldn't save file")); return; }
-        if (Messages.FOLDER.equals(dir.getName())) Messages.ensureCover(dir); // a voice message from the remote
+        if (Messages.FOLDER.equals(dir.getName())) Messages.ensureCover(ctx, dir); // a voice message from the remote
+        warmSoon();
         sendJson(out, 200, new JSONObject().put("ok", true).put("folder", dir.getName()).put("name", file));
     }
 
