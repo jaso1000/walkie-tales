@@ -56,6 +56,7 @@ public class SettingsActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = Store.prefs(this);
+        applyBrightness();
         scroll = new ScrollView(this);
         scroll.setBackgroundColor(BG);
         list = new LinearLayout(this);
@@ -432,6 +433,15 @@ public class SettingsActivity extends Activity {
 
     void buildScreen() {
         header("Screen", true);
+        panel("Brightness");
+        Switch own = toggle("Set the brightness here", "Otherwise the phone's own brightness", "brightness_set", false);
+        SeekBar level = seek("Brightness", "brightness", 5, 100, 60, this::applyBrightness);
+        if (level != null) level.setEnabled(own.isChecked());
+        own.setOnCheckedChangeListener((b, on) -> {
+            prefs.edit().putBoolean("brightness_set", on).apply();
+            if (level != null) level.setEnabled(on);
+            applyBrightness();
+        });
         panel("Sleeping");
         choice("Dim the screen after", "dim_after", DIM_VALUES, DIM_LABELS, 90);
         choice("Keep the screen on", "screen_on", KEEP_VALUES, KEEP_LABELS, 0);
@@ -465,7 +475,7 @@ public class SettingsActivity extends Activity {
                     }));
         }
         link("Home screen app", null, v -> openSystem(Settings.ACTION_HOME_SETTINGS));
-        link("Android settings", "Wi-Fi, Bluetooth, brightness", v -> openSystem(Settings.ACTION_SETTINGS));
+        link("Android settings", "Wi-Fi, Bluetooth", v -> openSystem(Settings.ACTION_SETTINGS));
     }
 
     void buildRemote() {
@@ -1180,7 +1190,16 @@ public class SettingsActivity extends Activity {
         return sw;
     }
 
-    void seek(String title, String key, int min, int max, int def) {
+    void seek(String title, String key, int min, int max, int def) { seek(title, key, min, max, def, null); }
+
+    /** Shows the new level on this screen straight away; the player uses it when it's back in front. */
+    void applyBrightness() {
+        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = MainActivity.userBrightness(prefs);
+        getWindow().setAttributes(lp);
+    }
+
+    SeekBar seek(String title, String key, int min, int max, int def, Runnable changed) {
         LinearLayout r = rowShell(title, null);
         TextView value = Ui.text(this, prefs.getInt(key, def) + "%", 16, ACCENT, true);
         r.addView(value);
@@ -1195,12 +1214,15 @@ public class SettingsActivity extends Activity {
                 int v = min + p * 5;
                 value.setText(v + "%");
                 prefs.edit().putInt(key, v).apply();
+                if (changed != null) changed.run();
             }
             @Override public void onStartTrackingTouch(SeekBar s) { }
             @Override public void onStopTrackingTouch(SeekBar s) { }
         });
         sb.setPadding(dp(20), 0, dp(20), dp(16));
-        if (rowShown) group.addView(sb, new LinearLayout.LayoutParams(-1, -2));
+        if (!rowShown) return null;
+        group.addView(sb, new LinearLayout.LayoutParams(-1, -2));
+        return sb;
     }
 
     String choiceLabel(String key, int[] values, String[] labels, int def) {

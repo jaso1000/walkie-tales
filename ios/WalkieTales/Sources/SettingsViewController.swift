@@ -215,6 +215,7 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
             ]
         case "screen":
             return [
+                ("Brightness", [.slider("Brightness", "@brightness")]),
                 ("Sleeping", [
                     .value("Dim the screen after", { Self.cycleLabel("dim_after", [30, 90, 300, 0], ["30 seconds", "90 seconds", "5 minutes", "Never"]) },
                            { [weak self] in self?.cycle("dim_after", [30, 90, 300, 0]) }),
@@ -237,7 +238,7 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
             ])]
         case "phone":
             return [(nil, [
-                .value("iPhone settings", { "Wi-Fi, Bluetooth, brightness" }, { Self.openSettings(nil) }),
+                .value("iPhone settings", { "Wi-Fi, Bluetooth" }, { Self.openSettings(nil) }),
                 .info("Auto-Lock", "iPhone Settings → Display & Brightness"),
             ])]
         case "remote":
@@ -464,14 +465,17 @@ final class SettingsViewController: UITableViewController, UISearchResultsUpdati
             cell.accessoryType = .disclosureIndicator
         case let .slider(title, key):
             cell.textLabel?.text = title
-            cell.detailTextLabel?.text = "\(Store.int(key))%"
+            // "@brightness" is the iPhone's own screen brightness (the same as Control Centre's), not a stored setting
+            let screen = key == "@brightness"
+            let cur = screen ? Int((UIScreen.main.brightness * 100 / 5).rounded()) * 5 : Store.int(key)
+            cell.detailTextLabel?.text = "\(cur)%"
             let sl = UISlider(frame: CGRect(x: 0, y: 0, width: 150, height: 30))
-            sl.minimumValue = 10
+            sl.minimumValue = screen ? 5 : 10
             sl.maximumValue = 100
-            sl.value = Float(Store.int(key))
+            sl.value = Float(max(screen ? 5 : 10, cur))
             sl.addAction(UIAction { _ in
                 let v = Int((sl.value / 5).rounded()) * 5
-                Store.set(key, v)
+                if screen { UIScreen.main.brightness = CGFloat(v) / 100 } else { Store.set(key, v) }
                 cell.detailTextLabel?.text = "\(v)%"
             }, for: .valueChanged)
             sl.addAction(UIAction { [weak self] _ in self?.owner?.applySettings() }, for: .touchUpInside)

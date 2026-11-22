@@ -3093,6 +3093,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         updateKeepOn();
     };
 
+    /** Settings → Screen → Brightness: the level set in the app (0.01–1), or the phone's own setting. */
+    static float userBrightness(android.content.SharedPreferences prefs) {
+        if (!prefs.getBoolean("brightness_set", false)) return WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        return Math.max(1, Math.min(100, prefs.getInt("brightness", 60))) / 100f;
+    }
+
     void setBrightness(float v) {
         WindowManager.LayoutParams lp = getWindow().getAttributes();
         lp.screenBrightness = v;
@@ -3113,8 +3119,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
 
     void wake() {
         if (screenLocked) return;
+        setBrightness(userBrightness(prefs)); // the grown-up's level from Settings → Screen, or the phone's own
         if (dimmed) {
-            setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE);
             nightView.animate().cancel();
             nightView.setVisibility(View.GONE);
             showBlackout(false);
