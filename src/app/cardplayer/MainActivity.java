@@ -193,6 +193,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         }
 
         Kiosk.restoreTimeout(this); // in case the app restarted while the screen was switched off
+        Store.keepKindsIn(getFilesDir()); // folders' kinds from last time, so the first Library read after a restart is quick
         showIdle();
         restoreLast();
         handleIntent(getIntent());
@@ -2505,7 +2506,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
     }
 
     String catOf(String f) {
-        try { return Store.category(prefs, Store.info(f)); } catch (Exception e) { return "music"; }
+        Store.FolderInfo i = Store.known(f); // never reads here: this runs on the main thread, once per Library tile
+        return i == null ? "music" : Store.category(prefs, i);
     }
 
     /** Where the folder will carry on from (0 when it starts from the top). */
@@ -2679,7 +2681,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         int hi = Ui.tint(accent, 0.45f);
         // a folder of books (a Marvel pack, a series): a heading for each book, the tracks without its name
         String[][] books = null;
-        if (!all && !liveOnly && !"music".equals(Store.category(prefs, Store.info(folder)))) {
+        if (!all && !liveOnly && !"music".equals(catOf(folder))) {
             List<String> nm = new ArrayList<>();
             for (Track t : list) nm.add(t.name);
             books = Store.books(nm);
@@ -2887,7 +2889,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
         final boolean all = Store.ALL.equals(f);
         final int token = ++themeToken;
         // Show the Library's small copy straight away, then swap in the sharper picture from the background.
-        Bitmap quick = all ? null : Ui.cachedTile(Store.info(f));
+        Store.FolderInfo known = all ? null : Store.known(f);
+        Bitmap quick = known == null ? null : Ui.cachedTile(known);
         int a = all ? 0xFFE0559A : Ui.colorFor(f);
         final boolean hadQuick = quick != null;
         if (hadQuick) a = Ui.dominantColor(quick, a); // theme follows the cover art

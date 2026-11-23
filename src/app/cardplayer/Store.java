@@ -282,29 +282,38 @@ final class Store {
         }
     }
 
-    private static final Map<String, FolderInfo> FOLDER_INFO = new java.util.HashMap<>();
+    // No lock around a whole Library read: after a restart (an update, a reboot) that read takes a while, and the
+    // screen asking about one folder meanwhile (opening the Library, tapping a tile) must not wait for all of it.
+    // Two threads reading the same folder at once just both read it.
+    private static final Map<String, FolderInfo> FOLDER_INFO = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Every folder, re-reading only the ones that changed. Adding or removing a file changes its directory's
      * time, so checking the directories and playlists is enough. A folder's first read can be slow: call off the
      * main thread when nothing's remembered yet.
      */
-    static synchronized List<FolderInfo> library() {
+    static List<FolderInfo> library() {
         List<String> names = folders();
         List<FolderInfo> out = new ArrayList<>();
         for (String n : names) out.add(info(n));
         FOLDER_INFO.keySet().retainAll(names);
+        saveKinds(names);
         return out;
     }
 
     /** One folder, re-read only if it changed. */
-    static synchronized FolderInfo info(String name) {
+    static FolderInfo info(String name) {
         FolderInfo i = FOLDER_INFO.get(name);
         if (i == null || stampOf(i.watched) != i.stamp) {
             i = readFolder(name);
             FOLDER_INFO.put(name, i);
         }
         return i;
+    }
+
+    /** What's remembered about a folder, without reading it (null if it hasn't been read yet): for the main thread. */
+    static FolderInfo known(String name) {
+        return name == null ? null : FOLDER_INFO.get(name);
     }
 
     private static FolderInfo readFolder(String name) {
@@ -315,7 +324,53 @@ final class Store {
         List<Track> t = listTracks(name);
         boolean live = !t.isEmpty();
         for (Track x : t) if (!x.live) { live = false; break; }
-        return new FolderInfo(name, Collections.unmodifiableList(t), live, stamp, watched, detectCategory(name, t, live));
+        return new FolderInfo(name, Collections.unmodifiableList(t), live, stamp, watched, kindOf(name, stamp, t, live));
+    }
+
+    // ---- each folder's guessed kind, kept on disk: guessing reads songs' tags, too slow to redo for every folder
+    // each time the app starts. Kept with the folder's stamp, so a changed folder is guessed again.
+
+    private static final Properties KINDS = new Properties();
+    private static File kindsFile;
+    private static boolean kindsChanged;
+
+    /** Where to keep the guesses (the app's own files), read once when the app starts. */
+    static void keepKindsIn(File dir) {
+        synchronized (KINDS) {
+            if (kindsFile != null) return;
+            kindsFile = new File(dir, "folder-kinds.properties");
+            try (Reader r = new InputStreamReader(new FileInputStream(kindsFile), StandardCharsets.UTF_8)) {
+                KINDS.load(r);
+            } catch (Exception ignored) { } // none yet, or unreadable: they're guessed again
+        }
+    }
+
+    private static String kindOf(String name, long stamp, List<Track> t, boolean live) {
+        String prefix = stamp + ":";
+        synchronized (KINDS) {
+            String saved = KINDS.getProperty(name);
+            if (saved != null && saved.startsWith(prefix)) return saved.substring(prefix.length());
+        }
+        String kind = detectCategory(name, t, live);
+        synchronized (KINDS) {
+            KINDS.setProperty(name, prefix + kind);
+            kindsChanged = true;
+        }
+        return kind;
+    }
+
+    private static void saveKinds(List<String> names) {
+        synchronized (KINDS) {
+            if (KINDS.keySet().retainAll(names)) kindsChanged = true; // forget deleted folders
+            if (!kindsChanged || kindsFile == null) return;
+            File tmp = new File(kindsFile.getPath() + ".tmp");
+            try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) {
+                KINDS.store(w, null);
+            } catch (IOException e) {
+                return;
+            }
+            if (tmp.renameTo(kindsFile)) kindsChanged = false;
+        }
     }
 
     // ------------------------------------------------------------ categories (Library: All, Music, Podcasts, Audiobooks)
