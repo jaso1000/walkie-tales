@@ -69,6 +69,9 @@ final class PlayerViewController: UIViewController {
         applySettings()
         batteryChanged()
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.findCovers(force: false) }
+        DispatchQueue.global(qos: .utility).async { // read the Library now, so opening it soon after a restart is quick
+            for f in Store.folders() { _ = Store.listTracks(f); _ = Store.autoCategory(f) }
+        }
     }
 
     override func viewDidLayoutSubviews() {

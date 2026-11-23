@@ -200,6 +200,18 @@ final class RemoteServer {
             send(c, 200, "application/octet-stream", data)
             return
         }
+        if method == "GET" && path == "/api/library" {
+            // Every folder is read: after a restart (an update) that takes a while, so not on the main thread.
+            DispatchQueue.main.async {
+                let p = Player.shared
+                let now = p.isPlaying ? p.folder : nil
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let out = PlayerViewController.library(nowPlaying: now)
+                    self.queue.async { self.sendJson(c, 200, out) }
+                }
+            }
+            return
+        }
         if method == "GET" && path == "/api/cover" {
             // Library tiles ask for a small copy (w=360) with the folder's stamp (v): kept here and in the browser for a week.
             let size = Int(query["w"] ?? "").map { max(96, min(800, $0)) }

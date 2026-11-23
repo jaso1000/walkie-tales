@@ -258,16 +258,23 @@ extension PlayerViewController {
     }
 
     func library() -> [String: Any] {
+        Self.library(nowPlaying: p.isPlaying ? p.folder : nil)
+    }
+
+    /// Reads every folder, which takes a while after a restart: the remote server calls this off the main thread
+    /// (nowPlaying is taken on the main thread first).
+    static func library(nowPlaying: String?) -> [String: Any] {
         var arr: [[String: Any]] = []
         for f in Store.folders() {
             let tracks = Store.listTracks(f)
+            let cat = Store.category(f)
             arr.append([
-                "name": f, "tracks": tracks.count, "live": Store.isLiveOnly(f), "autoCover": Art.hasAuto(f), "cards": 0,
+                "name": f, "tracks": tracks.count, "live": !tracks.isEmpty && tracks.allSatisfy { $0.live }, "autoCover": Art.hasAuto(f), "cards": 0,
                 "coverStamp": Int64(Store.stamp(f) * 1000), // the remote keeps covers until the folder changes
-                "info": LibraryViewController.info(f, player: p), "color": Art.hex(Art.colorFor(f)),
-                "progress": LibraryViewController.progress(f), "played": Store.ud.double(forKey: "played:" + f) * 1000,
+                "info": LibraryViewController.info(f, tracks: tracks, cat: cat, nowPlaying: nowPlaying), "color": Art.hex(Art.colorFor(f)),
+                "progress": LibraryViewController.progress(f, cat: cat, count: tracks.count), "played": Store.ud.double(forKey: "played:" + f) * 1000,
                 "shuffle": Store.flag("shuffle", f, false), "repeat": Store.flag("repeat", f, false),
-                "category": Store.category(f), "autoCategory": Store.autoCategory(f),
+                "category": cat, "autoCategory": Store.autoCategory(f),
                 "favourite": Store.isFavourite(f),
             ])
         }

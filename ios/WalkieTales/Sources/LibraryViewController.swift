@@ -130,19 +130,37 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     @objc private func searchChanged() { query = (search.text ?? "").trimmingCharacters(in: .whitespaces); applyFilter() }
     func textFieldShouldReturn(_ t: UITextField) -> Bool { t.resignFirstResponder(); return true }
 
+    /// Each folder's songs and kind, read off the main thread: after a restart (an update) every folder is read
+    /// again, and doing that on the main thread froze the Library until it was done.
+    private var shelf: [String: (tracks: [Track], cat: String)] = [:]
+    private var loadToken = 0
+
     /// No internet: radio stations can't play, so don't offer them.
     func reload() {
-        let online = Reachability.online
-        all = Store.folders().filter { f in
-            let t = Store.listTracks(f)
-            return !t.isEmpty && (online || !t.allSatisfy { $0.live })
+        loadToken += 1
+        let token = loadToken
+        DispatchQueue.global(qos: .userInitiated).async {
+            let online = Reachability.online
+            var found: [String] = []
+            var read: [String: (tracks: [Track], cat: String)] = [:]
+            for f in Store.folders() {
+                let t = Store.listTracks(f)
+                guard !t.isEmpty && (online || !t.allSatisfy { $0.live }) else { continue }
+                found.append(f)
+                read[f] = (t, Store.category(f))
+            }
+            DispatchQueue.main.async {
+                guard token == self.loadToken else { return }
+                self.all = found
+                self.shelf = read
+                self.applyFilter()
+            }
         }
-        applyFilter()
     }
 
     /// The category buttons and the search box decide which folders show.
     private func applyFilter() {
-        let cats = Dictionary(uniqueKeysWithValues: all.map { ($0, Store.category($0)) })
+        let cats = Dictionary(uniqueKeysWithValues: all.map { ($0, shelf[$0]?.cat ?? "music") })
         var present = Set(cats.values)
         if all.contains(where: Store.isFavourite) { present.insert("fav") }
         if cat != "all" && !present.contains(cat) { cat = "all" }
@@ -152,11 +170,11 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         items = all.filter { f in
             if cat == "fav" ? !Store.isFavourite(f) : cat != "all" && cats[f] != cat { return false }
             if q.isEmpty || f.lowercased().contains(q) { return true }
-            if let t = Store.listTracks(f).first(where: { $0.name.lowercased().contains(q) }) { hits[f] = t; return true }
+            if let t = (shelf[f]?.tracks ?? []).first(where: { $0.name.lowercased().contains(q) }) { hits[f] = t; return true }
             return false
         }
         if q.isEmpty && cat != "music" && cat != "radio" {
-            let keys = Dictionary(uniqueKeysWithValues: items.map { ($0, Self.recentKey($0)) })
+            let keys = Dictionary(uniqueKeysWithValues: items.map { ($0, Self.recentKey($0, cat: cats[$0] ?? "music")) })
             items = items.enumerated().sorted { a, b in
                 let ka = keys[a.element] ?? 0, kb = keys[b.element] ?? 0
                 return ka != kb ? ka > kb : a.offset < b.offset // stable: others keep their order
@@ -222,10 +240,15 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     static func info(_ f: String, player: Player) -> String {
         if f == player.folder && player.isPlaying { return "Now playing" }
         if f == Store.ALL { return "Shuffle it all" }
-        let tracks = Store.listTracks(f)
+        return info(f, tracks: Store.listTracks(f), cat: Store.category(f), nowPlaying: nil)
+    }
+
+    /// The same from what's already been read (nowPlaying: the folder playing right now, if any).
+    static func info(_ f: String, tracks: [Track], cat: String, nowPlaying: String?) -> String {
+        if f == nowPlaying { return "Now playing" }
+        if f == Store.ALL { return "Shuffle it all" }
         if !tracks.isEmpty && tracks.allSatisfy({ $0.live }) { return tracks.count == 1 ? "Live radio" : "\(tracks.count) radio stations" }
         let n = tracks.count
-        let cat = Store.category(f)
         let unit = cat == "audiobook" ? "Chapter" : cat == "podcast" ? "Episode" : "Track"
         let at = resumeIndex(f, n)
         if at > 0 { return "\(unit) \(at + 1) of \(n)" }
@@ -242,13 +265,16 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     static func progress(_ f: String) -> Double {
         let cat = Store.category(f)
         guard cat == "audiobook" || cat == "podcast" else { return 0 }
-        let n = Store.listTracks(f).count
+        return progress(f, cat: cat, count: Store.listTracks(f).count)
+    }
+
+    static func progress(_ f: String, cat: String, count n: Int) -> Double {
+        guard cat == "audiobook" || cat == "podcast" else { return 0 }
         return n < 2 ? 0 : Double(resumeIndex(f, n)) / Double(n)
     }
 
     /// Books and podcasts played in the last 30 days come first ("keep listening").
-    static func recentKey(_ f: String) -> Double {
-        let cat = Store.category(f)
+    static func recentKey(_ f: String, cat: String) -> Double {
         guard cat == "audiobook" || cat == "podcast" else { return 0 }
         let t = Store.ud.double(forKey: "played:" + f)
         return Date().timeIntervalSince1970 - t < 30 * 86400 ? t : 0
@@ -264,13 +290,15 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         cell.image.image = covers[f] ?? Art.letter(all ? "★" : String(f.prefix(1)).uppercased(), color)
         cell.name.text = all ? "Everything" : f
         cell.name.textColor = f == Player.shared.folder ? Art.tint(color, 0.35) : .white
-        cell.setProgress(f == Store.ALL ? 0 : Self.progress(f), color: Art.tint(color, 0.25))
+        let known = shelf[f] ?? ([], "music")
+        cell.setProgress(f == Store.ALL ? 0 : Self.progress(f, cat: known.cat, count: known.tracks.count), color: Art.tint(color, 0.25))
         cell.heart.isHidden = all || !Store.isFavourite(f)
         if let hit = hits[f] {
             cell.info.text = "♪ " + hit.name
             cell.info.textColor = UIColor(white: 1, alpha: 0.9)
         } else {
-            cell.info.text = Self.info(f, player: Player.shared)
+            let p = Player.shared
+            cell.info.text = Self.info(f, tracks: known.tracks, cat: known.cat, nowPlaying: p.isPlaying ? p.folder : nil)
             cell.info.textColor = UIColor(white: 1, alpha: 0.55)
         }
         return cell
