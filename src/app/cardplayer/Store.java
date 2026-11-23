@@ -68,6 +68,8 @@ final class Store {
         SETTINGS.put("dim_after", 90);
         SETTINGS.put("screen_on", 0);
         SETTINGS.put("screen_timeout", 60);
+        SETTINGS.put("brightness_set", false); // Settings → Screen: the app sets the brightness (else the phone's own)
+        SETTINGS.put("brightness", 60);        // ...at this level, 5-100 %
         SETTINGS.put("night_light", false);
         SETTINGS.put("night_clock", true);
         SETTINGS.put("daily_limit", 0);        // minutes of listening a day, 0 = no limit (sleep sounds don't count)
@@ -119,6 +121,7 @@ final class Store {
                     case "dim_after": v = Math.max(0, Math.min(3600, v)); break;
                     case "screen_on": v = v == 1 || v == 2 ? v : 0; break;
                     case "screen_timeout": v = Math.max(15, Math.min(1800, v)); break;
+                    case "brightness": v = Math.max(5, Math.min(100, v)); break;
                     default: break;
                 }
                 ed.putInt(k, v);

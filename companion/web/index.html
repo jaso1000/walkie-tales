@@ -526,6 +526,7 @@
     <div class="card" id="setWake"><h2>OK to wake</h2></div>
   </div>
   <div class="setpage" data-page="screen" data-title="Screen" data-words="display brightness dim sleep timeout" hidden>
+    <div class="card" id="setBright" hidden><h2>Brightness</h2></div>
     <div class="card" id="setSleep"><h2>Sleeping</h2></div>
     <div class="card" id="setOnPlayer"><h2>On the player</h2></div>
   </div>
@@ -2227,6 +2228,10 @@
   function showSummaries() {
     const s = settings; if (!s) return;
     showGatePin();
+    // Brightness: only players that know it (1.59+); the switch is Android's (an iPhone's slider is its own brightness)
+    $('#setBright').hidden = s.brightness === undefined;
+    $('#rowBrightSet').hidden = s.brightness_set === undefined;
+    $('#s_brightness').closest('.set').style.opacity = s.brightness_set === false ? '.55' : '';
     const on = s.screen_on, after = pick(TIMEOUT, s.screen_timeout);
     const text = {
       kid: s.kid_name || 'Not set',
@@ -2278,6 +2283,13 @@
     $('#setMax').appendChild(range('max_volume', 'Maximum volume', 10, 100));
     const t = $('#setTimes'); t.appendChild(time('quiet_start', 'Bedtime starts')); t.appendChild(time('quiet_end', 'Bedtime ends'));
     $('#setDuring').appendChild(range('quiet_volume', 'Bedtime maximum volume', 10, 100));
+    // Brightness (1.59+). Android: the app's own level, or the phone's brightness; iPhone: the iPhone's brightness itself.
+    const br = $('#setBright'), own = sw('brightness_set', 'Set the brightness here', 'Otherwise the phone’s own brightness');
+    own.id = 'rowBrightSet'; br.appendChild(own);
+    const lvl = range('brightness', 'Brightness', 5, 100); br.appendChild(lvl);
+    // moving the slider on an Android player also switches "Set the brightness here" on, so it takes effect
+    $('#s_brightness').onchange = e => api('/api/settings', settings && settings.brightness_set === false ? { brightness: +e.target.value, brightness_set: true } : { brightness: +e.target.value })
+      .then(r => { settings = r.settings; loadSettingsValues(); showSummaries(); toast('Saved'); }).catch(err);
     const sl = $('#setSleep');
     sl.appendChild(choice('dim_after', 'Dim the screen after', DIM));
     sl.appendChild(choice('screen_on', 'Keep the screen on', KEEP));
@@ -2327,6 +2339,10 @@
     api('/api/cards').then(c => { cardCount = c.cards.length; showSummaries(); }).catch(() => {});
     let r; try { r = await api('/api/settings'); } catch (e) { return err(e); }
     settings = r.settings;
+    loadSettingsValues();
+    showSummaries(); showLimit();
+  }
+  function loadSettingsValues() {
     for (const [k, v] of Object.entries(settings)) {
       const inp = document.getElementById('s_' + k); if (!inp) continue;
       if (inp.type === 'checkbox') inp.checked = !!v;
@@ -2334,7 +2350,6 @@
       else if (inp.type === 'time') inp.value = String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
       else inp.value = v;
     }
-    showSummaries(); showLimit();
   }
   buildMenu();
 
@@ -2352,7 +2367,7 @@
     cur = p; base = '/p/' + p.id; store.set('cp_player', p.id);
     pin = store.get(pinKey(p.id)) || '';
     st = null; lib = null; coverFor = undefined; lastPoll = 0; built = false; tlOpen = false; tlKey = ''; capFor = null; settings = null; folderCount = null; cardCount = null; freeBytes = 0;
-    for (const id of [...Object.keys(SWITCHES), 'setMax', 'setTimes', 'setSleep']) $('#' + id).querySelectorAll(':scope > :not(h2)').forEach(n => n.remove());
+    for (const id of [...Object.keys(SWITCHES), 'setMax', 'setTimes', 'setSleep', 'setLimit', 'setBright']) $('#' + id).querySelectorAll(':scope > :not(h2)').forEach(n => n.remove());
     $('#trackList').textContent = ''; $('#grid').textContent = ''; $('#cardList').textContent = '';
     showWho(); setConn(false, 'Connecting…');
     document.querySelector('nav button[data-tab=now]').click();

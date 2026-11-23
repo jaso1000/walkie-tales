@@ -45,8 +45,18 @@ extension PlayerViewController {
                 }
             return ["name": f, "files": files]
         case "/api/settings":
-            if post { Store.applySettings(b); applySettings() }
-            return ["settings": Store.settingsJson()]
+            if post {
+                Store.applySettings(b)
+                // the iPhone's own screen brightness (5–100 %), the same as Settings → Screen → Brightness
+                if let n = (b["brightness"] as? NSNumber)?.doubleValue ?? Double("\(b["brightness"] ?? "")") {
+                    let v = CGFloat(max(5, min(100, n))) / 100
+                    if dimmed { savedBrightness = v } else { UIScreen.main.brightness = v } // dimmed: used when it wakes
+                }
+                applySettings()
+            }
+            var s = Store.settingsJson()
+            s["brightness"] = Int(((dimmed ? savedBrightness : UIScreen.main.brightness) * 100 / 5).rounded()) * 5
+            return ["settings": s]
         default: break
         }
         guard post else { return nil }

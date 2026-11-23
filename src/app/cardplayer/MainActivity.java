@@ -438,6 +438,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback 
             case "/api/settings":
                 if (post) {
                     Store.applySettings(prefs, b);
+                    if (!dimmed && !screenLocked) setBrightness(userBrightness(prefs)); // dimmed: used when it wakes
                     applySettings();
                     syncRemote();
                 }
